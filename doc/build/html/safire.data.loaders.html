@@ -1,0 +1,1360 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.loaders module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.data.loaders">
+<span id="safire-data-loaders-module"></span><h1>safire.data.loaders module<a class="headerlink" href="#module-safire.data.loaders" title="Permalink to this headline">¶</a></h1>
+<p>This module provides facilities for loading data as Dataset objects.</p>
+<p>The loaders work by first processing data into gensim-style corpora,
+then providing access to the serialized corpora using the corpus dataset
+classes defined in the <tt class="xref py py-mod docutils literal"><span class="pre">corpus_dataset</span></tt> module.</p>
+<p>The loaders all expect the data dir layout defined by the <tt class="xref py py-class docutils literal"><span class="pre">DataDirLayout</span></tt>
+class.</p>
+<p>All loaders are initialized by a root and name. The root is the data directory
+where the loader should operate, the name is the dataset name (used in various
+prefixes). This scheme allows holding multiple selections from one set of raw
+data, although it can lead to clutter. However, aside from elementary files
+preparation (see the <tt class="xref py py-class docutils literal"><span class="pre">DataDirLayout</span></tt> documentation), the loaders should
+handle all further communication with the dataset(s).</p>
+<p>The individual experiments in a dataset and the corresponding data are
+distinguished by user-supplied labels that serve as infixes within a standard
+naming scheme (again defined by the layout class).</p>
+<p>There are currently four loaders available: one for multimodal datasets,
+one for models/transformers, one for similarity indexes and one for sharded
+datasets (see <tt class="xref py py-class docutils literal"><span class="pre">ShardedDataset</span></tt>).</p>
+<dl class="class">
+<dt id="safire.data.loaders.IndexLoader">
+<em class="property">class </em><tt class="descclassname">safire.data.loaders.</tt><tt class="descname">IndexLoader</tt><big>(</big><em>root</em>, <em>name</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#IndexLoader"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.IndexLoader" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>This class is responsible for loading indexes from a data directory.
+It mirrors the function of <a class="reference internal" href="#safire.data.loaders.MultimodalDatasetLoader" title="safire.data.loaders.MultimodalDatasetLoader"><tt class="xref py py-class docutils literal"><span class="pre">MultimodalDatasetLoader</span></tt></a>, but deals with
+index structures saved/loaded w.r.t. the data dir.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">iLoader</span> <span class="o">=</span> <span class="n">IndexLoader</span><span class="p">(</span><span class="s">&#39;path/to/dataset/root&#39;</span><span class="p">,</span> <span class="s">&#39;name&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">index</span> <span class="o">=</span> <span class="n">iLoader</span><span class="o">.</span><span class="n">load_index</span><span class="p">(</span><span class="s">&#39;.i4096&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This will load an index built from a 4096-dimensional image dataset.</p>
+<p>Also enables getting the &#8216;right&#8217; string for the <tt class="docutils literal"><span class="pre">output_prefix</span></tt> string
+of the gensim <tt class="xref py py-class docutils literal"><span class="pre">gensim.similarities.Similarity</span></tt> class.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">iLoader</span><span class="o">.</span><span class="n">output_prefix</span><span class="p">(</span><span class="s">&#39;.i4096&#39;</span><span class="p">)</span>
+<span class="go">&#39;indexes/name.i4096.iidx&#39;</span>
+</pre></div>
+</div>
+<dl class="method">
+<dt id="safire.data.loaders.IndexLoader.has_index">
+<tt class="descname">has_index</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#IndexLoader.has_index"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.IndexLoader.has_index" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether a saved index object with the given infix exists in
+the dataset.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (index label) of the desired index.
+(Infixes serve to differentiate saved indexes
+obtained from different image corpora, like a full 4096-dimensional
+Imagenet feature corpus or a lower-dimensional encoding.)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.IndexLoader.has_text_index">
+<tt class="descname">has_text_index</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#IndexLoader.has_text_index"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.IndexLoader.has_text_index" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether a saved text index object with the given infix exists
+in the dataset.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (index label) of the desired index.
+(Infixes serve to differentiate saved indexes
+obtained from different image corpora, like a full 4096-dimensional
+Imagenet feature corpus or a lower-dimensional encoding.)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.IndexLoader.load_index">
+<tt class="descname">load_index</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#IndexLoader.load_index"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.IndexLoader.load_index" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads a similarity index object for the dataset with the specified
+infix.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (index label) of the desired index.
+(Infixes serve to differentiate saved indexes
+obtained from different image corpora, like a full 4096-dimensional
+Imagenet feature corpus or a lower-dimensional encoding.)</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raises:</th><td class="field-body">ValueError</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.IndexLoader.load_text_index">
+<tt class="descname">load_text_index</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#IndexLoader.load_text_index"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.IndexLoader.load_text_index" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads a similarity index object for the dataset with the specified
+infix.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (index label) of the desired index.
+(Infixes serve to differentiate saved indexes
+obtained from different image corpora, like a full 4096-dimensional
+Imagenet feature corpus or a lower-dimensional encoding.)</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raises:</th><td class="field-body">ValueError</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.IndexLoader.output_prefix">
+<tt class="descname">output_prefix</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#IndexLoader.output_prefix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.IndexLoader.output_prefix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Builds the output_prefix parameter for a Similarity object
+so that the index can then be correctly saved.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.IndexLoader.save_index">
+<tt class="descname">save_index</tt><big>(</big><em>index</em>, <em>infix=''</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#IndexLoader.save_index"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.IndexLoader.save_index" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves a model instance to file.&#8221;</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>index</strong> (<em>safire.learning.interfaces.SafireTransformer</em>) &#8211; A transformer to save in the data dir.</li>
+<li><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (handle label) of the transformer to save. Pick
+a sensible one. (Infixes serve to differentiate saved model handles
+obtained with different methods, such as Logistic Regression or
+Denoising Autoencoders.)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.IndexLoader.save_text_index">
+<tt class="descname">save_text_index</tt><big>(</big><em>index</em>, <em>infix=''</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#IndexLoader.save_text_index"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.IndexLoader.save_text_index" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves a text index instance to the appropriate file.&#8221;</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>index</strong> (<em>safire.learning.interfaces.SafireTransformer</em>) &#8211; A transformer to save in the data dir.</li>
+<li><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (handle label) of the transformer to save. Pick
+a sensible one. (Infixes serve to differentiate saved model handles
+obtained with different methods, such as Logistic Regression or
+Denoising Autoencoders.)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.IndexLoader.text_output_prefix">
+<tt class="descname">text_output_prefix</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#IndexLoader.text_output_prefix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.IndexLoader.text_output_prefix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Builds the output_prefix parameter for a Similarity object
+for the text modality so that the index can then be correctly saved.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.data.loaders.LearnerLoader">
+<em class="property">class </em><tt class="descclassname">safire.data.loaders.</tt><tt class="descname">LearnerLoader</tt><big>(</big><em>root</em>, <em>name</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#LearnerLoader"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.LearnerLoader" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>This class is responsible for loading learners from a data directory.
+It mirrors the function of <a class="reference internal" href="#safire.data.loaders.IndexLoader" title="safire.data.loaders.IndexLoader"><tt class="xref py py-class docutils literal"><span class="pre">IndexLoader</span></tt></a>, but deals with
+learner structures saved/loaded w.r.t. the data dir.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">lLoader</span> <span class="o">=</span> <span class="n">LearnerLoader</span><span class="p">(</span><span class="s">&#39;path/to/dataset/root&#39;</span><span class="p">,</span> <span class="s">&#39;name&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">learner</span> <span class="o">=</span> <span class="n">lLoader</span><span class="o">.</span><span class="n">load_learner</span><span class="p">(</span><span class="s">&#39;.SDA-1000.img&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This will load a learner used for a Denoising Autoencoder with 1000
+output neurons experiment. The learner also includes some experimental
+environment, such as intermediate models saved at various stages of
+learner operation.</p>
+<dl class="method">
+<dt id="safire.data.loaders.LearnerLoader.has_learner">
+<tt class="descname">has_learner</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#LearnerLoader.has_learner"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.LearnerLoader.has_learner" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether a saved learner object with the given infix exists in
+the dataset.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (learner label) of the desired learner.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.LearnerLoader.learner_name">
+<tt class="descname">learner_name</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#LearnerLoader.learner_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.LearnerLoader.learner_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Builds the output_prefix parameter for a BaseSGDLearner object
+so that the learner can then be correctly saved.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.LearnerLoader.load_learner">
+<tt class="descname">load_learner</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#LearnerLoader.load_learner"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.LearnerLoader.load_learner" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads a Learner object for the dataset with the specified infix.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (learner label) of the desired learner.
+(Infixes serve to differentiate saved learners.)</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raises:</th><td class="field-body">ValueError</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.LearnerLoader.save_learner">
+<tt class="descname">save_learner</tt><big>(</big><em>learner</em>, <em>infix=''</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#LearnerLoader.save_learner"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.LearnerLoader.save_learner" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves a model instance to file.&#8221;</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>learner</strong> (<em>safire.learning.learners.BaseSGDLearner</em>) &#8211; A transformer to save in the data dir.</li>
+<li><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (handle label) of the learner to save. Pick
+a sensible one. (Learners serve to differentiate saved learners
+with different settings.)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.data.loaders.ModelLoader">
+<em class="property">class </em><tt class="descclassname">safire.data.loaders.</tt><tt class="descname">ModelLoader</tt><big>(</big><em>root</em>, <em>name</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ModelLoader"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ModelLoader" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>This class is responsible for loading models (and objects acting like
+models) from a data directory. It mirrors the function of
+<a class="reference internal" href="#safire.data.loaders.MultimodalDatasetLoader" title="safire.data.loaders.MultimodalDatasetLoader"><tt class="xref py py-class docutils literal"><span class="pre">MultimodalDatasetLoader</span></tt></a>, but is much less complicated, as it
+doesn&#8217;t have to deal with multiple synchronized corpora, required files,
+etc.</p>
+<p>The primary way of retrieving models is loading handles:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">mLoader</span> <span class="o">=</span> <span class="n">ModelLoader</span><span class="p">(</span><span class="s">&#39;path/to/dataset/root&#39;</span><span class="p">,</span> <span class="s">&#39;name&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model_handle</span> <span class="o">=</span> <span class="n">mLoader</span><span class="o">.</span><span class="n">load_handle</span><span class="p">(</span><span class="s">&#39;.NADV.top10000.sda3&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This will load a model handle built from a corpus filtered for autosemantic
+parts of speech and limited to the 10000 most frequent lemmas, with a model
+trained as a Stacked Denoising Autoencoder no. 3 in some experimental setup
+against the default image corpus for the dataset (assuming the descriptors
+are sensible - the developer is responsible for naming the corpora and
+models appropriately).</p>
+<p>For completeness, you can also retrieve models without handles:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">model</span> <span class="o">=</span> <span class="n">mLoader</span><span class="o">.</span><span class="n">load_model</span><span class="p">(</span><span class="s">&#39;.NADV.top1000.sda3&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>and build a handle later:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">model_handle</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Handles and models can also be saved and loaded:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">mLoader</span><span class="o">.</span><span class="n">save_model</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s">&#39;.NADV.top1000.sda3&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mLoader</span><span class="o">.</span><span class="n">save_handle</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span> <span class="s">&#39;.NADV.top1000.sda3&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">loaded_model</span> <span class="o">=</span> <span class="n">mLoader</span><span class="o">.</span><span class="n">load_model</span><span class="p">(</span><span class="s">&#39;.NADV.top1000.sda3&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">loaded_handle</span> <span class="o">=</span> <span class="n">mLoader</span><span class="o">.</span><span class="n">load_handle</span><span class="p">(</span><span class="s">&#39;.NADV.top1000.sda3&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>and so can SafireTransformers:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span> <span class="o">=</span> <span class="n">SafireTransformer</span><span class="p">(</span><span class="n">model_handle</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mLoader</span><span class="o">.</span><span class="n">save_transformer</span><span class="p">(</span><span class="n">transformer</span><span class="p">,</span> <span class="s">&#39;.NADV.top1000.sda3&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">loaded_transformer</span> <span class="o">=</span> <span class="n">mLoader</span><span class="o">.</span><span class="n">load_transformer</span><span class="p">(</span><span class="s">&#39;.NADV.top1000.sda3&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The naming conventions and directories within a data directory are described
+by the <tt class="xref py py-class docutils literal"><span class="pre">DataDirLayout</span></tt> class.</p>
+<dl class="method">
+<dt id="safire.data.loaders.ModelLoader.has_handle">
+<tt class="descname">has_handle</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ModelLoader.has_handle"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ModelLoader.has_handle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether a model handle with the given infix exists.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The model handle infix to check
+(like: <tt class="docutils literal"><span class="pre">.NADV.top1000.sda3</span></tt>)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.ModelLoader.has_model">
+<tt class="descname">has_model</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ModelLoader.has_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ModelLoader.has_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether a model with the given infix exists.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The model infix to check (like: <tt class="docutils literal"><span class="pre">.NADV.top1000.sda3</span></tt>)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.ModelLoader.has_transformer">
+<tt class="descname">has_transformer</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ModelLoader.has_transformer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ModelLoader.has_transformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether a transformer with the given infix exists.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The transformer infix to check (like:
+<tt class="docutils literal"><span class="pre">.NADV.top1000.sda3</span></tt>)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.ModelLoader.load_handle">
+<tt class="descname">load_handle</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ModelLoader.load_handle"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ModelLoader.load_handle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads a model handle object for the dataset with the specified infix.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (model label) of the desired model.
+(Infixes serve to differentiate saved model handles
+obtained with different methods, such as Logistic Regression or
+Denoising Autoencoders.)</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raises:</th><td class="field-body">ValueError</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.ModelLoader.load_mlp_hparams">
+<tt class="descname">load_mlp_hparams</tt><big>(</big><em>n_layers</em>, <em>infixes</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ModelLoader.load_mlp_hparams"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ModelLoader.load_mlp_hparams" title="Permalink to this definition">¶</a></dt>
+<dd><p>Assembles the <tt class="docutils literal"><span class="pre">hparams</span></tt> init arg for a MLP setup by loading
+the specified models&#8217; init args when requested/available.</p>
+<p>Note that if you want to load the default empty-infix model,
+you have to supply an empty infix explicitly (<tt class="docutils literal"><span class="pre">''</span></tt>), otherwise
+no init args will be loaded.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.ModelLoader.load_model">
+<tt class="descname">load_model</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ModelLoader.load_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ModelLoader.load_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads a model object for the dataset with the specified infix.</p>
+<p>We do not know the class of the model in advance, so we use the hack
+in the models&#8217; <tt class="docutils literal"><span class="pre">save</span></tt> mechanism to derive the class from the pickled
+object itself.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (model label) of the desired model.
+(Infixes serve to differentiate saved models
+obtained with different methods, such as Logistic Regression or
+Denoising Autoencoders.)</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raises:</th><td class="field-body">ValueError</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.ModelLoader.load_transformer">
+<tt class="descname">load_transformer</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ModelLoader.load_transformer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ModelLoader.load_transformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads a model handle object for the dataset with the specified infix.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (model label) of the desired model.
+(Infixes serve to differentiate saved model handles
+obtained with different methods, such as Logistic Regression or
+Denoising Autoencoders.)</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raises:</th><td class="field-body">ValueError</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.ModelLoader.model_full_path">
+<tt class="descname">model_full_path</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ModelLoader.model_full_path"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ModelLoader.model_full_path" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the full path to a model file for the given infix.
+(The model itself doesn&#8217;t have to exist.)</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.ModelLoader.save_handle">
+<tt class="descname">save_handle</tt><big>(</big><em>model_handle</em>, <em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ModelLoader.save_handle"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ModelLoader.save_handle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves a model instance to file.&#8221;</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>model_handle</strong> (<em>safire.learning.interfaces.ModelHandle</em>) &#8211; A model handle to save in the data dir.</li>
+<li><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (handle label) of the model handle to save. Pick
+a sensible one. (Infixes serve to differentiate saved model handles
+obtained with different methods, such as Logistic Regression or
+Denoising Autoencoders.)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.ModelLoader.save_model">
+<tt class="descname">save_model</tt><big>(</big><em>model</em>, <em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ModelLoader.save_model"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ModelLoader.save_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves a model instance to file.&#8221;</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>model</strong> (<em>safire.learning.models.BaseModel</em>) &#8211; A model to save in the data dir.</li>
+<li><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (model label) of the model to save. Pick
+a sensible one. (Infixes serve to differentiate saved model handles
+obtained with different methods, such as Logistic Regression or
+Denoising Autoencoders.)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.ModelLoader.save_model_layer">
+<tt class="descname">save_model_layer</tt><big>(</big><em>model</em>, <em>layer</em>, <em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ModelLoader.save_model_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ModelLoader.save_model_layer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves a layer from the given model with the given infix.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.ModelLoader.save_transformer">
+<tt class="descname">save_transformer</tt><big>(</big><em>transformer</em>, <em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ModelLoader.save_transformer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ModelLoader.save_transformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves a model instance to file.&#8221;</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>transformer</strong> (<em>safire.learning.interfaces.SafireTransformer</em>) &#8211; A transformer to save in the data dir.</li>
+<li><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (handle label) of the transformer to save. Pick
+a sensible one. (Infixes serve to differentiate saved model handles
+obtained with different methods, such as Logistic Regression or
+Denoising Autoencoders.)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.data.loaders.MultimodalDatasetLoader">
+<em class="property">class </em><tt class="descclassname">safire.data.loaders.</tt><tt class="descname">MultimodalDatasetLoader</tt><big>(</big><em>root</em>, <em>name</em>, <em>sentences=False</em>, <em>text_loader=&lt;class 'safire.data.vtextcorpus.VTextCorpus'&gt;</em>, <em>img_loader=&lt;class 'safire.data.imagenetcorpus.ImagenetCorpus'&gt;</em>, <em>text_serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em>, <em>img_serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>A class that works as an interface for loading a multimodal dataset
+using a <tt class="xref py py-class docutils literal"><span class="pre">VTextCorpus</span></tt> and <tt class="xref py py-class docutils literal"><span class="pre">ImagenetCorpus</span></tt>.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">loader</span> <span class="o">=</span> <span class="n">MDloader</span><span class="p">(</span><span class="s">&#39;/path/to/data/root&#39;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">safire_multimodal_dataset</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The <tt class="docutils literal"><span class="pre">name</span></tt> parameter is a name of the dataset. <strong>It has to reflect the
+names used in the data directory itself;</strong> the dependency is defined by
+the <tt class="xref py py-class docutils literal"><span class="pre">DataDirLayout</span></tt> class. Currently, the name is expected in the
+following places in the data root:</p>
+<ul class="simple">
+<li>The <tt class="docutils literal"><span class="pre">vtlist</span></tt> file passed to VTextCorpus to operate on has the name
+<tt class="docutils literal"><span class="pre">name.vtlist</span></tt></li>
+<li>The corpus file names start with <tt class="docutils literal"><span class="pre">name</span></tt></li>
+</ul>
+<p>Typically, <tt class="docutils literal"><span class="pre">name</span></tt> for a <tt class="docutils literal"><span class="pre">/path/to/data/root</span></tt> would be <tt class="docutils literal"><span class="pre">root</span></tt>.</p>
+<p>Loading relies on the gensim-style corpora already being generated. If not
+present, they first need to be generated. Because that is a time-consuming
+procedure, the loader class will not generate them automatically. Instead,
+the following workflow is available:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">loader</span> <span class="o">=</span> <span class="n">MDLoader</span><span class="p">(</span><span class="s">&#39;/path/to/data/root&#39;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">loader</span><span class="o">.</span><span class="n">has_corpora</span><span class="p">()</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dataset</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+<span class="go">ValueError: Corpora unavailable in SAFIRE dataset at /path/to/safire/root</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">loader</span><span class="o">.</span><span class="n">generate_corpora</span><span class="p">(</span><span class="n">safire_root</span><span class="p">)</span>
+<span class="go">[...takes a long time..]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">loader</span><span class="o">.</span><span class="n">has_corpora</span><span class="p">()</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dataset</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>All loading/corpus-building/corpus-checking functionality can further be
+called separately for text and image data.</p>
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.build_corpora">
+<tt class="descname">build_corpora</tt><big>(</big><em>vtext_corpus_args={}</em>, <em>img_corpus_args={}</em>, <em>text_serializer=None</em>, <em>img_serializer=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.build_corpora"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.build_corpora" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates all corpora necessary for the creation of the
+MultimodalDataset over the given data.</p>
+<p>The corpora will be located in <tt class="docutils literal"><span class="pre">self.layout.corpus_dir</span></tt> in the data
+directory. There will be four corpora, six files in total:</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">MmCorpus</span></tt> for text data</li>
+<li>The associated corpus index for text data</li>
+<li><tt class="docutils literal"><span class="pre">VTextCorpus</span></tt> for text data</li>
+</ul>
+<p>And an analogous trio for image data, with an <tt class="docutils literal"><span class="pre">ImagenetCorpus</span></tt>
+instead of a <tt class="docutils literal"><span class="pre">VTextCorpus</span></tt> holding the image corpus metadata.</p>
+<p>Building text corpora only or image corpora only can be handled
+using <a class="reference internal" href="#safire.data.loaders.MultimodalDatasetLoader.build_text_corpora" title="safire.data.loaders.MultimodalDatasetLoader.build_text_corpora"><tt class="xref py py-func docutils literal"><span class="pre">build_text_corpora()</span></tt></a> or <a class="reference internal" href="#safire.data.loaders.MultimodalDatasetLoader.build_image_corpora" title="safire.data.loaders.MultimodalDatasetLoader.build_image_corpora"><tt class="xref py py-func docutils literal"><span class="pre">build_image_corpora()</span></tt></a>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>vtext_corpus_args</strong> (<a class="reference external" href="http://docs.python.org/library/stdtypes.html#dict" title="(in Python v2.7)"><em>dict</em></a>) &#8211; <p>A dictionary passed as kwargs to the
+constructor of <tt class="docutils literal"><span class="pre">VTextCorpus</span></tt>. If there is an <tt class="docutils literal"><span class="pre">input_root</span></tt>
+member, it will be ignored.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The text corpus file names will have an infix based on the
+<tt class="docutils literal"><span class="pre">label</span></tt> member of this dictionary (if present).</p>
+</div>
+</li>
+<li><strong>img_corpus_args</strong> (<a class="reference external" href="http://docs.python.org/library/stdtypes.html#dict" title="(in Python v2.7)"><em>dict</em></a>) &#8211; <p>A dictionary passed as kwargs to the constructor
+of <tt class="docutils literal"><span class="pre">ImagenetCorpus</span></tt>.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The image corpus file names will have an infix based on the
+<tt class="docutils literal"><span class="pre">label</span></tt> member of this dicitonary (if present).</p>
+</div>
+</li>
+<li><strong>text_serializer</strong> (<em>class froom gensim.interfaces.CorpusABC</em>) &#8211; The corpus class that should be used to
+serialize the text corpus data. Defaults to <tt class="docutils literal"><span class="pre">text_serializer</span></tt>
+passed in <tt class="docutils literal"><span class="pre">__init__</span></tt>.</li>
+<li><strong>img_serializer</strong> (<em>class froom gensim.interfaces.CorpusABC</em>) &#8211; The corpus class that should be used to
+serialize the image corpus data. Defaults to <tt class="docutils literal"><span class="pre">img_serializer</span></tt>
+passed in <tt class="docutils literal"><span class="pre">__init__</span></tt>.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.build_image_corpora">
+<tt class="descname">build_image_corpora</tt><big>(</big><em>img_corpus_args</em>, <em>serializer=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.build_image_corpora"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.build_image_corpora" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates all <em>image</em> corpora necessary for the creation of the
+<tt class="xref py py-class docutils literal"><span class="pre">MultimodalDataset</span></tt> over the given data.</p>
+<p>The corpora will be located in <tt class="docutils literal"><span class="pre">self.layout.corpus_dir</span></tt> in the data
+directory. There will be two corpora, three files in total:</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">MmCorpus</span></tt> for image data</li>
+<li>The associated corpus index for image data</li>
+<li><tt class="docutils literal"><span class="pre">ImagenetCorpus</span></tt> for image metadata</li>
+</ul>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>img_corpus_args</strong> (<a class="reference external" href="http://docs.python.org/library/stdtypes.html#dict" title="(in Python v2.7)"><em>dict</em></a>) &#8211; <p>A dictionary passed as kwargs to the
+constructor of <tt class="docutils literal"><span class="pre">ImagenetCorpus</span></tt>. If there is an <tt class="docutils literal"><span class="pre">input_root</span></tt>
+member, it will be ignored.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The image corpus file names will have an infix based on the
+<tt class="docutils literal"><span class="pre">label</span></tt> member of this dictionary (if present).</p>
+</div>
+</li>
+<li><strong>serializer</strong> (<em>class froom gensim.interfaces.CorpusABC</em>) &#8211; The corpus class that should be used to
+serialize the corpus data. Defaults to <tt class="docutils literal"><span class="pre">img_serializer</span></tt> passed
+in <tt class="docutils literal"><span class="pre">__init__</span></tt>.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.build_text_corpora">
+<tt class="descname">build_text_corpora</tt><big>(</big><em>vtext_corpus_args</em>, <em>serializer=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.build_text_corpora"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.build_text_corpora" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates all <em>text</em> corpora necessary for the creation of the
+<tt class="xref py py-class docutils literal"><span class="pre">MultimodalDataset</span></tt> over the given data.</p>
+<p>The corpora will be located in <tt class="docutils literal"><span class="pre">self.layout.corpus_dir</span></tt> in the data
+directory. There will be four corpora, six files in total:</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">MmCorpus</span></tt> for text data</li>
+<li>The associated corpus index for text data</li>
+<li><tt class="docutils literal"><span class="pre">VTextCorpus</span></tt> for text data</li>
+</ul>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Is NOT capable of doing frequency filtering and tf-idf transform,
+because these are <em>transformations</em>, not VTextCorpus properties.</p>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>vtext_corpus_args</strong> (<a class="reference external" href="http://docs.python.org/library/stdtypes.html#dict" title="(in Python v2.7)"><em>dict</em></a>) &#8211; <p>A dictionary passed as kwargs to the
+constructor of <tt class="docutils literal"><span class="pre">VTextCorpus</span></tt>. If there is an <tt class="docutils literal"><span class="pre">input_root</span></tt>
+member, it will be ignored.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The text corpus file names will have an infix based on the
+<tt class="docutils literal"><span class="pre">label</span></tt> member of this dictionary (if present).</p>
+</div>
+</li>
+<li><strong>serializer</strong> (<em>class froom gensim.interfaces.CorpusABC</em>) &#8211; The corpus class that should be used to
+serialize the corpus data. Defaults to <tt class="docutils literal"><span class="pre">text_serializer</span></tt> passed
+in <tt class="docutils literal"><span class="pre">__init__</span></tt>.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.generate_icorp_name_infix">
+<tt class="descname">generate_icorp_name_infix</tt><big>(</big><em>img_corpus</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.generate_icorp_name_infix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.generate_icorp_name_infix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieves the infix of the standard name given by the Loader to the
+image corpus it builds.</p>
+<p>The label was supplied manually to the corpus using the <tt class="docutils literal"><span class="pre">label</span></tt>
+init argument.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.generate_tcorp_name_infix">
+<tt class="descname">generate_tcorp_name_infix</tt><big>(</big><em>text_corpus</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.generate_tcorp_name_infix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.generate_tcorp_name_infix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieves the infix of the standard name given by the Loader to the
+text corpus it builds.</p>
+<p>The label was supplied manually to the corpus using the <tt class="docutils literal"><span class="pre">label</span></tt>
+init argument.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.get_image_corpus">
+<tt class="descname">get_image_corpus</tt><big>(</big><em>image_corpus_args=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.get_image_corpus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.get_image_corpus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the ImagenetCorpus object correctly initialized to the Loader&#8217;s
+layout. As opposed to <tt class="docutils literal"><span class="pre">build_image_corpus</span></tt>, does NOT perform
+serialization.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>image_corpus_args</strong> (<a class="reference external" href="http://docs.python.org/library/stdtypes.html#dict" title="(in Python v2.7)"><em>dict</em></a>) &#8211; <p>A dictionary passed as kwargs to the
+constructor of <tt class="docutils literal"><span class="pre">VTextCorpus</span></tt>. If there is an <tt class="docutils literal"><span class="pre">input_root</span></tt>
+member, it will be ignored.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The text corpus file names will have an infix based on the
+<tt class="docutils literal"><span class="pre">label</span></tt> member of this dictionary (if present).</p>
+</div>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">safire.data.vtextcorpus.VTextCorpus</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A <tt class="xref py py-class docutils literal"><span class="pre">VTextCorpus</span></tt> initialized according to the loader&#8217;s
+layout.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.get_text_corpus">
+<tt class="descname">get_text_corpus</tt><big>(</big><em>vtext_corpus_args=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.get_text_corpus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.get_text_corpus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the VTextCorpus object correctly initialized to the Loader&#8217;s
+layout. As opposed to <tt class="docutils literal"><span class="pre">build_text_corpus</span></tt>, does NOT perform
+serialization, only creates the corpus bound to the loader&#8217;s data dir.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>vtext_corpus_args</strong> (<a class="reference external" href="http://docs.python.org/library/stdtypes.html#dict" title="(in Python v2.7)"><em>dict</em></a>) &#8211; <p>A dictionary passed as kwargs to the
+constructor of <tt class="docutils literal"><span class="pre">VTextCorpus</span></tt>. If there is an <tt class="docutils literal"><span class="pre">input_root</span></tt>
+member, it will be ignored.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The text corpus file names will have an infix based on the
+<tt class="docutils literal"><span class="pre">label</span></tt> member of this dictionary (if present).</p>
+</div>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">safire.data.vtextcorpus.VTextCorpus</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A <tt class="xref py py-class docutils literal"><span class="pre">VTextCorpus</span></tt> initialized according to the loader&#8217;s
+layout.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.has_corpora">
+<tt class="descname">has_corpora</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.has_corpora"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.has_corpora" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether corpora for loading the SAFIRE multimodal dataset
+have been generated and are in the right place.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.has_image_corpora">
+<tt class="descname">has_image_corpora</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.has_image_corpora"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.has_image_corpora" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether text corpora for loading the given multimodal dataset
+have been generated and are in the right place.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.has_image_corpus">
+<tt class="descname">has_image_corpus</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.has_image_corpus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.has_image_corpus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether a saved image corpus with the given infix exists
+in the data dir.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The desired infix (model label) of the corpus.
+(Infixes serve to differentiate saved corpora
+obtained with different methods - part of speech filters,
+frequency filters, etc.)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.has_text_corpora">
+<tt class="descname">has_text_corpora</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.has_text_corpora"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.has_text_corpora" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether text corpora for loading the given multimodal dataset
+have been generated and are in the right place.</p>
+<p>Analogous methods for the text and image corpora separately are provided
+as <tt class="docutils literal"><span class="pre">has_text_corpora()</span></tt> and <tt class="docutils literal"><span class="pre">has_img_corpora()</span></tt>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.has_text_corpus">
+<tt class="descname">has_text_corpus</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.has_text_corpus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.has_text_corpus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether a saved text corpus with the given infix exists
+in the data dir.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The desired infix (model label) of the corpus.
+(Infixes serve to differentiate saved corpora
+obtained with different methods - part of speech filters,
+frequency filters, etc.)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.load">
+<tt class="descname">load</tt><big>(</big><em>infix=None</em>, <em>text_infix=None</em>, <em>img_infix=None</em>, <em>text_serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em>, <em>img_serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.load"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.load" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates the SAFIRE MultimodalDataset. If corpora are not generated,
+raises a ValueError.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; <p>The infix (corpus label) of the desired text
+and image corpora. (Infixes serve to differentiate corpora
+obtained with different methods, such as filtering tokens
+according to Part of Speech tags or scaling down image
+dimensionality.)</p>
+<p>If <tt class="docutils literal"><span class="pre">infix</span></tt> is supplied, <tt class="docutils literal"><span class="pre">text_infix</span></tt> and <tt class="docutils literal"><span class="pre">img_infix</span></tt> are
+overriden by <tt class="docutils literal"><span class="pre">infix</span></tt>.</p>
+</li>
+<li><strong>text_infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (corpus label) of the desired text
+corpora. (Infixes serve to differentiate corpora
+obtained with different methods, such as filtering tokens
+according to Part of Speech tags.)</li>
+<li><strong>img_infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (corpus label) of the desired image
+corpora. (Infixes serve to differentiate corpora
+obtained with different methods, such as filtering tokens
+according to Part of Speech tags.)</li>
+<li><strong>text_serializer</strong> (<em>class froom gensim.interfaces.CorpusABC</em>) &#8211; The corpus class that should be used to
+de-serialize the given text corpus data. Defaults to
+<tt class="docutils literal"><span class="pre">text_serializer</span></tt> passed in <tt class="docutils literal"><span class="pre">__init__</span></tt>.</li>
+<li><strong>img_serializer</strong> (<em>class froom gensim.interfaces.CorpusABC</em>) &#8211; The corpus class that should be used to
+de-serialize the given image corpus data. Defaults to
+<tt class="docutils literal"><span class="pre">img_serializer</span></tt> passed in <tt class="docutils literal"><span class="pre">__init__</span></tt>.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><p class="first">safire.data.multimodal_dataset.MultimodalDataset</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A <tt class="xref py py-class docutils literal"><span class="pre">MultimodalDataset</span></tt> representation of the
+dataset.</p>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raises:</th><td class="field-body"><p class="first last">ValueError</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.load_image_corpus">
+<tt class="descname">load_image_corpus</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.load_image_corpus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.load_image_corpus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads an ImagenetCorpus object previously saved in the data dir.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (model label) of the desired model.
+(Infixes serve to differentiate saved corpora
+obtained with different methods - part of speech filters,
+frequency filters, etc.)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.load_img">
+<tt class="descname">load_img</tt><big>(</big><em>img_infix=None</em>, <em>dataset_init_args={}</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.load_img"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.load_img" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads an image-only dataset using the class
+<tt class="xref py py-class docutils literal"><span class="pre">UnsupervisedImagenetCorpusDataset</span></tt>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>img_infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (corpus label) of the desired text
+corpora. (Infixes serve to differentiate corpora
+obtained with different methods, such as filtering tokens
+according to Part of Speech tags.)</li>
+<li><strong>dataset_init_args</strong> (<a class="reference external" href="http://docs.python.org/library/stdtypes.html#dict" title="(in Python v2.7)"><em>dict</em></a>) &#8211; Further init args that will be passed to the
+dataset constructor.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><p class="first">safire.data.corpus_dataset.UnsueprvisedImagenetCorpusDataset</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">The <tt class="xref py py-class docutils literal"><span class="pre">UnsupervisedImagenetCorpusDataset</span></tt> built from the
+given text corpora.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.load_text">
+<tt class="descname">load_text</tt><big>(</big><em>text_infix=None</em>, <em>dataset_init_args={}</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.load_text"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.load_text" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads a text-only dataset using the class
+<tt class="xref py py-class docutils literal"><span class="pre">UnsupervisedVTextCorpusDataset</span></tt>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>text_infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (corpus label) of the desired text
+corpora. (Infixes serve to differentiate corpora
+obtained with different methods, such as filtering tokens
+according to Part of Speech tags.)</li>
+<li><strong>dataset_init_args</strong> (<a class="reference external" href="http://docs.python.org/library/stdtypes.html#dict" title="(in Python v2.7)"><em>dict</em></a>) &#8211; Further init args that will be passed to the
+dataset constructor.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><p class="first">safire.data.corpus_dataset.UnsueprvisedVTextCorpusDataset</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">The <tt class="xref py py-class docutils literal"><span class="pre">UnsupervisedVTextCorpusDataset</span></tt> built from the
+given text corpora.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.load_text_corpus">
+<tt class="descname">load_text_corpus</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.load_text_corpus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.load_text_corpus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads a VTextCorpus object previously saved in the data dir.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (model label) of the desired model.
+(Infixes serve to differentiate saved corpora
+obtained with different methods - part of speech filters,
+frequency filters, etc.)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.save_image_corpus">
+<tt class="descname">save_image_corpus</tt><big>(</big><em>corpus</em>, <em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.save_image_corpus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.save_image_corpus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves a ImagenetCorpus object to the data dir.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>corpus</strong> (<em>ImagenetCorpus</em>) &#8211; The corpus which should be saved.</li>
+<li><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The desired infix (model label) of the corpus.
+(Infixes serve to differentiate saved corpora
+obtained with different methods - part of speech filters,
+frequency filters, etc.)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.save_text_corpus">
+<tt class="descname">save_text_corpus</tt><big>(</big><em>corpus</em>, <em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.save_text_corpus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.save_text_corpus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves a VTextCorpus object to the data dir.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>corpus</strong> (<em>VTextCorpus</em>) &#8211; The corpus which should be saved.</li>
+<li><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The desired infix (model label) of the corpus.
+(Infixes serve to differentiate saved corpora
+obtained with different methods - part of speech filters,
+frequency filters, etc.)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.serialize_image_corpus">
+<tt class="descname">serialize_image_corpus</tt><big>(</big><em>corpus</em>, <em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.serialize_image_corpus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.serialize_image_corpus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Serializes the contents of an image corpus.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>corpus</strong> (<em>ImagenetCorpus or other corpus</em>) &#8211; The corpus which should be saved.</li>
+<li><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The desired infix (model label) of the corpus.
+(Infixes serve to differentiate saved corpora
+obtained with different methods - part of speech filters,
+frequency filters, etc.)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalDatasetLoader.serialize_text_corpus">
+<tt class="descname">serialize_text_corpus</tt><big>(</big><em>corpus</em>, <em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalDatasetLoader.serialize_text_corpus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalDatasetLoader.serialize_text_corpus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Serializes the contents of an image corpus.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>corpus</strong> (<em>ImagenetCorpus or other corpus</em>) &#8211; The corpus which should be saved.</li>
+<li><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The desired infix (model label) of the corpus.
+(Infixes serve to differentiate saved corpora
+obtained with different methods - part of speech filters,
+frequency filters, etc.)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.data.loaders.MultimodalShardedDatasetLoader">
+<em class="property">class </em><tt class="descclassname">safire.data.loaders.</tt><tt class="descname">MultimodalShardedDatasetLoader</tt><big>(</big><em>root</em>, <em>name</em>, <em>sentences=False</em>, <em>text_loader=&lt;class 'safire.data.vtextcorpus.VTextCorpus'&gt;</em>, <em>img_loader=&lt;class 'safire.data.imagenetcorpus.ImagenetCorpus'&gt;</em>, <em>text_serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em>, <em>img_serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalShardedDatasetLoader"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalShardedDatasetLoader" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#safire.data.loaders.MultimodalDatasetLoader" title="safire.data.loaders.MultimodalDatasetLoader"><tt class="xref py py-class docutils literal"><span class="pre">safire.data.loaders.MultimodalDatasetLoader</span></tt></a></p>
+<p>Implements all dataset loader functionality, but returns the sharded
+dataset version instead of indexed corpus-based datasets.</p>
+<p>Note the <tt class="docutils literal"><span class="pre">output_prefix</span></tt> methods, which are used to initialize dataset
+filenames AND the directory to which the shards will be written: these give
+the correct string to pass to the ShardedDataset constructor as the</p>
+<blockquote>
+<div><tt class="docutils literal"><span class="pre">output_prefix</span></tt> parameter. The idiom for creating a ShardedDatasets is:</div></blockquote>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">loader</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">corpus</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load_text_corpus</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">output_prefix</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">text_output_prefix</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dataset</span> <span class="o">=</span> <span class="n">ShardedDataset</span><span class="p">(</span><span class="n">output_prefix</span><span class="p">,</span> <span class="n">corpus</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dataset</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+</pre></div>
+</div>
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalShardedDatasetLoader.build_img">
+<tt class="descname">build_img</tt><big>(</big><em>corpus</em>, <em>img_infix=None</em>, <em>dataset_init_args={}</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalShardedDatasetLoader.build_img"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalShardedDatasetLoader.build_img" title="Permalink to this definition">¶</a></dt>
+<dd><p>From the given corpus, builds a text ShardedDataset with the given
+infix.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalShardedDatasetLoader.build_text">
+<tt class="descname">build_text</tt><big>(</big><em>corpus</em>, <em>text_infix=None</em>, <em>dataset_init_args={}</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalShardedDatasetLoader.build_text"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalShardedDatasetLoader.build_text" title="Permalink to this definition">¶</a></dt>
+<dd><p>From the given corpus, builds a text ShardedDataset with the given
+infix.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalShardedDatasetLoader.img_output_prefix">
+<tt class="descname">img_output_prefix</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalShardedDatasetLoader.img_output_prefix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalShardedDatasetLoader.img_output_prefix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Builds the output_prefix parameter for an image ShardedDataset object
+so that the index can then be correctly saved/loaded</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalShardedDatasetLoader.load">
+<tt class="descname">load</tt><big>(</big><em>infix=None</em>, <em>text_infix=None</em>, <em>img_infix=None</em>, <em>text_serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em>, <em>img_serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalShardedDatasetLoader.load"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalShardedDatasetLoader.load" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates a ShardedMultimodalDataset. If corpora are not generated,
+raises a ValueError.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; <p>The infix (corpus label) of the desired text
+and image corpora. (Infixes serve to differentiate corpora
+obtained with different methods, such as filtering tokens
+according to Part of Speech tags or scaling down image
+dimensionality.)</p>
+<p>If <tt class="docutils literal"><span class="pre">infix</span></tt> is supplied, <tt class="docutils literal"><span class="pre">text_infix</span></tt> and <tt class="docutils literal"><span class="pre">img_infix</span></tt> are
+overriden by <tt class="docutils literal"><span class="pre">infix</span></tt>.</p>
+</li>
+<li><strong>text_infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (corpus label) of the desired text
+corpora. (Infixes serve to differentiate corpora
+obtained with different methods, such as filtering tokens
+according to Part of Speech tags.)</li>
+<li><strong>img_infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (corpus label) of the desired image
+corpora. (Infixes serve to differentiate corpora
+obtained with different methods, such as filtering tokens
+according to Part of Speech tags.)</li>
+<li><strong>text_serializer</strong> (<em>class froom gensim.interfaces.CorpusABC</em>) &#8211; The corpus class that should be used to
+de-serialize the given text corpus data. Defaults to
+<tt class="docutils literal"><span class="pre">text_serializer</span></tt> passed in <tt class="docutils literal"><span class="pre">__init__</span></tt>.</li>
+<li><strong>img_serializer</strong> (<em>class froom gensim.interfaces.CorpusABC</em>) &#8211; The corpus class that should be used to
+de-serialize the given image corpus data. Defaults to
+<tt class="docutils literal"><span class="pre">img_serializer</span></tt> passed in <tt class="docutils literal"><span class="pre">__init__</span></tt>.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><p class="first">safire.data.multimodal_dataset.ShardedMultimodalDataset</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">A <tt class="xref py py-class docutils literal"><span class="pre">ShardedMultimodalDataset</span></tt> representation of the
+dataset.</p>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raises:</th><td class="field-body"><p class="first last">ValueError</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalShardedDatasetLoader.load_img">
+<tt class="descname">load_img</tt><big>(</big><em>img_infix=None</em>, <em>dataset_init_args={}</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalShardedDatasetLoader.load_img"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalShardedDatasetLoader.load_img" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads an image-only dataset using the class
+<tt class="xref py py-class docutils literal"><span class="pre">UnsupervisedShardedImagenetCorpusDataset</span></tt>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>img_infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (corpus label) of the desired image
+corpora. (Infixes serve to differentiate corpora
+obtained with different methods, such as filtering tokens
+according to Part of Speech tags.)</li>
+<li><strong>dataset_init_args</strong> (<a class="reference external" href="http://docs.python.org/library/stdtypes.html#dict" title="(in Python v2.7)"><em>dict</em></a>) &#8211; Further init args that will be passed to the
+dataset constructor.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><p class="first">safire.data.corpus_dataset.UnsueprvisedShardedImagenetCorpusDataset</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">The <tt class="xref py py-class docutils literal"><span class="pre">UnsupervisedImagenetCorpusDataset</span></tt> built from the
+given text corpora.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalShardedDatasetLoader.load_text">
+<tt class="descname">load_text</tt><big>(</big><em>text_infix=None</em>, <em>dataset_init_args={}</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalShardedDatasetLoader.load_text"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalShardedDatasetLoader.load_text" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads a text-only dataset using the class
+<tt class="xref py py-class docutils literal"><span class="pre">UnsupervisedVTextCorpusDataset</span></tt>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>text_infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (corpus label) of the desired text
+corpora. (Infixes serve to differentiate corpora
+obtained with different methods, such as filtering tokens
+according to Part of Speech tags.)</li>
+<li><strong>dataset_init_args</strong> (<a class="reference external" href="http://docs.python.org/library/stdtypes.html#dict" title="(in Python v2.7)"><em>dict</em></a>) &#8211; Further init args that will be passed to the
+dataset constructor.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><p class="first">safire.data.corpus_dataset.UnsueprvisedVTextCorpusDataset</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">The <tt class="xref py py-class docutils literal"><span class="pre">UnsupervisedVTextCorpusDataset</span></tt> built from the
+given text corpora.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalShardedDatasetLoader.output_prefix">
+<tt class="descname">output_prefix</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalShardedDatasetLoader.output_prefix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalShardedDatasetLoader.output_prefix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Builds the output_prefix parameter for a ShardedDataset object
+so that the index can then be correctly saved/loaded</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.MultimodalShardedDatasetLoader.text_output_prefix">
+<tt class="descname">text_output_prefix</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#MultimodalShardedDatasetLoader.text_output_prefix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.MultimodalShardedDatasetLoader.text_output_prefix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Builds the output_prefix parameter for a text ShardedDataset object
+so that the index can then be correctly saved/loaded</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.data.loaders.ShardedDatasetLoader">
+<em class="property">class </em><tt class="descclassname">safire.data.loaders.</tt><tt class="descname">ShardedDatasetLoader</tt><big>(</big><em>root</em>, <em>name</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ShardedDatasetLoader"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ShardedDatasetLoader" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>This class is responsible for loading sharded datasets from a data directory.
+It mirrors the function of <a class="reference internal" href="#safire.data.loaders.MultimodalDatasetLoader" title="safire.data.loaders.MultimodalDatasetLoader"><tt class="xref py py-class docutils literal"><span class="pre">MultimodalDatasetLoader</span></tt></a>, but deals with
+sharded dataset structures saved/loaded w.r.t. the data dir.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">sdLoader</span> <span class="o">=</span> <span class="n">ShardedDatasetLoader</span><span class="p">(</span><span class="s">&#39;path/to/dataset/root&#39;</span><span class="p">,</span> <span class="s">&#39;name&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">index</span> <span class="o">=</span> <span class="n">sdLoader</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="s">&#39;.SDA-1000.img&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This will load an image dataset corresponding to the original data
+transformed by a 1000-neuron denoising autoencoder.</p>
+<p>Also enables getting the &#8216;right&#8217; string for the <tt class="docutils literal"><span class="pre">output_prefix</span></tt> string
+of the gensim <tt class="xref py py-class docutils literal"><span class="pre">gensim.similarities.Similarity</span></tt> class.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">sdLoader</span><span class="o">.</span><span class="n">output_prefix</span><span class="p">(</span><span class="s">&#39;.i4096&#39;</span><span class="p">)</span>
+<span class="go">&#39;path/to/dataset/root/datasets/name.SDA-1000.img.shdat&#39;</span>
+</pre></div>
+</div>
+<dl class="method">
+<dt id="safire.data.loaders.ShardedDatasetLoader.has_dataset">
+<tt class="descname">has_dataset</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ShardedDatasetLoader.has_dataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ShardedDatasetLoader.has_dataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether a saved index object with the given infix exists in
+the dataset.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (dataset label) of the desired dataset.
+(Infixes serve to differentiate saved datasets
+obtained from different image corpora, like a full 4096-dimensional
+Imagenet feature corpus or a lower-dimensional encoding.)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.ShardedDatasetLoader.load_dataset">
+<tt class="descname">load_dataset</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ShardedDatasetLoader.load_dataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ShardedDatasetLoader.load_dataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads a similarity index object for the dataset with the specified
+infix.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (index label) of the desired index.
+(Infixes serve to differentiate saved indexes
+obtained from different image corpora, like a full 4096-dimensional
+Imagenet feature corpus or a lower-dimensional encoding.)</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raises:</th><td class="field-body">ValueError</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.ShardedDatasetLoader.output_prefix">
+<tt class="descname">output_prefix</tt><big>(</big><em>infix=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ShardedDatasetLoader.output_prefix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ShardedDatasetLoader.output_prefix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Builds the output_prefix parameter for a ShardedDataset object
+so that the dataset can then be correctly saved/loaded.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.loaders.ShardedDatasetLoader.save_dataset">
+<tt class="descname">save_dataset</tt><big>(</big><em>dataset</em>, <em>infix=''</em><big>)</big><a class="reference internal" href="_modules/safire/data/loaders.html#ShardedDatasetLoader.save_dataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.loaders.ShardedDatasetLoader.save_dataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves a model instance to file.&#8221;</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>dataset</strong> (<a class="reference internal" href="safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset" title="safire.data.sharded_dataset.ShardedDataset"><em>safire.data.sharded_dataset.ShardedDataset</em></a>) &#8211; A sharded dataset to save in the data dir.</li>
+<li><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The infix (handle label) of the dataset to save. Pick
+a sensible one. (Infixes serve to differentiate saved model handles
+obtained with different methods, such as Logistic Regression or
+Denoising Autoencoders.)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.data.loaders.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,202 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.utils.transcorp &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="safire.utils" href="../utils.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li><a href="../utils.html" accesskey="U">safire.utils</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.utils.transcorp</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">This module contains utility functions for working with gensim TransformedCorpus</span>
+<span class="sd">stacks.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">gensim.corpora</span> <span class="kn">import</span> <span class="n">TextCorpus</span>
+<span class="kn">from</span> <span class="nn">gensim.interfaces</span> <span class="kn">import</span> <span class="n">TransformedCorpus</span>
+<span class="kn">from</span> <span class="nn">gensim.models</span> <span class="kn">import</span> <span class="n">TfidfModel</span>
+<span class="kn">from</span> <span class="nn">safire.data</span> <span class="kn">import</span> <span class="n">FrequencyBasedTransformer</span><span class="p">,</span> <span class="n">VTextCorpus</span>
+<span class="kn">from</span> <span class="nn">safire.data.dataset</span> <span class="kn">import</span> <span class="n">Dataset</span>
+<span class="kn">from</span> <span class="nn">safire.data.imagenetcorpus</span> <span class="kn">import</span> <span class="n">ImagenetCorpus</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&quot;Jan Hajic jr.&quot;</span>
+
+
+<div class="viewcode-block" id="id2word"><a class="viewcode-back" href="../../../safire.utils.transcorp.html#safire.utils.transcorp.id2word">[docs]</a><span class="k">def</span> <span class="nf">id2word</span><span class="p">(</span><span class="n">corpus</span><span class="p">,</span> <span class="n">wid</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns the word associated with the original ID in the given corpus.</span>
+<span class="sd">    Based on corpus type, this can mean backtracking the origin of the ID</span>
+<span class="sd">    number through multiple transformations.</span>
+
+<span class="sd">    Currently implemented: backtracking through</span>
+<span class="sd">    :class:`FrequencyBasedTransformer`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">corpus</span><span class="p">,</span> <span class="n">TransformedCorpus</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="n">FrequencyBasedTransformer</span><span class="p">):</span>
+            <span class="n">orig_wid</span> <span class="o">=</span> <span class="n">corpus</span><span class="o">.</span><span class="n">obj</span><span class="o">.</span><span class="n">transformed2orig</span><span class="p">[</span><span class="n">wid</span><span class="p">]</span>
+            <span class="c">#print &#39;Running id2word through FrequencyBasedTransformer: from %d to %d&#39; % (wid, orig_wid)</span>
+            <span class="k">return</span> <span class="nb">unicode</span><span class="p">(</span><span class="n">id2word</span><span class="p">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">corpus</span><span class="p">,</span> <span class="n">orig_wid</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c">#print &#39;Running id2word through TransformedCorpus: staying at %d&#39; % wid</span>
+            <span class="k">return</span> <span class="nb">unicode</span><span class="p">(</span><span class="n">id2word</span><span class="p">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">corpus</span><span class="p">,</span> <span class="n">wid</span><span class="p">))</span>
+    <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">corpus</span><span class="p">,</span> <span class="s">&#39;dictionary&#39;</span><span class="p">):</span>
+        <span class="c">#print &#39;Found corpus with dictionary, wid: %d&#39; % wid</span>
+        <span class="k">return</span> <span class="nb">unicode</span><span class="p">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">dictionary</span><span class="p">[</span><span class="n">wid</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Cannot backtrack through corpus type </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">corpus</span><span class="p">)))</span>
+
+</div>
+<div class="viewcode-block" id="bottom_corpus"><a class="viewcode-back" href="../../../safire.utils.transcorp.html#safire.utils.transcorp.bottom_corpus">[docs]</a><span class="k">def</span> <span class="nf">bottom_corpus</span><span class="p">(</span><span class="n">corpus</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Jumps through a stack of TransformedCorpus objects all the way to the</span>
+<span class="sd">    bottom corpus.&quot;&quot;&quot;</span>
+    <span class="n">current_corpus</span> <span class="o">=</span> <span class="n">corpus</span>
+    <span class="k">while</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">current_corpus</span><span class="p">,</span> <span class="n">TransformedCorpus</span><span class="p">):</span>
+        <span class="n">current_corpus</span> <span class="o">=</span> <span class="n">current_corpus</span><span class="o">.</span><span class="n">corpus</span>
+    <span class="k">return</span> <span class="n">current_corpus</span>
+
+</div>
+<div class="viewcode-block" id="dimension"><a class="viewcode-back" href="../../../safire.utils.transcorp.html#safire.utils.transcorp.dimension">[docs]</a><span class="k">def</span> <span class="nf">dimension</span><span class="p">(</span><span class="n">corpus</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Finds the topomost corpus that can provide information about its</span>
+<span class="sd">    output dimension.&quot;&quot;&quot;</span>
+    <span class="n">current_corpus</span> <span class="o">=</span> <span class="n">corpus</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">current_corpus</span><span class="p">,</span> <span class="n">Dataset</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">current_corpus</span><span class="o">.</span><span class="n">n_in</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">current_corpus</span><span class="p">,</span> <span class="n">TextCorpus</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">current_corpus</span><span class="o">.</span><span class="n">dictionary</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">current_corpus</span><span class="p">,</span> <span class="n">ImagenetCorpus</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">current_corpus</span><span class="o">.</span><span class="n">dim</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">current_corpus</span><span class="p">,</span> <span class="n">TransformedCorpus</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">current_corpus</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="n">FrequencyBasedTransformer</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">current_corpus</span><span class="o">.</span><span class="n">obj</span><span class="o">.</span><span class="n">k</span> <span class="o">-</span> <span class="n">current_corpus</span><span class="o">.</span><span class="n">obj</span><span class="o">.</span><span class="n">discard_top</span>
+        <span class="c"># Optimization, TfidfModel doesn&#39;t change model dimension</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">current_corpus</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="n">TfidfModel</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">current_corpus</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="s">&#39;dfs&#39;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">current_corpus</span><span class="o">.</span><span class="n">obj</span><span class="o">.</span><span class="n">dfs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">current_corpus</span><span class="o">.</span><span class="n">obj</span><span class="p">,</span> <span class="s">&#39;n_out&#39;</span><span class="p">):</span> <span class="c"># Covers SafireTransformers</span>
+            <span class="k">return</span> <span class="n">current_corpus</span><span class="o">.</span><span class="n">obj</span><span class="o">.</span><span class="n">n_out</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">dimension</span><span class="p">(</span><span class="n">current_corpus</span><span class="o">.</span><span class="n">corpus</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Cannot find output dimension of corpus </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">corpus</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="run_transformations"><a class="viewcode-back" href="../../../safire.utils.transcorp.html#safire.utils.transcorp.run_transformations">[docs]</a><span class="k">def</span> <span class="nf">run_transformations</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="o">*</span><span class="n">transformations</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Runs the TransformedCorpus transformation stack.&quot;&quot;&quot;</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">item</span>
+    <span class="k">for</span> <span class="n">tr</span> <span class="ow">in</span> <span class="n">transformations</span><span class="p">:</span>
+        <span class="c">#print &#39;Transformation applied: %s&#39; % str(tr)</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">tr</span><span class="p">[</span><span class="n">out</span><span class="p">]</span>
+        <span class="c">#print &#39;Result: %s&#39; % str(out)</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+</div>
+<div class="viewcode-block" id="get_transformers"><a class="viewcode-back" href="../../../safire.utils.transcorp.html#safire.utils.transcorp.get_transformers">[docs]</a><span class="k">def</span> <span class="nf">get_transformers</span><span class="p">(</span><span class="n">corpus</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Recovers the Transformation objects from a stack of TransformedCorpora.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">tr</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">current_corpus</span> <span class="o">=</span> <span class="n">corpus</span>
+    <span class="k">while</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">current_corpus</span><span class="p">,</span> <span class="n">TransformedCorpus</span><span class="p">):</span>
+        <span class="n">tr</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">current_corpus</span><span class="o">.</span><span class="n">obj</span><span class="p">)</span>
+        <span class="n">current_corpus</span> <span class="o">=</span> <span class="n">current_corpus</span><span class="o">.</span><span class="n">corpus</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">current_corpus</span><span class="p">,</span> <span class="n">VTextCorpus</span><span class="p">):</span> <span class="c"># Also has __getitem__...</span>
+        <span class="n">tr</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">current_corpus</span><span class="p">)</span>
+    <span class="n">tr</span><span class="o">.</span><span class="n">reverse</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">tr</span>
+</div>
+<div class="viewcode-block" id="reset_vtcorp_input"><a class="viewcode-back" href="../../../safire.utils.transcorp.html#safire.utils.transcorp.reset_vtcorp_input">[docs]</a><span class="k">def</span> <span class="nf">reset_vtcorp_input</span><span class="p">(</span><span class="n">corpus</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">input_root</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">lock</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                       <span class="n">inplace</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Resets the inputs for the VTextCorpus at the bottom of the</span>
+<span class="sd">    TransformedCorpus stack.</span>
+
+<span class="sd">    :param inplace: If this flag is set, will switch the inputs for the given</span>
+<span class="sd">        corpus in-place. If not, will deepcopy the corpus. **[NOT IMPLEMENTED]</span>
+<span class="sd">        Don&#39;t use (stick with True)!**&quot;&quot;&quot;</span>
+    <span class="n">vtcorp</span> <span class="o">=</span> <span class="n">bottom_corpus</span><span class="p">(</span><span class="n">corpus</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">vtcorp</span><span class="p">,</span> <span class="n">VTextCorpus</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Bottom corpus </span><span class="si">%s</span><span class="s"> instead of VTextCorpus.&#39;</span> <span class="o">%</span> <span class="nb">type</span><span class="p">(</span><span class="n">vtcorp</span><span class="p">))</span>
+    <span class="n">vtcorp</span><span class="o">.</span><span class="n">reset_input</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">input_root</span><span class="o">=</span><span class="n">input_root</span><span class="p">,</span> <span class="n">lock</span><span class="o">=</span><span class="n">lock</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li><a href="../utils.html" >safire.utils</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

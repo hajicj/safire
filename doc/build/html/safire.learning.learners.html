@@ -1,0 +1,164 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.learners package &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" />
+    <link rel="up" title="safire.learning package" href="safire.learning.html" />
+    <link rel="next" title="safire.learning.learners.base_sgd_learner module" href="safire.learning.learners.base_sgd_learner.html" />
+    <link rel="prev" title="safire.learning.interfaces.safire_transformer module" href="safire.learning.interfaces.safire_transformer.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="safire.learning.learners.base_sgd_learner.html" title="safire.learning.learners.base_sgd_learner module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="safire.learning.interfaces.safire_transformer.html" title="safire.learning.interfaces.safire_transformer module"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="safire.html" >safire package</a> &raquo;</li>
+          <li><a href="safire.learning.html" accesskey="U">safire.learning package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="safire-learning-learners-package">
+<h1>safire.learning.learners package<a class="headerlink" href="#safire-learning-learners-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="safire.learning.learners.base_sgd_learner.html">safire.learning.learners.base_sgd_learner module</a></li>
+</ul>
+</div>
+</div>
+<div class="section" id="module-safire.learning.learners">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-safire.learning.learners" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="safire.learning.learners.MomentumUpdater">
+<em class="property">class </em><tt class="descclassname">safire.learning.learners.</tt><tt class="descname">MomentumUpdater</tt><big>(</big><em>learning_rate=0.13</em>, <em>momentum=0.9</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners.html#MomentumUpdater"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.MomentumUpdater" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.learning.learners.ResilientBackpropUpdater">
+<em class="property">class </em><tt class="descclassname">safire.learning.learners.</tt><tt class="descname">ResilientBackpropUpdater</tt><big>(</big><em>params</em>, <em>init_update=0.05</em>, <em>positive_step=1.2</em>, <em>negative_step=0.5</em>, <em>max_step=1.0</em>, <em>min_step=0.0001</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners.html#ResilientBackpropUpdater"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.ResilientBackpropUpdater" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.learning.learners.StandardSGDUpdater">
+<em class="property">class </em><tt class="descclassname">safire.learning.learners.</tt><tt class="descname">StandardSGDUpdater</tt><big>(</big><em>learning_rate=0.13</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners.html#StandardSGDUpdater"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.StandardSGDUpdater" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.learning.learners.standard_sgd_updater">
+<tt class="descclassname">safire.learning.learners.</tt><tt class="descname">standard_sgd_updater</tt><big>(</big><em>params</em>, <em>gradients</em>, <em>learning_rate</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners.html#standard_sgd_updater"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.standard_sgd_updater" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">safire.learning.learners package</a><ul>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#module-safire.learning.learners">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="safire.learning.interfaces.safire_transformer.html"
+                        title="previous chapter">safire.learning.interfaces.safire_transformer module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="safire.learning.learners.base_sgd_learner.html"
+                        title="next chapter">safire.learning.learners.base_sgd_learner module</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.learning.learners.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="safire.learning.learners.base_sgd_learner.html" title="safire.learning.learners.base_sgd_learner module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="safire.learning.interfaces.safire_transformer.html" title="safire.learning.interfaces.safire_transformer module"
+             >previous</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="safire.html" >safire package</a> &raquo;</li>
+          <li><a href="safire.learning.html" >safire.learning package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

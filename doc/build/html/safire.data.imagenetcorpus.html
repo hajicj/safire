@@ -1,0 +1,120 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.imagenetcorpus module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.data.imagenetcorpus">
+<span id="safire-data-imagenetcorpus-module"></span><h1>safire.data.imagenetcorpus module<a class="headerlink" href="#module-safire.data.imagenetcorpus" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.data.imagenetcorpus.ImagenetCorpus">
+<em class="property">class </em><tt class="descclassname">safire.data.imagenetcorpus.</tt><tt class="descname">ImagenetCorpus</tt><big>(</big><em>input</em>, <em>delimiter=None</em>, <em>dim=4096</em>, <em>eps=1e-09</em>, <em>doc2id=None</em>, <em>id2doc=None</em>, <em>gzipped=False</em>, <em>label=''</em><big>)</big><a class="reference internal" href="_modules/safire/data/imagenetcorpus.html#ImagenetCorpus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.imagenetcorpus.ImagenetCorpus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">gensim.interfaces.CorpusABC</span></tt></p>
+<p>The ImgnetCorpus is capable of reading the results of running
+images through the ImageNet convolutional network, giving out 4096-dim
+vectors of floats.</p>
+<p>Through a set of
+common document IDs, it&#8217;s possible to link the image vectors to text
+documents in a <tt class="xref py py-class docutils literal"><span class="pre">MultimodalDataset</span></tt>.</p>
+<dl class="method">
+<dt id="safire.data.imagenetcorpus.ImagenetCorpus.get_images">
+<tt class="descname">get_images</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/imagenetcorpus.html#ImagenetCorpus.get_images"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.imagenetcorpus.ImagenetCorpus.get_images" title="Permalink to this definition">¶</a></dt>
+<dd><p>One iteration of get_images should yield one document, which means
+one line of input.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.imagenetcorpus.ImagenetCorpus.reset">
+<tt class="descname">reset</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/imagenetcorpus.html#ImagenetCorpus.reset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.imagenetcorpus.ImagenetCorpus.reset" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.data.imagenetcorpus.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

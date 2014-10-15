@@ -1,0 +1,205 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.multimodal_dataset module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" />
+    <link rel="up" title="safire.data package" href="safire.data.html" />
+    <link rel="next" title="safire.data.parameter_space module" href="safire.data.parameter_space.html" />
+    <link rel="prev" title="safire.data.loaders module" href="safire.data.loaders.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="safire.data.parameter_space.html" title="safire.data.parameter_space module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="safire.data.loaders.html" title="safire.data.loaders module"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="safire.html" >safire package</a> &raquo;</li>
+          <li><a href="safire.data.html" accesskey="U">safire.data package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.data.multimodal_dataset">
+<span id="safire-data-multimodal-dataset-module"></span><h1>safire.data.multimodal_dataset module<a class="headerlink" href="#module-safire.data.multimodal_dataset" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.data.multimodal_dataset.MultimodalDataset">
+<em class="property">class </em><tt class="descclassname">safire.data.multimodal_dataset.</tt><tt class="descname">MultimodalDataset</tt><big>(</big><em>text_mm_filename</em>, <em>text_vt_filename</em>, <em>img_mm_filename</em>, <em>img_ic_filename</em>, <em>dim_text=None</em>, <em>dim_img=None</em>, <em>aligned=False</em>, <em>textdoc2imdoc=None</em>, <em>test_p=0.1</em>, <em>devel_p=0.1</em>, <em>mode=0</em>, <em>shared=False</em>, <em>text_serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em>, <em>img_serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em><big>)</big><a class="reference internal" href="_modules/safire/data/multimodal_dataset.html#MultimodalDataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.multimodal_dataset.MultimodalDataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="safire.data.supervised_dataset.html#safire.data.supervised_dataset.SupervisedDataset" title="safire.data.supervised_dataset.SupervisedDataset"><tt class="xref py py-class docutils literal"><span class="pre">safire.data.supervised_dataset.SupervisedDataset</span></tt></a></p>
+<p>The MultimodalCorpus is capable of reading both text and image data.
+The image data is assumed to be the output of ImageetCorpus: 4096-dim
+vectors of 32-bit floats. The text data is assumed to be a combined
+VTextCorpus and MmCorpus - see <tt class="xref py py-class docutils literal"><span class="pre">UnsupervisedVTextCorpusDataset</span></tt>.</p>
+<p>The dataset will assume that the text and image corpora are aligned - that
+the <tt class="docutils literal"><span class="pre">i</span></tt>-th item in the text corpus corresponds to the <tt class="docutils literal"><span class="pre">i</span></tt>-th item in
+the image corpus, unless a textdoc2imdoc mapping is given. !!!This
+default behavior is soon to be deprecated!!!</p>
+<p>If the textdoc2imdoc mapping is given, the corpus will simulate being
+aligned. <strong>The indexing of the MultimodalDataset is based on the text
+modality:</strong> all images belonging to the same text will be retrieved
+consecutively.</p>
+<p>Because the text2im mapping means that the datasets will not be loaded in
+order, potentially a <strong>lot</strong> of shard-switching may happen on iterating.
+This is severly debillitating to performance. Therefore, two measures are
+taken:</p>
+<ul class="simple">
+<li>On initialization, the text and images are sorted by shard index (texts
+first, images second).</li>
+<li>When batches are retrieved, they are cached. The cache currently assumes
+the texts fit into memory - there is no limit on cache size. On each mode
+change, the cache is cleared. Only batches that correspond to the current
+<em>input</em> mode are cached. (The necessity to cache is currently only felt
+with the multimodal mode, as that is where shard-jumping can happen.)</li>
+</ul>
+<dl class="method">
+<dt id="safire.data.multimodal_dataset.MultimodalDataset.cache_full">
+<tt class="descname">cache_full</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/multimodal_dataset.html#MultimodalDataset.cache_full"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.multimodal_dataset.MultimodalDataset.cache_full" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="safire.data.multimodal_dataset.MultimodalDataset.n_devel_batches">
+<tt class="descname">n_devel_batches</tt><big>(</big><em>batch_size</em><big>)</big><a class="reference internal" href="_modules/safire/data/multimodal_dataset.html#MultimodalDataset.n_devel_batches"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.multimodal_dataset.MultimodalDataset.n_devel_batches" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the number of devel batches of the given batch size.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.multimodal_dataset.MultimodalDataset.n_test_batches">
+<tt class="descname">n_test_batches</tt><big>(</big><em>batch_size</em><big>)</big><a class="reference internal" href="_modules/safire/data/multimodal_dataset.html#MultimodalDataset.n_test_batches"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.multimodal_dataset.MultimodalDataset.n_test_batches" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the number of devel batches of the given batch size.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.multimodal_dataset.MultimodalDataset.n_train_batches">
+<tt class="descname">n_train_batches</tt><big>(</big><em>batch_size</em><big>)</big><a class="reference internal" href="_modules/safire/data/multimodal_dataset.html#MultimodalDataset.n_train_batches"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.multimodal_dataset.MultimodalDataset.n_train_batches" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the number of training batches of the given batch size.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.multimodal_dataset.MultimodalDataset.set_mode">
+<tt class="descname">set_mode</tt><big>(</big><em>mode</em><big>)</big><a class="reference internal" href="_modules/safire/data/multimodal_dataset.html#MultimodalDataset.set_mode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.multimodal_dataset.MultimodalDataset.set_mode" title="Permalink to this definition">¶</a></dt>
+<dd><p>Controls dataset behavior - what kind of dataset the dataset should
+act like on batch requests. Sets n_in and n_out accordingly.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>mode</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; <p>Set what kind of dataset the dataset should act like. One
+of <tt class="docutils literal"><span class="pre">0</span></tt>, <tt class="docutils literal"><span class="pre">1</span></tt> or <tt class="docutils literal"><span class="pre">2</span></tt>.</p>
+<ul class="simple">
+<li>&#8216;0&#8217; for unsupervised action (returns combined batches of both
+text and image features),</li>
+<li><tt class="docutils literal"><span class="pre">1</span></tt> for text as <tt class="docutils literal"><span class="pre">X</span></tt> (input), images as <tt class="docutils literal"><span class="pre">y</span></tt> (response),</li>
+<li><tt class="docutils literal"><span class="pre">2</span></tt> for images as <tt class="docutils literal"><span class="pre">X</span></tt> (input) and text as <tt class="docutils literal"><span class="pre">y</span></tt> (response).</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.multimodal_dataset.MultimodalDataset.textno2imno">
+<tt class="descname">textno2imno</tt><big>(</big><em>textno</em><big>)</big><a class="reference internal" href="_modules/safire/data/multimodal_dataset.html#MultimodalDataset.textno2imno"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.multimodal_dataset.MultimodalDataset.textno2imno" title="Permalink to this definition">¶</a></dt>
+<dd><p>Finds the appropriate image numbers for the given text number.
+Returns a list.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="safire.data.loaders.html"
+                        title="previous chapter">safire.data.loaders module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="safire.data.parameter_space.html"
+                        title="next chapter">safire.data.parameter_space module</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.data.multimodal_dataset.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="safire.data.parameter_space.html" title="safire.data.parameter_space module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="safire.data.loaders.html" title="safire.data.loaders module"
+             >previous</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="safire.html" >safire package</a> &raquo;</li>
+          <li><a href="safire.data.html" >safire.data package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

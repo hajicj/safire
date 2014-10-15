@@ -1,0 +1,202 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.vtextcorpus module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.data.vtextcorpus">
+<span id="safire-data-vtextcorpus-module"></span><h1>safire.data.vtextcorpus module<a class="headerlink" href="#module-safire.data.vtextcorpus" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.data.vtextcorpus.VTextCorpus">
+<em class="property">class </em><tt class="descclassname">safire.data.vtextcorpus.</tt><tt class="descname">VTextCorpus</tt><big>(</big><em>input=None, colnames=['form', 'lemma', 'tag'], retcol='lemma', input_root=None, delimiter='t', gzipped=True, sentences=False, dictionary=None, allow_dict_updates=True, doc2id=None, id2doc=None, token_filter=None, token_transformer='strip_UFAL', pfilter=None, pfilter_full_freqs=False, filter_capital=False, label=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/vtextcorpus.html#VTextCorpus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.vtextcorpus.VTextCorpus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">gensim.corpora.textcorpus.TextCorpus</span></tt></p>
+<p>A text corpus that works on files in Vertical Text format.
+The vtext format has one token per line, with various columns.
+The column names are defined on initialization.</p>
+<p>Which columns should be returned is also specified on init.</p>
+<dl class="method">
+<dt id="safire.data.vtextcorpus.VTextCorpus.doc2bow">
+<tt class="descname">doc2bow</tt><big>(</big><em>text</em>, <em>allow_update=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/vtextcorpus.html#VTextCorpus.doc2bow"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.vtextcorpus.VTextCorpus.doc2bow" title="Permalink to this definition">¶</a></dt>
+<dd><p>Mini-method for generating BOW representation of text.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.vtextcorpus.VTextCorpus.dry_run">
+<tt class="descname">dry_run</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/vtextcorpus.html#VTextCorpus.dry_run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.vtextcorpus.VTextCorpus.dry_run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loops through the entire corpus without outputting the documents
+themselves, to generate the corpus infrastructure: document ID mapping,
+dictionary, etc.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.vtextcorpus.VTextCorpus.get_texts">
+<tt class="descname">get_texts</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/vtextcorpus.html#VTextCorpus.get_texts"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.vtextcorpus.VTextCorpus.get_texts" title="Permalink to this definition">¶</a></dt>
+<dd><p>One iteration of get_texts() should yield one document, which means
+one file.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.vtextcorpus.VTextCorpus.lock">
+<tt class="descname">lock</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/vtextcorpus.html#VTextCorpus.lock"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.vtextcorpus.VTextCorpus.lock" title="Permalink to this definition">¶</a></dt>
+<dd><p>In order to use the corpus as a transformer, it has to be locked: it
+only reads texts and doesn&#8217;t update anything.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.vtextcorpus.VTextCorpus.locked">
+<tt class="descname">locked</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/vtextcorpus.html#VTextCorpus.locked"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.vtextcorpus.VTextCorpus.locked" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether the corpus is locked.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.vtextcorpus.VTextCorpus.parse_document_and_sentences">
+<tt class="descname">parse_document_and_sentences</tt><big>(</big><em>doc_handle</em><big>)</big><a class="reference internal" href="_modules/safire/data/vtextcorpus.html#VTextCorpus.parse_document_and_sentences"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.vtextcorpus.VTextCorpus.parse_document_and_sentences" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses the whole document. Returns both the sentences and the
+whole document, filtered by pfilter.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.vtextcorpus.VTextCorpus.parse_sentences">
+<tt class="descname">parse_sentences</tt><big>(</big><em>doc_handle</em><big>)</big><a class="reference internal" href="_modules/safire/data/vtextcorpus.html#VTextCorpus.parse_sentences"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.vtextcorpus.VTextCorpus.parse_sentences" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses one vtext document into sentences, based on self.colnames and
+self.retcol. Interprets blank lines as sentence breaks.</p>
+<p>If a sentence filter is specified, applies the sentence filter.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.vtextcorpus.VTextCorpus.reset_input">
+<tt class="descname">reset_input</tt><big>(</big><em>vtlist_filename</em>, <em>input_root=None</em>, <em>lock=True</em><big>)</big><a class="reference internal" href="_modules/safire/data/vtextcorpus.html#VTextCorpus.reset_input"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.vtextcorpus.VTextCorpus.reset_input" title="Permalink to this definition">¶</a></dt>
+<dd><p>Used to re-direct the VTextCorpus to a different <a href="#id1"><span class="problematic" id="id2">*</span></a>.vtlist input
+file. By default:</p>
+<ul class="simple">
+<li>The input root is the same,</li>
+<li>The corpus will be <em>locked</em>: the dictionary will not be updated.
+This is to reflect the usage: to load a VTextCorpus that was used
+for training and use it to correctly feed data to the higher-level
+corpora.</li>
+</ul>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>vtlist_filename</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The new vtlist filename. To be consistent, this
+is only the raw filename without the path (more precisely, with only
+the path relative to <tt class="docutils literal"><span class="pre">self.input_root</span></tt>, if the <tt class="docutils literal"><span class="pre">input_root</span></tt>
+parameter is <tt class="docutils literal"><span class="pre">None</span></tt>, or relative to the <tt class="docutils literal"><span class="pre">input_root</span></tt> path
+parameter).</li>
+<li><strong>input_root</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; If the corpus input root relative to which the
+<a href="#id3"><span class="problematic" id="id4">*</span></a>.vt.txt files in the new vtlist <tt class="docutils literal"><span class="pre">vtlist_filename</span></tt> are stored
+differs from the current input root, re-set it using this parameter.</li>
+<li><strong>lock</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) &#8211; If the corpus should be locked, i.e. in read-only mode
+(no modifications to the dictionary/other behavior), set this.
+By default, lock is set.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.vtextcorpus.VTextCorpus.setup_tfidf">
+<tt class="descname">setup_tfidf</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/vtextcorpus.html#VTextCorpus.setup_tfidf"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.vtextcorpus.VTextCorpus.setup_tfidf" title="Permalink to this definition">¶</a></dt>
+<dd><p>Prepare the TfidfModel that should transform the corpus outputs.
+Runs through the corpus, so it may be slow.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.vtextcorpus.VTextCorpus.unlock">
+<tt class="descname">unlock</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/vtextcorpus.html#VTextCorpus.unlock"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.vtextcorpus.VTextCorpus.unlock" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.data.vtextcorpus.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.dataset_stats module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-scripts.dataset_stats">
+<span id="scripts-dataset-stats-module"></span><h1>scripts.dataset_stats module<a class="headerlink" href="#module-scripts.dataset_stats" title="Permalink to this headline">¶</a></h1>
+<p><tt class="docutils literal"><span class="pre">dataset_stats.py</span></tt> is a script that collects statistics about datasets. It
+computes:</p>
+<ul class="simple">
+<li>Mean, variance</li>
+<li>Number of zero elements, nonzero elements, sparsity</li>
+<li>Histogram of feature values, in steps of 0.01 (or specified by argument)</li>
+<li>Histogram of average feature values, in steps of 0.01</li>
+<li>Visualization of feature averages</li>
+<li>Average feature correlation? Weighed by feature sums?</li>
+<li>Direct visualization of a part of the dataset</li>
+</ul>
+<dl class="class">
+<dt id="scripts.dataset_stats.DatasetStats">
+<em class="property">class </em><tt class="descclassname">scripts.dataset_stats.</tt><tt class="descname">DatasetStats</tt><big>(</big><em>dataset</em>, <em>sample_n=None</em><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#DatasetStats"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.DatasetStats" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>A simple container for various statistics about a dataset.</p>
+<dl class="method">
+<dt id="scripts.dataset_stats.DatasetStats.cell_cumulative_mass">
+<tt class="descname">cell_cumulative_mass</tt><big>(</big><em>n=100</em>, <em>n_bins=100</em><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#DatasetStats.cell_cumulative_mass"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.DatasetStats.cell_cumulative_mass" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="scripts.dataset_stats.DatasetStats.cell_histogram">
+<tt class="descname">cell_histogram</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#DatasetStats.cell_histogram"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.DatasetStats.cell_histogram" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plots the cell value density.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="scripts.dataset_stats.DatasetStats.cell_mass_histogram">
+<tt class="descname">cell_mass_histogram</tt><big>(</big><em>n=10</em>, <em>n_bins=100</em><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#DatasetStats.cell_mass_histogram"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.DatasetStats.cell_mass_histogram" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plots the mass in each histogram cell.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="scripts.dataset_stats.DatasetStats.feature_grid">
+<tt class="descname">feature_grid</tt><big>(</big><em>features</em>, <em>fn</em><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#DatasetStats.feature_grid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.DatasetStats.feature_grid" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluates given function <tt class="docutils literal"><span class="pre">fn</span></tt> average over all pairs of given features.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>features</strong> &#8211; </li>
+<li><strong>fn</strong> &#8211; </li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="scripts.dataset_stats.DatasetStats.feature_histogram">
+<tt class="descname">feature_histogram</tt><big>(</big><em>feature</em>, <em>n_bins=None</em>, <em>whole_dataset=False</em><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#DatasetStats.feature_histogram"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.DatasetStats.feature_histogram" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plots the histogram of feature values and the mean. Does not include
+zero values, only gives their proportion.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="scripts.dataset_stats.DatasetStats.feature_lecunn_covariances">
+<tt class="descname">feature_lecunn_covariances</tt><big>(</big><em>n_items=1000</em><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#DatasetStats.feature_lecunn_covariances"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.DatasetStats.feature_lecunn_covariances" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes and plots feature covariances, according to Y. LeCunn&#8217;s
+1998 paper on efficient backprop.</p>
+<p>Uses the first <tt class="docutils literal"><span class="pre">n_items</span></tt> data points.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="scripts.dataset_stats.DatasetStats.item_histogram">
+<tt class="descname">item_histogram</tt><big>(</big><em>idx</em>, <em>n_bins=None</em><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#DatasetStats.item_histogram"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.DatasetStats.item_histogram" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="scripts.dataset_stats.DatasetStats.nnz_histogram">
+<tt class="descname">nnz_histogram</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#DatasetStats.nnz_histogram"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.DatasetStats.nnz_histogram" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plots the distribution of nonzero counts.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="scripts.dataset_stats.DatasetStats.pairwise_feature_matrix">
+<tt class="descname">pairwise_feature_matrix</tt><big>(</big><em>features</em>, <em>fn</em><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#DatasetStats.pairwise_feature_matrix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.DatasetStats.pairwise_feature_matrix" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="scripts.dataset_stats.DatasetStats.plot_feature">
+<tt class="descname">plot_feature</tt><big>(</big><em>feature</em><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#DatasetStats.plot_feature"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.DatasetStats.plot_feature" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plots the counts for a feature.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="scripts.dataset_stats.DatasetStats.raw_cell_histogram">
+<tt class="descname">raw_cell_histogram</tt><big>(</big><em>n=100</em>, <em>n_bins=100</em><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#DatasetStats.raw_cell_histogram"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.DatasetStats.raw_cell_histogram" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plots the cell value histogram directly from the dataset,
+taking the first N items.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="scripts.dataset_stats.DatasetStats.report">
+<tt class="descname">report</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#DatasetStats.report"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.DatasetStats.report" title="Permalink to this definition">¶</a></dt>
+<dd><p>Prints out the stats, with appropriate formatting.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="scripts.dataset_stats.DatasetStats.rich_histogram">
+<tt class="descname">rich_histogram</tt><big>(</big><em>values</em>, <em>n_bins=100</em>, <em>with_zero=False</em>, <em>title=None</em><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#DatasetStats.rich_histogram"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.DatasetStats.rich_histogram" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.dataset_stats.build_argument_parser">
+<tt class="descclassname">scripts.dataset_stats.</tt><tt class="descname">build_argument_parser</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#build_argument_parser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.build_argument_parser" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="scripts.dataset_stats.do_stats_init">
+<tt class="descclassname">scripts.dataset_stats.</tt><tt class="descname">do_stats_init</tt><big>(</big><em>args</em>, <em>dataset</em><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#do_stats_init"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.do_stats_init" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="scripts.dataset_stats.main">
+<tt class="descclassname">scripts.dataset_stats.</tt><tt class="descname">main</tt><big>(</big><em>args</em><big>)</big><a class="reference internal" href="_modules/scripts/dataset_stats.html#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.dataset_stats.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/scripts.dataset_stats.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

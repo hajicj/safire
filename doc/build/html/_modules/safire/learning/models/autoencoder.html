@@ -1,0 +1,407 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.autoencoder &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.learning.models.autoencoder</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">.. module:: </span>
+<span class="sd">    :platform: Unix</span>
+<span class="sd">    :synopsis: This module contains the Autoencoder class definition.</span>
+
+<span class="sd">.. moduleauthor: Jan Hajic &lt;hajicj@gmail.com&gt;</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">cPickle</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">theano.tensor</span> <span class="kn">as</span> <span class="nn">TT</span>
+<span class="kn">from</span> <span class="nn">theano.tensor.shared_randomstreams</span> <span class="kn">import</span> <span class="n">RandomStreams</span>
+
+<span class="kn">from</span> <span class="nn">safire.learning.models.base_unsupervised_model</span> <span class="kn">import</span> <span class="n">BaseUnsupervisedModel</span>
+
+
+<div class="viewcode-block" id="Autoencoder"><a class="viewcode-back" href="../../../../safire.learning.models.autoencoder.html#safire.learning.models.autoencoder.Autoencoder">[docs]</a><span class="k">class</span> <span class="nc">Autoencoder</span><span class="p">(</span><span class="n">BaseUnsupervisedModel</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;The Autoencoder model. </span>
+<span class="sd">    </span>
+<span class="sd">    Optimizes reconstruction error with a cross-entropy loss function.</span>
+<span class="sd">    </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+                 <span class="n">activation</span><span class="o">=</span><span class="n">TT</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">,</span>
+                 <span class="n">backward_activation</span><span class="o">=</span><span class="n">TT</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">,</span>
+                 <span class="n">reconstruction</span><span class="o">=</span><span class="s">&#39;cross-entropy&#39;</span><span class="p">,</span>
+                 <span class="n">W</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">W_prime</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">b_prime</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                 <span class="n">tied_weights</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">(),</span>
+                 <span class="n">theano_rng</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initialize the parameters of the Autoencoder.</span>
+<span class="sd">        An Autoencoder is an unsupervised model that tries to minimize</span>
+<span class="sd">        reconstruction error on input.</span>
+
+<span class="sd">        :type inputs: theano.tensor.TensorType</span>
+<span class="sd">        :param inputs: Symbolic variable that descripbes the input</span>
+<span class="sd">                       of the architecture (e.g., one minibatch of</span>
+<span class="sd">                       input images, or output of a previous layer)</span>
+
+
+<span class="sd">        :type n_in: int</span>
+<span class="sd">        :param n_in: Number of input units, the dimension of the space</span>
+<span class="sd">                     in which the data points live</span>
+
+<span class="sd">        :type n_out: int</span>
+<span class="sd">        :param n_out: The number of output/hidden units.</span>
+<span class="sd">        </span>
+<span class="sd">        :type activation: theano.tensor.elemwise.Elemwise</span>
+<span class="sd">        :param activation: The nonlinearity applied at neuron</span>
+<span class="sd">                           output.</span>
+
+<span class="sd">        :type reconstruction: str</span>
+<span class="sd">        :param reconstruction: Which reconstruction cost to use. Accepts</span>
+<span class="sd">            ``cross-entropy`` and ``mse`` (for Mean Squared Error).</span>
+<span class="sd">                      </span>
+<span class="sd">        :type W: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param W: Theano variable pointing to a set of weights that should</span>
+<span class="sd">                  be shared between the autoencoder and another architecture;</span>
+<span class="sd">                  if autoencoder should be standalone, leave this as None.</span>
+<span class="sd">                  This set of weights refers to the transition from visible</span>
+<span class="sd">                  to hidden layer.</span>
+<span class="sd">        </span>
+<span class="sd">        :type W_prime: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param W_prime: Theano variable pointing to a set of weights that</span>
+<span class="sd">                        should be shared between the autoencoder and another</span>
+<span class="sd">                        architecture; if autoencoder should be standalone,</span>
+<span class="sd">                        leave this as None. This set of weights refers to</span>
+<span class="sd">                        the transition from the hidden to the visible layer.</span>
+<span class="sd">                        </span>
+<span class="sd">        :type b: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param b: Theano variable pointing to a set of bias values that</span>
+<span class="sd">                  should be shared between the autoencoder and another</span>
+<span class="sd">                  architecture; if autoencoder should be standalone,</span>
+<span class="sd">                  leave this as None. This set of bias values refers</span>
+<span class="sd">                  to the transition from visible to hidden layer. </span>
+<span class="sd">                  </span>
+<span class="sd">        :type b_prime: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param b_prime: Theano variable pointing to a set of bias values</span>
+<span class="sd">                        that should be shared between the autoencoder and</span>
+<span class="sd">                        another architecture; if autoencoder should be </span>
+<span class="sd">                        standalone, leave this as None. This set of bias</span>
+<span class="sd">                        values refers to the transition from visible to </span>
+<span class="sd">                        hidden layer. </span>
+<span class="sd">                        </span>
+<span class="sd">        :type tied_weights: bool</span>
+<span class="sd">        :param tied_weights: If True (default), forces W_prime = W.T, i.e.</span>
+<span class="sd">                             the visible-hidden transformation and the</span>
+<span class="sd">                             hidden-visible transformation use the same</span>
+<span class="sd">                             weights.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">Autoencoder</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">activation</span> <span class="o">=</span> <span class="n">activation</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">backward_activation</span> <span class="o">=</span> <span class="n">backward_activation</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tied_weights</span> <span class="o">=</span> <span class="n">tied_weights</span> <span class="c"># Bookkeeping, basically.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction</span> <span class="o">=</span> <span class="n">reconstruction</span>
+         
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">W</span><span class="p">:</span>
+            <span class="n">W</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_weights</span><span class="p">(</span><span class="s">&#39;W&#39;</span><span class="p">,</span> <span class="p">(</span><span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">),</span> <span class="n">rng</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>    <span class="c"># Check for consistency in supplied weights</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_init_param_consistency_check</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="p">(</span><span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">W</span> <span class="o">=</span> <span class="n">W</span>
+
+        <span class="c"># W_prime needs different behavior for tied_weights=True/False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">W_prime</span> <span class="o">=</span> <span class="bp">None</span>
+        
+        <span class="k">if</span> <span class="n">tied_weights</span> <span class="ow">is</span> <span class="bp">True</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">W_prime</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="o">.</span><span class="n">T</span>
+        
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">W_prime</span><span class="p">:</span>
+                <span class="n">W_prime</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_weights</span><span class="p">(</span><span class="s">&#39;W_prime&#39;</span><span class="p">,</span> <span class="p">(</span><span class="n">n_out</span><span class="p">,</span> <span class="n">n_in</span><span class="p">),</span> <span class="n">rng</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span> <span class="c"># Check for consistency of supplied weights </span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_init_param_consistency_check</span><span class="p">(</span><span class="n">W_prime</span><span class="p">,</span> <span class="p">(</span><span class="n">n_out</span><span class="p">,</span> <span class="n">n_in</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">b</span><span class="p">:</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_bias</span><span class="p">(</span><span class="s">&#39;b&#39;</span><span class="p">,</span> <span class="n">n_out</span><span class="p">,</span> <span class="n">rng</span><span class="p">)</span>
+            <span class="c"># initialize the biases b as a vector of n_out 0s</span>
+            <span class="c">#b = theano.shared(value = numpy.zeros((n_hidden,),</span>
+            <span class="c">#                      dtype = theano.config.floatX),</span>
+            <span class="c">#                  name = &#39;b&#39;)</span>
+
+        <span class="k">else</span><span class="p">:</span>    <span class="c"># Check for consistency in supplied weights</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_init_param_consistency_check</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="p">(</span><span class="n">n_out</span><span class="p">,))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="n">b</span>
+        
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">b_prime</span><span class="p">:</span>
+            <span class="c"># initialize the biases b as a vector of n_out 0s</span>
+            <span class="n">b_prime</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_bias</span><span class="p">(</span><span class="s">&#39;b_prime&#39;</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">rng</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>    <span class="c"># Check for consistency in supplied weights</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_init_param_consistency_check</span><span class="p">(</span><span class="n">b_prime</span><span class="p">,</span> <span class="p">(</span><span class="n">n_in</span><span class="p">,))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">b_prime</span> <span class="o">=</span> <span class="n">b_prime</span>
+        
+        <span class="c"># Different params for tied weights!</span>
+        <span class="c"># This will be difficult to put in a general method.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_prime</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">tied_weights</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">W_prime</span><span class="p">)</span>
+
+        <span class="c"># Compatibility of interface</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">outputs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">theano_rng</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">theano_rng</span> <span class="o">=</span> <span class="n">RandomStreams</span><span class="p">(</span><span class="n">rng</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">2</span> <span class="o">**</span> <span class="mi">30</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">theano_rng</span> <span class="o">=</span> <span class="n">theano_rng</span>
+
+
+    <span class="k">def</span> <span class="nf">_init_args_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Saves the model in the form of an init kwarg dict, since not all</span>
+<span class="sd">        attributes of the instance can be pickled. Upon loading, the saved</span>
+<span class="sd">        model kwarg dict will be used as ``**kwargs`` (the ``load`` method</span>
+<span class="sd">        is a classmethod) for an initialization of the model.&quot;&quot;&quot;</span>
+
+        <span class="n">init_arg_dict</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;W&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">,</span>
+            <span class="s">&#39;W_prime&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">W_prime</span><span class="p">,</span>
+            <span class="s">&#39;b&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span>
+            <span class="s">&#39;b_prime&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_prime</span><span class="p">,</span>
+            <span class="s">&#39;n_in&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span><span class="p">,</span>
+            <span class="s">&#39;n_out&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span><span class="p">,</span>
+            <span class="s">&#39;activation&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span>
+            <span class="s">&#39;tied_weights&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">tied_weights</span><span class="p">,</span>
+            <span class="s">&#39;inputs&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">inputs</span><span class="p">,</span>
+            <span class="s">&#39;reconstruction&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction</span>
+            <span class="c"># Random number generators are ignored?</span>
+        <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">init_arg_dict</span>
+
+<div class="viewcode-block" id="Autoencoder.mean_h_given_v"><a class="viewcode-back" href="../../../../safire.learning.models.autoencoder.html#safire.learning.models.autoencoder.Autoencoder.mean_h_given_v">[docs]</a>    <span class="k">def</span> <span class="nf">mean_h_given_v</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the activation of the hidden units.</span>
+<span class="sd">        </span>
+<span class="sd">        :type inputs: theano.tensor.TensorType</span>
+<span class="sd">        :param inputs: Values of the visible units (i.e. rows of data).</span>
+<span class="sd">        </span>
+<span class="sd">        :returns: The activation on hidden units, as symbolic expression</span>
+<span class="sd">        bound to ``inputs``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="Autoencoder.mean_v_given_h"><a class="viewcode-back" href="../../../../safire.learning.models.autoencoder.html#safire.learning.models.autoencoder.Autoencoder.mean_v_given_h">[docs]</a>    <span class="k">def</span> <span class="nf">mean_v_given_h</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden_values</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the activation of the visible units on reconstruction.</span>
+
+<span class="sd">        :type hidden_values: theano.tensor.TensorType</span>
+<span class="sd">        :param hidden_values: Values of the hidden units.</span>
+<span class="sd">        </span>
+<span class="sd">        :returns: The activation on visible units, as symbolic expression</span>
+<span class="sd">        bound to ``hidden_values``. This is the reconstructed activation.</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">backward_activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">hidden_values</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W_prime</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_prime</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="Autoencoder.sample_v_given_h"><a class="viewcode-back" href="../../../../safire.learning.models.autoencoder.html#safire.learning.models.autoencoder.Autoencoder.sample_v_given_h">[docs]</a>    <span class="k">def</span> <span class="nf">sample_v_given_h</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Samples the visible layer given the hidden layer.&quot;&quot;&quot;</span>
+        <span class="n">mean_v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">hidden</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W_prime</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_prime</span><span class="p">)</span>
+        <span class="n">sample_v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theano_rng</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="n">mean_v</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+                                            <span class="n">n</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">mean_v</span><span class="p">,</span>
+                                            <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sample_v</span>
+</div>
+<div class="viewcode-block" id="Autoencoder.sample_h_given_v"><a class="viewcode-back" href="../../../../safire.learning.models.autoencoder.html#safire.learning.models.autoencoder.Autoencoder.sample_h_given_v">[docs]</a>    <span class="k">def</span> <span class="nf">sample_h_given_v</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">visible</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Samples the hidden layer given the visible layer.&quot;&quot;&quot;</span>
+        <span class="n">mean_h</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">backward_activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">visible</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)</span>
+        <span class="n">sample_h</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theano_rng</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="n">mean_h</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+                                            <span class="n">n</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">mean_h</span><span class="p">,</span>
+                                            <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sample_h</span>
+    </div>
+    <span class="k">def</span> <span class="nf">_reconstruction_cross_entropy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the reconstruction cross-entropy on X.</span>
+<span class="sd">        </span>
+<span class="sd">        :type X: theano.tensor.TensorType</span>
+<span class="sd">        :param X: A training batch. In comparison to a supervised model,</span>
+<span class="sd">                  which computes cost on some response vector, the</span>
+<span class="sd">                  unsupervised model has to compute cost on the inputs.</span>
+<span class="sd">        </span>
+<span class="sd">        :returns: The reconstruction cross-entropy on X, as a number.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">activation_hidden</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean_h_given_v</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="n">activation_visible</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean_v_given_h</span><span class="p">(</span><span class="n">activation_hidden</span><span class="p">)</span>
+        <span class="k">return</span> <span class="o">-</span><span class="n">TT</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">X</span> <span class="o">*</span> <span class="n">TT</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">activation_visible</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">X</span><span class="p">)</span>
+                      <span class="o">*</span> <span class="n">TT</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">activation_visible</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+            <span class="c"># A -TT.sum(...) here; should the negative really be</span>
+            <span class="c"># there or not?</span>
+
+    <span class="k">def</span> <span class="nf">_reconstruction_squared_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the reconstruction squared error on X.</span>
+
+<span class="sd">        :type X: theano.tensor.TensorType</span>
+<span class="sd">        :param X: A training batch. In comparison to a supervised model,</span>
+<span class="sd">                  which computes cost on some response vector, the</span>
+<span class="sd">                  unsupervised model has to compute cost on the inputs.</span>
+
+<span class="sd">        :returns: The reconstruction squared error on X, as a number.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">activation_hidden</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean_h_given_v</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="n">activation_visible</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean_v_given_h</span><span class="p">(</span><span class="n">activation_hidden</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">(</span><span class="n">activation_visible</span> <span class="o">-</span> <span class="n">X</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+
+    <span class="k">def</span> <span class="nf">_reconstruction_hypercubic_exploded_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the reconstruction hypercubic (to the power of 4) error</span>
+<span class="sd">        and multiplies it by a significant number.&quot;&quot;&quot;</span>
+
+        <span class="n">activation_hidden</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean_h_given_v</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="n">activation_visible</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean_v_given_h</span><span class="p">(</span><span class="n">activation_hidden</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="mf">10.0</span> <span class="o">*</span> <span class="p">((</span><span class="n">activation_visible</span> <span class="o">-</span> <span class="n">X</span><span class="p">)</span> <span class="o">**</span> <span class="mi">10</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Autoencoder.error"><a class="viewcode-back" href="../../../../safire.learning.models.autoencoder.html#safire.learning.models.autoencoder.Autoencoder.error">[docs]</a>    <span class="k">def</span> <span class="nf">error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the mean reconstruction cross-entropy on X.</span>
+<span class="sd">        This is the same number which is used for model cost to optimize</span>
+<span class="sd">        in gradient descent, since without gold-standard data, we have</span>
+<span class="sd">        nothing to really compute any error on. So, validation and</span>
+<span class="sd">        testing can use this function in guarding against overfitting.</span>
+
+<span class="sd">        :type X: theano.tensor.TensorType</span>
+<span class="sd">        :param X: A training batch. In comparison to a supervised model,</span>
+<span class="sd">                  which computes cost on some response vector, the</span>
+<span class="sd">                  unsupervised model has to compute cost on the inputs.</span>
+
+<span class="sd">        :returns: The reconstruction cross-entropy (as a number)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction</span> <span class="o">==</span> <span class="s">&#39;cross-entropy&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_reconstruction_cross_entropy</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction</span> <span class="o">==</span> <span class="s">&#39;mse&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_reconstruction_squared_error</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction</span> <span class="o">==</span> <span class="s">&#39;exaggerated-mse&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_reconstruction_hypercubic_exploded_error</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid reconstruction set! </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction</span><span class="p">)</span>
+
+   </div>
+    <span class="k">def</span> <span class="nf">_cost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the mean reconstruction cross-entropy on X.</span>
+<span class="sd">        This is the same number which is used for model error.</span>
+<span class="sd">        </span>
+<span class="sd">        :type X: theano.tensor.TensorType</span>
+<span class="sd">        :param X: A training batch. In comparison to a supervised model,</span>
+<span class="sd">                  which computes cost on some response vector, the</span>
+<span class="sd">                  unsupervised model has to compute cost on the inputs.</span>
+<span class="sd">                  </span>
+<span class="sd">        :returns: The reconstruction cross-entropy (as a number)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction</span> <span class="o">==</span> <span class="s">&#39;cross-entropy&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_reconstruction_cross_entropy</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction</span> <span class="o">==</span> <span class="s">&#39;mse&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_reconstruction_squared_error</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction</span> <span class="o">==</span> <span class="s">&#39;exaggerated-mse&#39;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_reconstruction_hypercubic_exploded_error</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid reconstruction set! </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction</span><span class="p">)</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_init_args</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span> <span class="c"># This method will get obsolete.</span>
+        <span class="sd">&quot;&quot;&quot;Returns a list of the required kwargs the class needs to be</span>
+<span class="sd">        successfully initialized.</span>
+
+<span class="sd">        Only returns args that are OVER the minimum defined in the</span>
+<span class="sd">        BaseModel.__init__() function definition.</span>
+<span class="sd"> </span>
+<span class="sd">        .. warn::</span>
+<span class="sd">        </span>
+<span class="sd">          This method and its role is subject to change; it may also</span>
+<span class="sd">          be removed entirely.</span>
+<span class="sd">                        </span>
+<span class="sd">        :returns: A list of strings: ``[&#39;n_out&#39;, &#39;activation&#39;, &#39;rng&#39;]``</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[</span><span class="s">&#39;n_out&#39;</span><span class="p">,</span> <span class="s">&#39;activation&#39;</span><span class="p">,</span> <span class="s">&#39;rng&#39;</span><span class="p">,</span> <span class="s">&#39;reconstruction&#39;</span><span class="p">]</span>
+       </div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

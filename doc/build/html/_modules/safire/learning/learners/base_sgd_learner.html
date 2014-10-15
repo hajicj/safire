@@ -1,0 +1,976 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.learners.base_sgd_learner &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../../index.html" />
+    <link rel="up" title="safire.learning.learners" href="../learners.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li>
+          <li><a href="../learners.html" accesskey="U">safire.learning.learners</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.learning.learners.base_sgd_learner</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;The SGDLearner module contains learner classes for stochastic gradient</span>
+<span class="sd">descent.</span>
+
+<span class="sd">A **Learner** is a class that gets a model handle and a dataset and optimizes</span>
+<span class="sd">the model parameters.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">gensim</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="c">#from safire.data.loaders import ModelLoader # Was a circular import</span>
+<span class="kn">from</span> <span class="nn">safire.learning.interfaces.model_handle</span> <span class="kn">import</span> <span class="n">BackwardModelHandle</span>
+<span class="kn">from</span> <span class="nn">safire.learning.models</span> <span class="kn">import</span> <span class="n">BaseModel</span>
+
+<span class="kn">from</span> <span class="nn">safire.learning.models.base_supervised_model</span> <span class="kn">import</span> <span class="n">BaseSupervisedModel</span>
+<span class="kn">from</span> <span class="nn">safire.learning.models.base_unsupervised_model</span> <span class="kn">import</span> <span class="n">BaseUnsupervisedModel</span>
+<span class="kn">from</span> <span class="nn">safire.data.supervised_dataset</span> <span class="kn">import</span> <span class="n">SupervisedDataset</span>
+<span class="kn">import</span> <span class="nn">safire.utils</span>
+
+
+<div class="viewcode-block" id="BaseSGDLearner"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner">[docs]</a><span class="k">class</span> <span class="nc">BaseSGDLearner</span><span class="p">(</span><span class="n">gensim</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">SaveLoad</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Base class for other Learner classes. Defines the Learner interface.</span>
+<span class="sd">    Implements a basic Stochastic Gradient Descent algorithm and provides some</span>
+<span class="sd">    elementary training environment.</span>
+
+<span class="sd">    Using a Learner:</span>
+
+<span class="sd">    &gt;&gt;&gt; model_handle = Model.setup()</span>
+<span class="sd">    &gt;&gt;&gt; dataset = MultimodalShardedDatasetLoader.load()</span>
+<span class="sd">    &gt;&gt;&gt; learner.evaluate(model_handle, dataset)</span>
+<span class="sd">    Average cost: 0.897</span>
+<span class="sd">    &gt;&gt;&gt; learner = BaseSGDLearner(n_epochs=10, **kwargs)</span>
+<span class="sd">    &gt;&gt;&gt; learner.run(model_handle, dataset)</span>
+<span class="sd">    &gt;&gt;&gt; learner.evaluate(model_handle, dataset)</span>
+<span class="sd">    Average cost: 0.017</span>
+
+<span class="sd">    The learner can also log and save its progress. This is done using the</span>
+<span class="sd">    ``track_weights`` and ``track_weights_change`` for logging weights and</span>
+<span class="sd">    the ``set_saving()`` method for saving intermediate models at each K epochs.</span>
+
+<span class="sd">    &gt;&gt;&gt; mloader = ModelLoader(&#39;test-data&#39;, &#39;test-data&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; learner.set_saving(mloader, save_every=1, infix=&#39;.test_label&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; learner.run(model_handle, dataset)</span>
+<span class="sd">    &gt;&gt;&gt; os.path.exists(mloader.model_full_path(learner._generate_stage_infix(3)))</span>
+<span class="sd">    True</span>
+<span class="sd">    &gt;&gt;&gt; os.path.exists(mloader.model_full_path(learner._generate_stage_infix(11)))</span>
+<span class="sd">    False</span>
+
+<span class="sd">    In the spirit of providing the training environment, learners can also</span>
+<span class="sd">    try to resume training where it left off by attempting to load a saved</span>
+<span class="sd">    intermediate file.</span>
+
+<span class="sd">    &gt;&gt;&gt; learner.run(model_handle, dataset, resume=True, force_resume=False)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n_epochs</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.13</span><span class="p">,</span>
+                 <span class="n">patience</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span> <span class="n">patience_increase</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+                 <span class="n">improvement_threshold</span><span class="o">=</span><span class="mf">0.995</span><span class="p">,</span> <span class="n">validation_frequency</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">track_weights</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">track_weights_change</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">monitoring</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">shuffle_batches</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">plot_transformation</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">plot_weights</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">plot_every</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">plot_on_init</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initialize the learner.</span>
+
+<span class="sd">        The parameters common to each learner are just the number of epochs.</span>
+<span class="sd">        There will be further specializations.</span>
+
+<span class="sd">        :type n_epochs: int</span>
+<span class="sd">        :param n_epochs: How many training epochs should be run?</span>
+
+<span class="sd">        :type b_size: int</span>
+<span class="sd">        :param b_size: What should the size of one training batch be?</span>
+
+<span class="sd">        :type learning_rate: float</span>
+<span class="sd">        :param learning_rate: The SGD learning rate.</span>
+
+<span class="sd">        :type patience: int</span>
+<span class="sd">        :param patience: Always look at at least this many examples.</span>
+
+<span class="sd">        :type patience_increase: int</span>
+<span class="sd">        :param patience_increase: How much patience should increase when a new</span>
+<span class="sd">            best is found.</span>
+
+<span class="sd">        :type track_weights: bool</span>
+<span class="sd">        :param track_weights: If set to True, will print out a sub-matrix of the</span>
+<span class="sd">            first layer weights for each batch. The sub-matrix is [0,0],[0,9],</span>
+<span class="sd">            [9,0] and [9,9].</span>
+
+<span class="sd">        :type track_weights_change: bool</span>
+<span class="sd">        :param track_weights_change: If set to True, will find the 3 largest</span>
+<span class="sd">            weight changes in each operation.</span>
+
+<span class="sd">        :type monitoring: bool</span>
+<span class="sd">        :param monitoring: Turn on monitoring of training cost, validation cost</span>
+<span class="sd">            [DEPRECATED: monitoring always on, plot results on demand.]</span>
+
+<span class="sd">        :type shuffle_batches: bool</span>
+<span class="sd">        :param shuffle_batches: If set, will randomly shuffle batch order</span>
+<span class="sd">            between SGD runs.</span>
+
+<span class="sd">        :type plot_transformation: bool</span>
+<span class="sd">        :param plot_transformation: If set, will plot a sample of the output</span>
+<span class="sd">            transformation after each epoch and at the end of learning.</span>
+
+<span class="sd">        :type plot_weights: bool</span>
+<span class="sd">        :param plot_weights: If set, will plot the weights in each iteration.</span>
+<span class="sd">            Only works for single-layer models.</span>
+
+<span class="sd">        :type plot_every: int</span>
+<span class="sd">        :param plot_every: Plot transformations/weights every this many epochs.</span>
+
+<span class="sd">        :type plot_on_init: bool</span>
+<span class="sd">        :param plot_on_init: Plot initial state of model/transformation/recons.</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_epochs</span> <span class="o">=</span> <span class="n">n_epochs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">b_size</span> <span class="o">=</span> <span class="n">b_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">learning_rate</span> <span class="o">=</span> <span class="n">learning_rate</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">patience</span> <span class="o">=</span> <span class="n">patience</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">patience_increase</span> <span class="o">=</span> <span class="n">patience_increase</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">improvement_threshold</span> <span class="o">=</span> <span class="n">improvement_threshold</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">validation_frequency</span> <span class="o">=</span> <span class="n">validation_frequency</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">track_weights</span> <span class="o">=</span> <span class="n">track_weights</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">track_weights_change</span> <span class="o">=</span> <span class="n">track_weights_change</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">monitoring</span> <span class="o">=</span> <span class="n">monitoring</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">shuffle_batches</span> <span class="o">=</span> <span class="n">shuffle_batches</span>
+
+        <span class="c"># Visualizing intermediate results</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot_every</span> <span class="o">=</span> <span class="n">plot_every</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot_transform_per_epoch</span> <span class="o">=</span> <span class="n">plot_transformation</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot_transform</span> <span class="o">=</span> <span class="n">plot_transformation</span>
+        <span class="c">#self.plot_every_batch = False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot_weights</span> <span class="o">=</span> <span class="n">plot_weights</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">plot_on_init</span> <span class="o">=</span> <span class="n">plot_on_init</span>
+
+        <span class="c"># Saving options.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">saving</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_infix</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mloader</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">save_every</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_overwrite</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_fnames</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_tids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_saved_epoch</span> <span class="o">=</span> <span class="mf">0.0</span>
+
+<div class="viewcode-block" id="BaseSGDLearner.training_updates"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.training_updates">[docs]</a>    <span class="k">def</span> <span class="nf">training_updates</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">cost</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.13</span><span class="p">,</span>
+                         <span class="o">**</span><span class="n">gradient_kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Builds the training function. To implement various optimization</span>
+<span class="sd">        strategies (rprop, conjugate gradients, levenberg-marquart, etc.),</span>
+<span class="sd">        override this method.</span>
+
+<span class="sd">        :param model:</span>
+
+<span class="sd">        :param kwargs:</span>
+
+<span class="sd">        :return: Updates.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">dmatrix</span><span class="p">(</span><span class="s">&#39;X_train&#39;</span><span class="p">)</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">inputs</span> <span class="o">=</span> <span class="n">X</span>
+
+        <span class="n">gradients</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">cost</span><span class="p">,</span> <span class="n">model</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="o">**</span><span class="n">gradient_kwargs</span><span class="p">)</span>
+
+        <span class="n">updates</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">param</span><span class="p">,</span> <span class="n">gradient</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="n">gradients</span><span class="p">):</span>
+            <span class="n">updates</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">param</span><span class="p">,</span> <span class="n">param</span> <span class="o">-</span> <span class="n">learning_rate</span> <span class="o">*</span> <span class="n">gradient</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">updates</span>
+</div>
+<div class="viewcode-block" id="BaseSGDLearner.run"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_handle</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">resume</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">force_resume</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Runs the learner. Returns the model handle.</span>
+
+<span class="sd">        Intermediate result saving and progress logging depends on how the</span>
+<span class="sd">        learner has been set up (see :meth:`set_saving`).</span>
+
+<span class="sd">        :type model_handle: ModelHandle</span>
+<span class="sd">        :param model_handle: A model handle that came out of a ``setup``</span>
+<span class="sd">            classmethod of a model.</span>
+
+<span class="sd">        :type data: Dataset</span>
+<span class="sd">        :param data: A dataset on which the learner should run.</span>
+
+<span class="sd">        :type resume: bool</span>
+<span class="sd">        :param resume: If given, will attempt to load the last intermediate file</span>
+<span class="sd">            saved by the learner. (Useful for resuming interrupted training.)</span>
+
+<span class="sd">        :type force_resume: bool</span>
+<span class="sd">        :param force_resume: If set to ``True`` and resuming fails, will raise a</span>
+<span class="sd">            ``ValueError``. If set to ``False`` and resuming fails, will warn</span>
+<span class="sd">            and train from scratch.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c"># Attempting to resume model training.</span>
+        <span class="n">resume_successful</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">if</span> <span class="n">resume</span><span class="p">:</span>
+            <span class="n">resuming_instance</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">attempt_resume</span><span class="p">()</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">resuming_instance</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">force_resume</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Could not resume training!&#39;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Could not resume training, starting from scratch.&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">resume_successful</span> <span class="o">=</span> <span class="bp">True</span>
+                <span class="c"># TODO: There should be a sanity check here!</span>
+                <span class="c"># Also, the loading could possibly use TIDs - which would require,</span>
+                <span class="c"># however, a ModelLoader.</span>
+                <span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span> <span class="o">=</span> <span class="n">resuming_instance</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">backward_handle</span> <span class="o">=</span> <span class="n">BackwardModelHandle</span><span class="o">.</span><span class="n">clone</span><span class="p">(</span><span class="n">model_handle</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+            <span class="n">backward_handle</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="c"># Initialize training</span>
+        <span class="n">n_train_batches</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">n_train_batches</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b_size</span><span class="p">)</span>
+        <span class="n">n_devel_batches</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">n_devel_batches</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b_size</span><span class="p">)</span>
+        <span class="c">#n_test_batches = data.n_test_batches(self.b_size)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">validation_frequency</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">validation_frequency</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">n_train_batches</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">patience</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+
+
+        <span class="n">best_params</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">best_validation_loss</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">inf</span>
+        <span class="n">best_test_loss</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">inf</span>
+
+        <span class="n">done_looping</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="n">epoch</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="n">max_epoch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_epochs</span>
+        <span class="k">if</span> <span class="n">resume</span> <span class="ow">and</span> <span class="n">resume_successful</span><span class="p">:</span>
+            <span class="n">epoch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_saved_epoch</span>
+            <span class="n">max_epoch</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_saved_epoch</span> <span class="c"># Always run for self.n_epochs,</span>
+                                               <span class="c"># even if resuming.</span>
+        <span class="n">iteration</span> <span class="o">=</span> <span class="mf">0.0</span>
+
+        <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+        <span class="n">last_epoch_time</span> <span class="o">=</span> <span class="n">start_time</span>
+
+        <span class="c"># Validation init logging</span>
+        <span class="n">validation_losses</span> <span class="o">=</span> <span class="p">[</span> <span class="bp">self</span><span class="o">.</span><span class="n">_validate_batch</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">vb_index</span><span class="p">)</span>
+                              <span class="k">for</span> <span class="n">vb_index</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">n_devel_batches</span><span class="p">)]</span>
+
+        <span class="n">validation_loss</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">validation_losses</span><span class="p">)</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s">&#39;At initialization: v. error </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">validation_loss</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="c">#if self.track_weights_change:</span>
+            <span class="c">#print self.report_weights(model_handle.model_instance)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">weights_snapshot</span><span class="p">(</span><span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">monitor</span> <span class="o">=</span> <span class="p">{</span> <span class="s">&#39;training_cost&#39;</span> <span class="p">:</span> <span class="p">[],</span> <span class="s">&#39;validation_cost&#39;</span> <span class="p">:</span> <span class="p">[]</span> <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">monitor</span><span class="p">[</span><span class="s">&#39;validation_cost&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">iteration</span><span class="p">,</span> <span class="n">validation_loss</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">plot_on_init</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">plot_transformed_results</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">model_handle</span><span class="p">,</span>
+                                          <span class="n">backward_handle</span><span class="o">=</span><span class="n">backward_handle</span><span class="p">,</span>
+                                          <span class="n">with_orig</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                                          <span class="n">title</span><span class="o">=</span><span class="s">&#39;After init, before training&#39;</span><span class="p">)</span>
+
+        <span class="c"># Run training, use validation</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="n">done_looping</span> <span class="ow">and</span> <span class="n">epoch</span> <span class="o">&lt;</span> <span class="n">max_epoch</span><span class="p">:</span>
+
+            <span class="n">batch_ordering</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_train_batches</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">shuffle_batches</span><span class="p">:</span>
+                <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">batch_ordering</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">b_index</span> <span class="ow">in</span> <span class="n">batch_ordering</span><span class="p">:</span> <span class="c"># One uninterrupted run</span>
+                                           <span class="c"># of SGD on train data</span>
+
+                <span class="c"># Runs one iteration of training, based on model and dataset</span>
+                <span class="c"># type.</span>
+                <span class="n">training_cost</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_train_batch</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">b_index</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">monitor</span><span class="p">[</span><span class="s">&#39;training_cost&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">iteration</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">training_cost</span><span class="p">])</span>
+
+                <span class="c">#if self.plot_every_batch:</span>
+                <span class="c">#    self.plot_transformed_results(data, model_handle)</span>
+
+                <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">validation_frequency</span>
+                    <span class="ow">and</span> <span class="p">(</span><span class="n">iteration</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">validation_frequency</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span>
+
+                    <span class="n">validation_losses</span> <span class="o">=</span> <span class="p">[</span> <span class="bp">self</span><span class="o">.</span><span class="n">_validate_batch</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span>
+                                                               <span class="n">data</span><span class="p">,</span> <span class="n">vb_index</span><span class="p">)</span>
+                                          <span class="c">#/ float(self.b_size)</span>
+                                          <span class="k">for</span> <span class="n">vb_index</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">n_devel_batches</span><span class="p">)]</span>
+
+                    <span class="n">validation_loss</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">validation_losses</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">monitor</span><span class="p">[</span><span class="s">&#39;validation_cost&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">([(</span><span class="n">iteration</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">validation_frequency</span><span class="p">),</span>
+                                                            <span class="n">validation_loss</span><span class="p">])</span>
+
+                    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                        <span class="s">&#39;Epoch </span><span class="si">%d</span><span class="s">, minibatch </span><span class="si">%d</span><span class="s">/</span><span class="si">%d</span><span class="s">: v. error </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                            <span class="n">epoch</span><span class="p">,</span> <span class="n">b_index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">n_train_batches</span><span class="p">,</span>
+                            <span class="n">validation_loss</span><span class="p">)</span>
+                                 <span class="p">)</span>
+
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">track_weights_change</span><span class="p">:</span>
+                        <span class="k">print</span> <span class="bp">self</span><span class="o">.</span><span class="n">report_max_weight_change</span><span class="p">(</span><span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">)</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">weights_snapshot</span><span class="p">(</span><span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">)</span>
+
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">track_weights</span><span class="p">:</span>
+                        <span class="k">print</span> <span class="bp">self</span><span class="o">.</span><span class="n">report_weights</span><span class="p">(</span><span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">)</span>
+
+                    <span class="c"># Update algorithm based on improved validation score</span>
+                    <span class="k">if</span> <span class="n">validation_loss</span> <span class="o">&lt;</span> <span class="p">(</span><span class="n">best_validation_loss</span>
+                                          <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">improvement_threshold</span><span class="p">):</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">patience</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">patience</span><span class="p">,</span>
+                                            <span class="n">iteration</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">patience_increase</span><span class="p">)</span>
+
+                        <span class="n">best_validation_loss</span> <span class="o">=</span> <span class="n">validation_loss</span>
+
+                        <span class="c"># Get corresponding test loss for logging purposes</span>
+                        <span class="n">test_loss</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+                        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Epoch </span><span class="si">%i</span><span class="s">, minibatch </span><span class="si">%i</span><span class="s">/</span><span class="si">%i</span><span class="s">: t. error </span><span class="si">%f</span><span class="s">&#39;</span><span class="o">%</span><span class="p">(</span>
+                                     <span class="n">epoch</span><span class="p">,</span> <span class="n">b_index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">n_train_batches</span><span class="p">,</span>
+                                     <span class="n">test_loss</span><span class="p">))</span>
+
+                        <span class="k">if</span> <span class="n">test_loss</span> <span class="o">&lt;</span> <span class="n">best_test_loss</span><span class="p">:</span>
+                            <span class="n">best_test_loss</span> <span class="o">=</span> <span class="n">test_loss</span>
+
+                <span class="n">iteration</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="n">iteration</span> <span class="o">%</span> <span class="mi">1000</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Iteration not. </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">iteration</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">patience</span> <span class="o">&lt;=</span> <span class="n">iteration</span><span class="p">:</span>
+                    <span class="n">done_looping</span> <span class="o">=</span> <span class="bp">True</span>
+                    <span class="k">break</span> <span class="c"># from cycle over minibatches, not cycle over epochs</span>
+
+            <span class="c"># Epoch logging</span>
+            <span class="n">epoch_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;----------------------------------&#39;</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Epoch </span><span class="si">%i</span><span class="s"> report:&#39;</span> <span class="o">%</span> <span class="n">epoch</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;    Complete in </span><span class="si">%f</span><span class="s"> s. (average </span><span class="si">%f</span><span class="s"> / epoch)&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">epoch_time</span> <span class="o">-</span> <span class="n">last_epoch_time</span><span class="p">,</span>
+                <span class="p">(</span><span class="n">epoch_time</span> <span class="o">-</span> <span class="n">start_time</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)))</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;    Average time per minibatch: </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="p">(</span><span class="n">epoch_time</span> <span class="o">-</span> <span class="n">last_epoch_time</span><span class="p">)</span> <span class="o">/</span> <span class="n">n_train_batches</span><span class="p">))</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;    Best validation loss: </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">best_validation_loss</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;    Best test loss: </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">best_test_loss</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;      Patience left: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">patience</span><span class="p">)</span>
+            <span class="n">last_epoch_time</span> <span class="o">=</span> <span class="n">epoch_time</span>
+
+            <span class="n">epoch</span> <span class="o">+=</span> <span class="mi">1</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">saving</span> <span class="ow">and</span> <span class="n">epoch</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">save_every</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="c"># Saves an intermediate model.</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">save_intermediate</span><span class="p">(</span><span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">epoch</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">last_saved_epoch</span> <span class="o">=</span> <span class="n">epoch</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">plot_transform_per_epoch</span> <span class="ow">and</span> <span class="n">epoch</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">plot_every</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">plot_transformed_results</span><span class="p">(</span><span class="n">dataset</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
+                                              <span class="n">model_handle</span><span class="o">=</span><span class="n">model_handle</span><span class="p">,</span>
+                                              <span class="n">backward_handle</span><span class="o">=</span><span class="n">backward_handle</span><span class="p">,</span>
+                                              <span class="n">plot_bias</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                                              <span class="n">title</span><span class="o">=</span><span class="s">&#39;Test batch transformed after epoch </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">epoch</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">plot_weights</span> <span class="ow">and</span> <span class="n">epoch</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">plot_every</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">W</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_weights_from_model</span><span class="p">(</span><span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">)</span>
+                <span class="n">weights</span> <span class="o">=</span> <span class="n">W</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">heatmap_matrix</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span>
+                                    <span class="n">title</span><span class="o">=</span><span class="s">&#39;Weights heatmap af epoch </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">epoch</span><span class="p">,</span>
+                                    <span class="n">with_average</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                    <span class="n">colormap</span><span class="o">=</span><span class="s">&#39;coolwarm&#39;</span><span class="p">,</span>
+                                    <span class="n">vmin</span><span class="o">=</span><span class="mf">0.9</span> <span class="o">*</span> <span class="n">numpy</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">weights</span><span class="p">),</span>
+                                    <span class="n">vmax</span><span class="o">=</span><span class="mf">0.9</span> <span class="o">*</span> <span class="n">numpy</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">weights</span><span class="p">))</span>
+
+                <span class="n">W_diff</span> <span class="o">=</span> <span class="n">weights</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">W_snapshot</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">weights_snapshot</span><span class="p">(</span><span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">)</span>
+                <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">heatmap_matrix</span><span class="p">(</span><span class="n">W_diff</span><span class="p">,</span>
+                                            <span class="n">title</span><span class="o">=</span><span class="s">&#39;Diff of W from prev. epoch&#39;</span><span class="p">,</span>
+                                            <span class="n">with_average</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                            <span class="n">colormap</span><span class="o">=</span><span class="s">&#39;coolwarm&#39;</span><span class="p">,</span>
+                                            <span class="n">vmin</span><span class="o">=</span><span class="mf">0.9</span> <span class="o">*</span> <span class="n">numpy</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">weights</span><span class="p">),</span>
+                                            <span class="n">vmax</span><span class="o">=</span><span class="mf">0.9</span> <span class="o">*</span> <span class="n">numpy</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">weights</span><span class="p">))</span>
+
+
+        <span class="c"># Total logging</span>
+        <span class="n">end_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;===================================&#39;</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Training run report:&#39;</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;    Total epochs: </span><span class="si">%i</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">epoch</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;    Total time: </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">end_time</span> <span class="o">-</span> <span class="n">start_time</span><span class="p">))</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;    Average time per epoch: </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="p">(</span><span class="n">end_time</span> <span class="o">-</span> <span class="n">start_time</span><span class="p">)</span> <span class="o">/</span> <span class="n">epoch</span><span class="p">))</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;    Average time per minibatch: </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="p">(</span><span class="n">end_time</span> <span class="o">-</span> <span class="n">start_time</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">epoch</span> <span class="o">*</span> <span class="n">n_train_batches</span><span class="p">)))</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;    Best validation score: </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">best_validation_loss</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;    Best test loss: </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">best_test_loss</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">plot_transform</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">plot_transformed_results</span><span class="p">(</span><span class="n">dataset</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
+                                          <span class="n">model_handle</span><span class="o">=</span><span class="n">model_handle</span><span class="p">,</span>
+                                          <span class="n">backward_handle</span><span class="o">=</span><span class="n">backward_handle</span><span class="p">,</span>
+                                          <span class="n">title</span><span class="o">=</span><span class="s">&#39;Test batch after training.&#39;</span><span class="p">,</span>
+                                          <span class="n">plot_bias</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">plot_weights</span><span class="p">:</span>
+            <span class="n">W</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_weights_from_model</span><span class="p">(</span><span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">)</span>
+            <span class="n">weights</span> <span class="o">=</span> <span class="n">W</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">heatmap_matrix</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span>
+                                    <span class="n">title</span><span class="o">=</span><span class="s">&#39;Weights heatmap af epoch </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">epoch</span><span class="p">,</span>
+                                    <span class="n">with_average</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                    <span class="n">colormap</span><span class="o">=</span><span class="s">&#39;coolwarm&#39;</span><span class="p">,</span>
+                                    <span class="n">vmin</span><span class="o">=</span><span class="mf">0.9</span> <span class="o">*</span> <span class="n">numpy</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">weights</span><span class="p">),</span>
+                                    <span class="n">vmax</span><span class="o">=</span><span class="mf">0.9</span> <span class="o">*</span> <span class="n">numpy</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">weights</span><span class="p">))</span>
+
+            <span class="n">W_diff</span> <span class="o">=</span> <span class="n">weights</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">W_snapshot</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weights_snapshot</span><span class="p">(</span><span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">)</span>
+            <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">heatmap_matrix</span><span class="p">(</span><span class="n">W_diff</span><span class="p">,</span>
+                                            <span class="n">title</span><span class="o">=</span><span class="s">&#39;Diff of W from prev. epoch&#39;</span><span class="p">,</span>
+                                            <span class="n">with_average</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                            <span class="n">colormap</span><span class="o">=</span><span class="s">&#39;coolwarm&#39;</span><span class="p">,</span>
+                                            <span class="n">vmin</span><span class="o">=</span><span class="mf">0.9</span> <span class="o">*</span> <span class="n">numpy</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">weights</span><span class="p">),</span>
+                                            <span class="n">vmax</span><span class="o">=</span><span class="mf">0.9</span> <span class="o">*</span> <span class="n">numpy</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">weights</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">best_validation_loss</span>
+</div>
+<div class="viewcode-block" id="BaseSGDLearner.set_saving"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.set_saving">[docs]</a>    <span class="k">def</span> <span class="nf">set_saving</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_loader</span><span class="p">,</span> <span class="n">save_every</span><span class="p">,</span> <span class="n">infix</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Settings for saving intermediate models. Currently, will save every K-th</span>
+<span class="sd">        epoch, using the given infix and a ``.tmp.n`` suffix, for n-th epoch.</span>
+
+<span class="sd">        .. note::</span>
+
+<span class="sd">          Design-wise, this adds some internal state to the learner and introduces</span>
+<span class="sd">          a binding from a loader class (data management) inside the training</span>
+<span class="sd">          architecture. This is not a problem per se - however, it is thus wrong</span>
+<span class="sd">          to imagine that the loader classes are a *layer* of architecture;</span>
+<span class="sd">          instead, they are *services* for data management, permeating throughout</span>
+<span class="sd">          the application. Since loaders have no internal state of their own</span>
+<span class="sd">          (their &quot;internal state&quot; is the actual state of the data directory),</span>
+<span class="sd">          this is not a problem; they can be freely shared across the application.</span>
+
+<span class="sd">        :type infix: str</span>
+<span class="sd">        :param infix: The infix to use for the model.</span>
+
+<span class="sd">            .. note::</span>
+
+<span class="sd">                A temp-string will be appended to this infix for each intermediate</span>
+<span class="sd">                saved model that includes ``.tmp`` - the best saving infix is</span>
+<span class="sd">                simply the infix under which you want to save the final model.</span>
+
+<span class="sd">        :type model_loader: safire.data.loaders.ModelLoader</span>
+<span class="sd">        :param model_loader: The model loader that will correctly generate file</span>
+<span class="sd">            names.</span>
+
+<span class="sd">        :type save_every: int</span>
+<span class="sd">        :param save_every: Each k-th epoch, the learner will save an intermediate</span>
+<span class="sd">            model.</span>
+
+<span class="sd">        :type overwrite: bool</span>
+<span class="sd">        :param overwrite: If True, will only keep the last intermediate model.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_infix</span> <span class="o">=</span> <span class="n">infix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mloader</span> <span class="o">=</span> <span class="n">model_loader</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">save_every</span> <span class="o">=</span> <span class="n">save_every</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_overwrite</span> <span class="o">=</span> <span class="n">overwrite</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">saving</span> <span class="o">=</span> <span class="bp">True</span>
+
+        <span class="c"># Does not reset intermediate files buffer.</span>
+</div>
+<div class="viewcode-block" id="BaseSGDLearner.save_intermediate"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.save_intermediate">[docs]</a>    <span class="k">def</span> <span class="nf">save_intermediate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">tid</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Given previously supplied settings, saves the given model. No infix or</span>
+<span class="sd">        filename is given - it will be generated based on the saving settings.</span>
+
+<span class="sd">        :param model: The model to save.</span>
+
+<span class="sd">        :param tid: The ID of the stage at which the intermediate model is created.</span>
+<span class="sd">            If saving at epochs, this will typically be a number. The learner</span>
+<span class="sd">            will generate this argument during :meth:`run`.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">saving</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Saving intermediate model without the </span><span class="se">\&#39;</span><span class="s">saving</span><span class="se">\&#39;</span><span class="s"> &#39;</span>
+                         <span class="s">&#39;attribute set; why?&#39;</span><span class="p">)</span>
+
+        <span class="n">temp_infix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_stage_infix</span><span class="p">(</span><span class="n">tid</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mloader</span><span class="o">.</span><span class="n">save_model</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">temp_infix</span><span class="p">)</span>
+
+        <span class="c"># Update last saved name tracking, for overwrite purposes.</span>
+        <span class="n">new_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mloader</span><span class="o">.</span><span class="n">model_full_path</span><span class="p">(</span><span class="n">temp_infix</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_overwrite</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">clear_intermediate</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_fnames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_tids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tid</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="BaseSGDLearner.load_intermediate"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.load_intermediate">[docs]</a>    <span class="k">def</span> <span class="nf">load_intermediate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tid</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Given a stage ID, can load a model. This is to be able to continue</span>
+<span class="sd">        training from some model state.</span>
+
+<span class="sd">        :param tid:</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+</div>
+    <span class="k">def</span> <span class="nf">_generate_stage_infix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tid</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Generates the infix for an intermediate model with infix ``infix``</span>
+<span class="sd">        saved at stage ``tid``.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_infix</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s">&#39;.intermediate.&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">tid</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_infix</span> <span class="o">+</span> <span class="s">&#39;.intermediate.&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">tid</span><span class="p">)</span>
+
+<div class="viewcode-block" id="BaseSGDLearner.clear_intermediate"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.clear_intermediate">[docs]</a>    <span class="k">def</span> <span class="nf">clear_intermediate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Removes all intermediate files saved so far. Has to keep the list</span>
+<span class="sd">        of available intermediate files consistent!&quot;&quot;&quot;</span>
+        <span class="n">processed</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">processed_tids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">n_to_process</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">intermediate_fnames</span><span class="p">)</span> <span class="c"># Keeping track</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">tid</span><span class="p">,</span> <span class="n">fname</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">intermediate_tids</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_fnames</span><span class="p">):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">fname</span><span class="p">):</span>
+                    <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Somebody already removed a saved intermediate model (</span><span class="si">%s</span><span class="s">). Continuing without...&#39;</span> <span class="o">%</span> <span class="n">fname</span><span class="p">)</span>
+                    <span class="n">processed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+                    <span class="n">processed_tids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tid</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+                    <span class="k">finally</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">fname</span><span class="p">):</span> <span class="c"># The file has been successflly removed.</span>
+                            <span class="n">processed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+                            <span class="n">processed_tids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tid</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">processed_tid</span><span class="p">,</span> <span class="n">processed_fname</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">processed_tids</span><span class="p">,</span> <span class="n">processed</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_fnames</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">processed_fname</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_tids</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">processed_tid</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Clearing intermediate files from loader with infix </span><span class="si">%s</span><span class="s">: done&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_infix</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;    Cleared: </span><span class="si">%d</span><span class="s"> / </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">processed</span><span class="p">),</span> <span class="n">n_to_process</span><span class="p">))</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;    Cleared stages: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">processed_tids</span><span class="p">))</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_saved_epoch</span> <span class="o">=</span> <span class="mf">0.0</span>
+</div>
+<div class="viewcode-block" id="BaseSGDLearner.attempt_resume"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.attempt_resume">[docs]</a>    <span class="k">def</span> <span class="nf">attempt_resume</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Attempts to resume training from last intermediate file saved.&quot;&quot;&quot;</span>
+
+        <span class="c"># if not hasattr(self, &#39;mloader&#39;):</span>
+        <span class="c">#    raise ValueError(&quot;Cannot resume training: model loader is not available.&quot;)</span>
+        <span class="n">resuming_instance</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">intermediate_fnames</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&quot;Cannot resume training: no intermediate file tracked.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">None</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">model_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_fnames</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">resuming_instance</span> <span class="o">=</span> <span class="n">BaseModel</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">model_file</span><span class="p">,</span> <span class="n">load_any</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Could not load resuming model </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">model_file</span><span class="p">)</span>
+            <span class="k">raise</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">resuming_instance</span>
+</div>
+<div class="viewcode-block" id="BaseSGDLearner.evaluate"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.evaluate">[docs]</a>    <span class="k">def</span> <span class="nf">evaluate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Evaluates model performance on the test portion of the given</span>
+<span class="sd">        dataset.</span>
+
+<span class="sd">        :type model_handle: ModelHandle</span>
+<span class="sd">        :param model_handle: A model handle.</span>
+
+<span class="sd">        :type dataset: Dataset</span>
+<span class="sd">        :param dataset: A dataset that corresponds to the type of the model</span>
+<span class="sd">            instance in ``model_handle`` - Supervised or Unsupervised.</span>
+<span class="sd">            A SupervisedDataset is allowed for an UnsupervisedModel, but not</span>
+<span class="sd">            the other way round.</span>
+
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">test_losses</span> <span class="o">=</span> <span class="p">[</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_batch</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+                        <span class="c">#/ float(self.b_size)</span>
+                        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">n_test_batches</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b_size</span><span class="p">))</span> <span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">numpy</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">test_losses</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_train_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">batch_index</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Runs a training batch. It relies on the model handle&#39;s</span>
+<span class="sd">        ``train`` compiled Theano function to expect inputs according</span>
+<span class="sd">        to whether the model instance is a subclass of</span>
+<span class="sd">        :class:`BaseSupervisedModel` or :class:`BaseUnsupervisedModel`.</span>
+
+<span class="sd">        :type model_handle: ModelHandle</span>
+<span class="sd">        :param model_handle: A model handle.</span>
+
+<span class="sd">        :type dataset: Dataset</span>
+<span class="sd">        :param dataset: A dataset that corresponds to the type of the model</span>
+<span class="sd">            instance in ``model_handle`` - Supervised or Unsupervised.</span>
+<span class="sd">            A SupervisedDataset is allowed for an UnsupervisedModel, but not</span>
+<span class="sd">            the other way round.</span>
+
+<span class="sd">        :type batch_index: int</span>
+<span class="sd">        :param batch_index: The index of the requested batch.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span>
+        <span class="n">batch_loss</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">BaseSupervisedModel</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">SupervisedDataset</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Attempting to train supervised model without&#39;</span><span class="o">+</span>
+                                 <span class="s">&#39; a supervised dataset (dataset type: </span><span class="si">%s</span><span class="s">) &#39;</span> <span class="o">%</span> <span class="p">(</span>
+                                     <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">dataset</span><span class="p">))))</span>
+            <span class="n">train_X</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">train_X_batch</span><span class="p">(</span><span class="n">batch_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_size</span><span class="p">)</span>
+            <span class="n">train_y</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">train_y_batch</span><span class="p">(</span><span class="n">batch_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_size</span><span class="p">)</span>
+
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Train batch: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">train_X</span><span class="p">)</span>
+
+            <span class="n">batch_loss</span> <span class="o">=</span> <span class="n">model_handle</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">train_X</span><span class="p">,</span> <span class="n">train_y</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">BaseUnsupervisedModel</span><span class="p">):</span>
+            <span class="n">train_X</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">train_X_batch</span><span class="p">(</span><span class="n">batch_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_size</span><span class="p">)</span>
+
+            <span class="n">batch_loss</span> <span class="o">=</span> <span class="n">model_handle</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">train_X</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">batch_loss</span>
+
+    <span class="k">def</span> <span class="nf">_validate_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">batch_index</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Runs a validation batch. It relies on the model handle&#39;s</span>
+<span class="sd">        ``validate`` compiled Theano function to expect inputs according</span>
+<span class="sd">        to whether the model instance is a subclass of</span>
+<span class="sd">        :class:`BaseSupervisedModel` or :class:`BaseUnsupervisedModel`.</span>
+
+<span class="sd">        :type model_handle: ModelHandle</span>
+<span class="sd">        :param model_handle: A model handle.</span>
+
+<span class="sd">        :type dataset: Dataset</span>
+<span class="sd">        :param dataset: A dataset that corresponds to the type of the model</span>
+<span class="sd">            instance in ``model_handle`` - Supervised or Unsupervised.</span>
+<span class="sd">            A SupervisedDataset is allowed for an UnsupervisedModel, but not</span>
+<span class="sd">            the other way round.</span>
+
+<span class="sd">        :type batch_index: int</span>
+<span class="sd">        :param batch_index: The index of the requested batch.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span>
+        <span class="n">batch_loss</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">BaseSupervisedModel</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">SupervisedDataset</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Attempting to validate supervised model&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; without a supervised dataset (dataset type: </span><span class="si">%s</span><span class="s">) &#39;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">dataset</span><span class="p">))))</span>
+
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Batch index type: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">type</span><span class="p">(</span><span class="n">batch_index</span><span class="p">))</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Batch size type: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b_size</span><span class="p">))</span>
+
+            <span class="n">devel_X</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">devel_X_batch</span><span class="p">(</span><span class="n">batch_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_size</span><span class="p">)</span>
+            <span class="n">devel_y</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">devel_y_batch</span><span class="p">(</span><span class="n">batch_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_size</span><span class="p">)</span>
+
+            <span class="n">batch_loss</span> <span class="o">=</span> <span class="n">model_handle</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">devel_X</span><span class="p">,</span> <span class="n">devel_y</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">BaseUnsupervisedModel</span><span class="p">):</span>
+            <span class="n">devel_X</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">devel_X_batch</span><span class="p">(</span><span class="n">batch_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_size</span><span class="p">)</span>
+
+            <span class="n">batch_loss</span> <span class="o">=</span> <span class="n">model_handle</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">devel_X</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">batch_loss</span>
+
+    <span class="k">def</span> <span class="nf">_test_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">batch_index</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Runs a test batch. It relies on the model handle&#39;s</span>
+<span class="sd">        ``test`` compiled Theano function to expect inputs according</span>
+<span class="sd">        to whether the model instance is a subclass of</span>
+<span class="sd">        :class:`BaseSupervisedModel` or :class:`BaseUnsupervisedModel`.</span>
+
+<span class="sd">        :type model_handle: ModelHandle</span>
+<span class="sd">        :param model_handle: A model handle.</span>
+
+<span class="sd">        :type dataset: Dataset</span>
+<span class="sd">        :param dataset: A dataset that corresponds to the type of the model</span>
+<span class="sd">            instance in ``model_handle`` - Supervised or Unsupervised.</span>
+<span class="sd">            A SupervisedDataset is allowed for an UnsupervisedModel, but not</span>
+<span class="sd">            the other way round.</span>
+
+<span class="sd">        :type batch_index: int</span>
+<span class="sd">        :param batch_index: The index of the requested batch.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span>
+        <span class="n">batch_loss</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">BaseSupervisedModel</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">SupervisedDataset</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Attempting to validate supervised model&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; without a supervised dataset (dataset type: </span><span class="si">%s</span><span class="s">) &#39;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">dataset</span><span class="p">))))</span>
+            <span class="n">train_X</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">test_X_batch</span><span class="p">(</span><span class="n">batch_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_size</span><span class="p">)</span>
+            <span class="n">train_y</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">test_y_batch</span><span class="p">(</span><span class="n">batch_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_size</span><span class="p">)</span>
+
+            <span class="n">batch_loss</span> <span class="o">=</span> <span class="n">model_handle</span><span class="o">.</span><span class="n">test</span><span class="p">(</span><span class="n">train_X</span><span class="p">,</span> <span class="n">train_y</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">BaseUnsupervisedModel</span><span class="p">):</span>
+            <span class="n">train_X</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">test_X_batch</span><span class="p">(</span><span class="n">batch_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_size</span><span class="p">)</span>
+
+            <span class="n">batch_loss</span> <span class="o">=</span> <span class="n">model_handle</span><span class="o">.</span><span class="n">test</span><span class="p">(</span><span class="n">train_X</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">batch_loss</span>
+
+<div class="viewcode-block" id="BaseSGDLearner.plot_transformed_results"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.plot_transformed_results">[docs]</a>    <span class="k">def</span> <span class="nf">plot_transformed_results</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">model_handle</span><span class="p">,</span>
+                                 <span class="n">title</span><span class="o">=</span><span class="s">&#39;Dataset heatmap after learner run&#39;</span><span class="p">,</span>
+                                 <span class="n">with_orig</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">with_no_bias</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                 <span class="n">plot_bias</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">backward_handle</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Plots a sample heatmap of how the dataset will be transformed.&quot;&quot;&quot;</span>
+        <span class="n">sample_size</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">dataset</span><span class="p">)</span> <span class="o">-</span> <span class="n">dataset</span><span class="o">.</span><span class="n">_test_doc_offset</span><span class="p">))</span>
+        <span class="n">batch</span> <span class="o">=</span> <span class="mi">0</span> <span class="c"># Deterministic plotting.</span>
+        <span class="c">#batch = random.randint(0, dataset.n_test_batches(sample_size))</span>
+        <span class="n">sample_data</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">test_X_batch</span><span class="p">(</span><span class="n">batch</span><span class="p">,</span> <span class="n">sample_size</span><span class="p">)</span>
+        <span class="n">transformed_data</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">model_handle</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">sample_data</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">with_orig</span><span class="p">:</span>
+            <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">heatmap_matrix</span><span class="p">(</span><span class="n">sample_data</span><span class="p">,</span>
+                                        <span class="n">title</span><span class="o">=</span><span class="n">title</span> <span class="o">+</span> <span class="s">&#39; - inputs&#39;</span><span class="p">,</span>
+                                        <span class="n">with_average</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                        <span class="n">colormap</span><span class="o">=</span><span class="s">&#39;afmhot&#39;</span><span class="p">,</span>
+                                        <span class="n">vmin</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+        <span class="c">#if with_no_bias:</span>
+        <span class="c">#    forward_weights = model_handle.model_instance.W.get_value(borrow=True)</span>
+        <span class="c">#    linear_activation = numpy.dot(sample_data, forward_weights)</span>
+        <span class="c">#    safire.utils.heatmap_matrix(linear_activation,</span>
+        <span class="c">#                                 title=title + &#39; - linear act.&#39;,</span>
+        <span class="c">#                                 with_average=False,</span>
+        <span class="c">#                                 colormap=&#39;afmhot&#39;,</span>
+        <span class="c">#                                 vmin=min(linear_activation),</span>
+        <span class="c">#                                 vmax=max(linear_activation))</span>
+
+
+        <span class="c"># safire.utils.heatmap_matrix(transformed_data,</span>
+        <span class="c">#                             title=title + &#39;(abs. 0-1 scale)&#39;,</span>
+        <span class="c">#                             with_average=True,</span>
+        <span class="c">#                             colormap=&#39;afmhot&#39;,</span>
+        <span class="c">#                             vmin=0.0, vmax=1.0)</span>
+        <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">heatmap_matrix</span><span class="p">(</span><span class="n">transformed_data</span><span class="p">,</span>
+                                    <span class="n">title</span><span class="o">=</span><span class="n">title</span> <span class="o">+</span> <span class="s">&#39;(rel. min-max scale)&#39;</span><span class="p">,</span>
+                                    <span class="n">with_average</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                                    <span class="n">colormap</span><span class="o">=</span><span class="s">&#39;afmhot&#39;</span><span class="p">,</span>
+                                    <span class="n">vmin</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">transformed_data</span><span class="p">),</span>
+                                    <span class="n">vmax</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">transformed_data</span><span class="p">))</span>
+
+        <span class="c"># plot the reconstruction</span>
+        <span class="k">if</span> <span class="n">backward_handle</span><span class="p">:</span>
+            <span class="n">reconstructed_data</span> <span class="o">=</span> <span class="n">backward_handle</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">transformed_data</span><span class="p">)</span>
+            <span class="c"># safire.utils.heatmap_matrix(reconstructed_data,</span>
+            <span class="c">#                             title=title + &#39;REC. (abs.)&#39;,</span>
+            <span class="c">#                             with_average=True,</span>
+            <span class="c">#                             colormap=&#39;afmhot&#39;,</span>
+            <span class="c">#                             vmin=0.0, vmax=1.0)</span>
+            <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">heatmap_matrix</span><span class="p">(</span><span class="n">reconstructed_data</span><span class="p">,</span>
+                                        <span class="n">title</span><span class="o">=</span><span class="n">title</span> <span class="o">+</span> <span class="s">&#39;REC. (rel.)&#39;</span><span class="p">,</span>
+                                        <span class="n">with_average</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                        <span class="n">colormap</span><span class="o">=</span><span class="s">&#39;afmhot&#39;</span><span class="p">,</span>
+                                        <span class="n">vmin</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">reconstructed_data</span><span class="p">),</span>
+                                        <span class="n">vmax</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">reconstructed_data</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">plot_bias</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">,</span> <span class="s">&#39;b&#39;</span><span class="p">):</span>
+                <span class="n">bias_hidden</span> <span class="o">=</span> <span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="o">.</span><span class="n">b</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">,</span> <span class="s">&#39;b_hidden&#39;</span><span class="p">):</span>
+                <span class="n">bias_hidden</span> <span class="o">=</span> <span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="o">.</span><span class="n">b_hidden</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">bias_hidden</span> <span class="o">=</span> <span class="bp">None</span>
+
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">,</span> <span class="s">&#39;b_prime&#39;</span><span class="p">):</span>
+                <span class="n">bias_visible</span> <span class="o">=</span> <span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="o">.</span><span class="n">b_prime</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">,</span> <span class="s">&#39;b_visible&#39;</span><span class="p">):</span>
+                <span class="n">bias_visible</span> <span class="o">=</span> <span class="n">model_handle</span><span class="o">.</span><span class="n">model_instance</span><span class="o">.</span><span class="n">b_visible</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">bias_visible</span> <span class="o">=</span> <span class="bp">None</span>
+
+            <span class="k">if</span> <span class="n">bias_hidden</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">bias_visible</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">heatmap_matrix</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">atleast_2d</span><span class="p">(</span><span class="n">bias_hidden</span><span class="p">),</span>
+                                            <span class="n">title</span><span class="o">=</span><span class="s">&#39;Hidden units bias&#39;</span><span class="p">,</span>
+                                            <span class="n">vmin</span><span class="o">=-</span><span class="nb">abs</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">bias_hidden</span><span class="p">)),</span>
+                                            <span class="n">vmax</span><span class="o">=</span><span class="nb">abs</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">bias_hidden</span><span class="p">)),</span>
+                                            <span class="n">colormap</span><span class="o">=</span><span class="s">&#39;coolwarm&#39;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">bias_visible</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">heatmap_matrix</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">atleast_2d</span><span class="p">(</span><span class="n">bias_visible</span><span class="p">),</span>
+                                            <span class="n">title</span><span class="o">=</span><span class="s">&#39;Visible units bias&#39;</span><span class="p">,</span>
+                                            <span class="n">vmin</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">bias_visible</span><span class="p">),</span>
+                                            <span class="n">vmax</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">bias_visible</span><span class="p">),</span>
+                                            <span class="n">colormap</span><span class="o">=</span><span class="s">&#39;coolwarm&#39;</span><span class="p">)</span>
+
+        <span class="c"># Compute correlation between total activation and item sum</span>
+
+        <span class="n">sample_mean</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">sample_data</span><span class="p">)</span>
+        <span class="n">sample_sqdevs</span> <span class="o">=</span> <span class="p">(</span><span class="n">sample_data</span> <span class="o">-</span> <span class="n">sample_mean</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+        <span class="n">sample_sqdev</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">sample_sqdevs</span><span class="p">)</span>
+        <span class="n">sample_mean_sqdev</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">sample_sqdevs</span><span class="p">)</span>
+        <span class="k">print</span> <span class="s">&#39;Sample mean: </span><span class="si">%.8f</span><span class="s">, total sq. dev. </span><span class="si">%.8f</span><span class="s">, mean sq. dev </span><span class="si">%.8f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">sample_mean</span><span class="p">,</span> <span class="n">sample_sqdev</span><span class="p">,</span> <span class="n">sample_mean_sqdev</span>
+        <span class="p">)</span>
+
+        <span class="n">tr_mean</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">transformed_data</span><span class="p">)</span>
+        <span class="n">tr_sqdevs</span> <span class="o">=</span> <span class="p">(</span><span class="n">transformed_data</span> <span class="o">-</span> <span class="n">tr_mean</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+        <span class="n">tr_sqdev</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">tr_sqdevs</span><span class="p">)</span>
+        <span class="n">tr_mean_sqdev</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">tr_sqdevs</span><span class="p">)</span>
+        <span class="k">print</span> <span class="s">&#39;Transformed mean: </span><span class="si">%.8f</span><span class="s">, total sq. dev. </span><span class="si">%.8f</span><span class="s">, mean sq. dev </span><span class="si">%.8f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">tr_mean</span><span class="p">,</span> <span class="n">tr_sqdev</span><span class="p">,</span> <span class="n">tr_mean_sqdev</span>
+        <span class="p">)</span>
+
+        <span class="c"># Compute correlation of</span>
+
+</div>
+<div class="viewcode-block" id="BaseSGDLearner.report_weights"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.report_weights">[docs]</a>    <span class="k">def</span> <span class="nf">report_weights</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">submatrix</span><span class="o">=</span><span class="p">[[[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">],[</span><span class="mi">0</span><span class="p">,</span><span class="mi">9</span><span class="p">]],[[</span><span class="mi">9</span><span class="p">,</span><span class="mi">0</span><span class="p">],[</span><span class="mi">9</span><span class="p">,</span><span class="mi">9</span><span class="p">]]]):</span>
+        <span class="sd">&quot;&quot;&quot;Reports the weight submatrix from the first layer of the model.&quot;&quot;&quot;</span>
+        <span class="n">W</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_weights_from_model</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+
+        <span class="n">W_value</span> <span class="o">=</span> <span class="n">W</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">submatrix</span> <span class="o">=</span> <span class="p">[[</span><span class="n">W_value</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">j</span> <span class="ow">in</span> <span class="n">srow</span><span class="p">]</span> <span class="k">for</span> <span class="n">srow</span> <span class="ow">in</span> <span class="n">submatrix</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">submatrix</span>
+</div>
+<div class="viewcode-block" id="BaseSGDLearner.weights_snapshot"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.weights_snapshot">[docs]</a>    <span class="k">def</span> <span class="nf">weights_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Takes a snapshot of the model weights and stores it to a cache.&quot;&quot;&quot;</span>
+        <span class="n">W</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_weights_from_model</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">W_snapshot</span> <span class="o">=</span> <span class="n">W</span><span class="o">.</span><span class="n">get_value</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="BaseSGDLearner.weight_change_vs_snapshot"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.weight_change_vs_snapshot">[docs]</a>    <span class="k">def</span> <span class="nf">weight_change_vs_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the difference in weights between the model and the</span>
+<span class="sd">        snapshot.&quot;&quot;&quot;</span>
+        <span class="n">W</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_weights_from_model</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+
+        <span class="n">W_value</span> <span class="o">=</span> <span class="n">W</span><span class="o">.</span><span class="n">get_value</span><span class="p">()</span>
+
+        <span class="n">W_diff</span> <span class="o">=</span> <span class="n">W_value</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">W_snapshot</span>
+
+        <span class="k">return</span> <span class="n">W_diff</span>
+</div>
+<div class="viewcode-block" id="BaseSGDLearner.find_maximum_diff"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.find_maximum_diff">[docs]</a>    <span class="k">def</span> <span class="nf">find_maximum_diff</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">W_diff</span><span class="p">,</span> <span class="n">k</span> <span class="o">=</span> <span class="mi">3</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Finds the k highest differences (in absolute values) in the weight</span>
+<span class="sd">        difference report.&quot;&quot;&quot;</span>
+
+        <span class="n">max_diff_w_indices</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">n_max</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">absolute</span><span class="p">(</span><span class="n">W_diff</span><span class="p">),</span> <span class="n">k</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">max_diff_w_indices</span>
+</div>
+<div class="viewcode-block" id="BaseSGDLearner.report_maximum_diff"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.report_maximum_diff">[docs]</a>    <span class="k">def</span> <span class="nf">report_maximum_diff</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">max_diff_w_indices</span><span class="p">,</span> <span class="n">W_diff</span><span class="p">,</span> <span class="n">W</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Formats the maximum differences.&quot;&quot;&quot;</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;--- diff report ---&#39;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">diff</span><span class="p">,</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">max_diff_w_indices</span><span class="p">:</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span> <span class="o">+</span> <span class="s">&#39; : &#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">W_diff</span><span class="p">[</span><span class="n">idx</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">idx</span><span class="p">[</span><span class="mi">1</span><span class="p">]])</span> <span class="o">+</span> <span class="s">&#39; --&gt; &#39;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">W</span><span class="p">[</span><span class="n">idx</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">idx</span><span class="p">[</span><span class="mi">1</span><span class="p">]]))</span>
+
+        <span class="k">return</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="BaseSGDLearner.report_max_weight_change"><a class="viewcode-back" href="../../../../safire.learning.learners.base_sgd_learner.html#safire.learning.learners.base_sgd_learner.BaseSGDLearner.report_max_weight_change">[docs]</a>    <span class="k">def</span> <span class="nf">report_max_weight_change</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">3</span><span class="p">):</span>
+
+        <span class="n">W</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_weights_from_model</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+        <span class="n">W_diff</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight_change_vs_snapshot</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+        <span class="n">total_diff</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">W_diff</span><span class="p">)</span>
+        <span class="n">max_diff_w_indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">find_maximum_diff</span><span class="p">(</span><span class="n">W_diff</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span>
+        <span class="n">report</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">report_maximum_diff</span><span class="p">(</span><span class="n">max_diff_w_indices</span><span class="p">,</span> <span class="n">W_diff</span><span class="p">,</span> <span class="n">W</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">W_diff</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mf">0.0001</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Changing weight of [0,0] by </span><span class="si">%.5f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">W_diff</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Weight tracking, total diff: </span><span class="si">%.5f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">total_diff</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">report</span>
+</div>
+    <span class="k">def</span> <span class="nf">_get_weights_from_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">):</span>
+        <span class="n">W</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s">&#39;W&#39;</span><span class="p">):</span>
+            <span class="n">W</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">W</span>
+        <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s">&#39;hidden_layers&#39;</span><span class="p">):</span>
+            <span class="n">W</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">hidden_layers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">W</span>
+        <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s">&#39;log_regression_layer&#39;</span><span class="p">):</span>
+            <span class="n">W</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">log_regression_layer</span><span class="o">.</span><span class="n">W</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Cannot report weights - couldn</span><span class="se">\&#39;</span><span class="s">t find weight matrix.&#39;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">W</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li>
+          <li><a href="../learners.html" >safire.learning.learners</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

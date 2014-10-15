@@ -1,0 +1,199 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.base_pretrained_supervised_model module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.learning.models.base_pretrained_supervised_model">
+<span id="safire-learning-models-base-pretrained-supervised-model-module"></span><h1>safire.learning.models.base_pretrained_supervised_model module<a class="headerlink" href="#module-safire.learning.models.base_pretrained_supervised_model" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.learning.models.base_pretrained_supervised_model.BasePretrainedSupervisedModel">
+<em class="property">class </em><tt class="descclassname">safire.learning.models.base_pretrained_supervised_model.</tt><tt class="descname">BasePretrainedSupervisedModel</tt><big>(</big><em>inputs</em>, <em>n_in</em>, <em>n_out</em>, <em>n_layers</em>, <em>n_hidden_list</em>, <em>supervised_stack_params=None</em>, <em>unsupervised_stack_params=None</em>, <em>logistic_regression_params=None</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/base_pretrained_supervised_model.html#BasePretrainedSupervisedModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.base_pretrained_supervised_model.BasePretrainedSupervisedModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="safire.learning.models.base_supervised_model.html#safire.learning.models.base_supervised_model.BaseSupervisedModel" title="safire.learning.models.base_supervised_model.BaseSupervisedModel"><tt class="xref py py-class docutils literal"><span class="pre">safire.learning.models.base_supervised_model.BaseSupervisedModel</span></tt></a></p>
+<p>This is the base class for supervised models that
+can be pre-trained in an unsupervised fashion.</p>
+<p>The model has two aspects: one is a supervised aspect for
+classification, the other is an unsupervised aspect for pre-training
+the weights on unsupervised data so that the model better captures
+the structure of the data - it should focus on features that actually
+also describe the data well, not just that they are somehow determined
+to be useful for classification.</p>
+<p>This duality is achieved by having two stacks of layers that share
+weights. The first stack is for pre-training, the second stack is for
+the supervised (classification) task. The unsupervised layers have inputs
+from the previous feedforward layer.</p>
+<p>In the base version, the supervised portion is a classical multilayer
+perceptron with a logistic regression layer at the end. The unsupervised
+portion is composed of <a href="#id1"><span class="problematic" id="id2">``</span></a>DenoisingAutoencoder``s.</p>
+<p>On <a class="reference internal" href="#safire.learning.models.base_pretrained_supervised_model.BasePretrainedSupervisedModel.setup" title="safire.learning.models.base_pretrained_supervised_model.BasePretrainedSupervisedModel.setup"><tt class="xref py py-func docutils literal"><span class="pre">setup()</span></tt></a>, the returned handle is a
+<tt class="xref py py-class docutils literal"><span class="pre">PretrainedSupervisedModelHandle</span></tt> instance that as an extra field
+contains the functions for layer-wise pre-training.</p>
+<dl class="method">
+<dt id="safire.learning.models.base_pretrained_supervised_model.BasePretrainedSupervisedModel.error">
+<tt class="descname">error</tt><big>(</big><em>y</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/base_pretrained_supervised_model.html#BasePretrainedSupervisedModel.error"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.base_pretrained_supervised_model.BasePretrainedSupervisedModel.error" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the proportion of incorrectly classified instances.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>y</strong> (<em>theano.tensor.TensorType</em>) &#8211; Corresponds to a vector that gives for each example the
+correct label.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The proportion of incorrectly classified instances.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Raises:</th><td class="field-body">TypeError</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="safire.learning.models.base_pretrained_supervised_model.BasePretrainedSupervisedModel.setup">
+<em class="property">classmethod </em><tt class="descname">setup</tt><big>(</big><em>data</em>, <em>model=None</em>, <em>batch_size=500</em>, <em>learning_rate=0.13</em>, <em>data_pretrain=None</em>, <em>batch_size_pretrain=None</em>, <em>learning_rate_pretrain=None</em>, <em>**model_init_kwargs</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/base_pretrained_supervised_model.html#BasePretrainedSupervisedModel.setup"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.base_pretrained_supervised_model.BasePretrainedSupervisedModel.setup" title="Permalink to this definition">¶</a></dt>
+<dd><p>Prepares the train_model, validate_model, test_model and
+pretrain_model functions on the given dataset and with the given 
+parameters.</p>
+<p>It is a CLASS METHOD, which during its run actually creates
+an instance of the model. It is called as</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">model_handle</span> <span class="o">=</span> <span class="n">ModelClass</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">params</span><span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Note that the pretraining functions do not necessarily have to be
+obtained from this class method: the <tt class="docutils literal"><span class="pre">model_handle.model_instance</span></tt>
+attribute of the returned handle supplies its own method to build
+the pretraining functions (and this <tt class="docutils literal"><span class="pre">setup</span></tt> uses exactly this
+method to build them).</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>data</strong> (<em>SupervisedDataset</em>) &#8211; The dataset on which the model will be run.</li>
+<li><strong>model</strong> (<em>StackedDenoisingAutoencoder</em>) &#8211; A model instance that the setup should use.</li>
+<li><strong>batch_size</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; How many data items will be in one minibatch
+(the data is split to minibatches for training,
+validation and testing)</li>
+<li><strong>learning_rate</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#float" title="(in Python v2.7)"><em>float</em></a>) &#8211; A coefficient that says how much we should move
+in the direction of the gradient during SGD</li>
+<li><strong>data_pretrain</strong> (<em>UnsupervisedDataset</em>) &#8211; The dataset on which you want to initialize
+pre-training (often there is a good reason
+to do this: there is a bigger unsupervised
+dataset available for pre-training than
+a supervised one for fine-tuning). If the
+parameter is set to <tt class="docutils literal"><span class="pre">None</span></tt> (default behavior),
+it is linked to the parameter <tt class="docutils literal"><span class="pre">data</span></tt>.</li>
+<li><strong>batch_size</strong> &#8211; How many data items will be in one minibatch
+when pre-training.</li>
+<li><strong>learning_rate</strong> &#8211; A coefficient that says how much we should move
+in the direction of the gradient during SGD
+in pre-training.</li>
+<li><strong>model_init_kwargs</strong> (<em>kwargs</em>) &#8211; Various keyword arguments that get passed
+to the model constructor. See constructor
+argument documentation.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><p class="first">PretrainingModelHandle</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"><tt class="docutils literal"><span class="pre">PretrainingModelHandle(model,</span> <span class="pre">train_f,</span> <span class="pre">validate_f,</span> <span class="pre">test_f,</span>
+<span class="pre">pretraining_fs)</span></tt>
+where &#8216;model&#8217; is the Model instance initialized during
+<a class="reference internal" href="#safire.learning.models.base_pretrained_supervised_model.BasePretrainedSupervisedModel.setup" title="safire.learning.models.base_pretrained_supervised_model.BasePretrainedSupervisedModel.setup"><tt class="xref py py-func docutils literal"><span class="pre">setup()</span></tt></a> and the <tt class="docutils literal"><span class="pre">_f</span></tt> variables are compiled
+theano.functions to use in a learner.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.learning.models.base_pretrained_supervised_model.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

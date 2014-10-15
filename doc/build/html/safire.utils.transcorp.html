@@ -1,0 +1,151 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.utils.transcorp module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.utils.transcorp">
+<span id="safire-utils-transcorp-module"></span><h1>safire.utils.transcorp module<a class="headerlink" href="#module-safire.utils.transcorp" title="Permalink to this headline">¶</a></h1>
+<p>This module contains utility functions for working with gensim TransformedCorpus
+stacks.</p>
+<dl class="function">
+<dt id="safire.utils.transcorp.bottom_corpus">
+<tt class="descclassname">safire.utils.transcorp.</tt><tt class="descname">bottom_corpus</tt><big>(</big><em>corpus</em><big>)</big><a class="reference internal" href="_modules/safire/utils/transcorp.html#bottom_corpus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.transcorp.bottom_corpus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Jumps through a stack of TransformedCorpus objects all the way to the
+bottom corpus.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.transcorp.dimension">
+<tt class="descclassname">safire.utils.transcorp.</tt><tt class="descname">dimension</tt><big>(</big><em>corpus</em><big>)</big><a class="reference internal" href="_modules/safire/utils/transcorp.html#dimension"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.transcorp.dimension" title="Permalink to this definition">¶</a></dt>
+<dd><p>Finds the topomost corpus that can provide information about its
+output dimension.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.transcorp.get_transformers">
+<tt class="descclassname">safire.utils.transcorp.</tt><tt class="descname">get_transformers</tt><big>(</big><em>corpus</em><big>)</big><a class="reference internal" href="_modules/safire/utils/transcorp.html#get_transformers"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.transcorp.get_transformers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Recovers the Transformation objects from a stack of TransformedCorpora.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.transcorp.id2word">
+<tt class="descclassname">safire.utils.transcorp.</tt><tt class="descname">id2word</tt><big>(</big><em>corpus</em>, <em>wid</em><big>)</big><a class="reference internal" href="_modules/safire/utils/transcorp.html#id2word"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.transcorp.id2word" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the word associated with the original ID in the given corpus.
+Based on corpus type, this can mean backtracking the origin of the ID
+number through multiple transformations.</p>
+<p>Currently implemented: backtracking through
+<tt class="xref py py-class docutils literal"><span class="pre">FrequencyBasedTransformer</span></tt>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.transcorp.reset_vtcorp_input">
+<tt class="descclassname">safire.utils.transcorp.</tt><tt class="descname">reset_vtcorp_input</tt><big>(</big><em>corpus</em>, <em>filename</em>, <em>input_root=None</em>, <em>lock=True</em>, <em>inplace=True</em><big>)</big><a class="reference internal" href="_modules/safire/utils/transcorp.html#reset_vtcorp_input"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.transcorp.reset_vtcorp_input" title="Permalink to this definition">¶</a></dt>
+<dd><p>Resets the inputs for the VTextCorpus at the bottom of the
+TransformedCorpus stack.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>inplace</strong> &#8211; If this flag is set, will switch the inputs for the given
+corpus in-place. If not, will deepcopy the corpus. <strong>[NOT IMPLEMENTED]
+Don&#8217;t use (stick with True)!</strong></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.transcorp.run_transformations">
+<tt class="descclassname">safire.utils.transcorp.</tt><tt class="descname">run_transformations</tt><big>(</big><em>item</em>, <em>*transformations</em><big>)</big><a class="reference internal" href="_modules/safire/utils/transcorp.html#run_transformations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.transcorp.run_transformations" title="Permalink to this definition">¶</a></dt>
+<dd><p>Runs the TransformedCorpus transformation stack.</p>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.utils.transcorp.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

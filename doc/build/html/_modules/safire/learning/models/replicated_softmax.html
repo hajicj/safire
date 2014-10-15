@@ -1,0 +1,271 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.replicated_softmax &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.learning.models.replicated_softmax</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">.. module:: </span>
+<span class="sd">    :platform: Unix</span>
+<span class="sd">    :synopsis: ???</span>
+
+<span class="sd">.. moduleauthor: Jan Hajic &lt;hajicj@gmail.com&gt;</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span>
+
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">theano.tensor</span> <span class="kn">as</span> <span class="nn">TT</span>
+<span class="kn">from</span> <span class="nn">theano.tensor.shared_randomstreams</span> <span class="kn">import</span> <span class="n">RandomStreams</span>
+<span class="kn">from</span> <span class="nn">safire.learning.models</span> <span class="kn">import</span> <span class="n">RestrictedBoltzmannMachine</span>
+
+<span class="kn">from</span> <span class="nn">safire.learning.models.base_unsupervised_model</span> <span class="kn">import</span> <span class="n">BaseUnsupervisedModel</span>
+<span class="kn">from</span> <span class="nn">safire.learning.interfaces.pretraining_model_handle</span> <span class="kn">import</span> <span class="n">PretrainingModelHandle</span>
+<span class="kn">from</span> <span class="nn">safire.learning.interfaces</span> <span class="kn">import</span> <span class="n">ModelHandle</span>
+<span class="kn">from</span> <span class="nn">safire.utils</span> <span class="kn">import</span> <span class="n">check_kwargs</span>
+
+<div class="viewcode-block" id="ReplicatedSoftmax"><a class="viewcode-back" href="../../../../safire.learning.models.replicated_softmax.html#safire.learning.models.replicated_softmax.ReplicatedSoftmax">[docs]</a><span class="k">class</span> <span class="nc">ReplicatedSoftmax</span><span class="p">(</span><span class="n">RestrictedBoltzmannMachine</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+                 <span class="n">activation</span><span class="o">=</span><span class="n">TT</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">,</span>
+                 <span class="n">backward_activation</span><span class="o">=</span><span class="n">TT</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">softmax</span><span class="p">,</span>
+                 <span class="n">W</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">b_hidden</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">b_visible</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">persistent</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">CD_k</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">CD_use_mean</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                 <span class="n">sparsity_target</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">output_sparsity_target</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">numpy_rng</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">(),</span>
+                 <span class="n">L1_norm</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">L2_norm</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">bias_decay</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+                 <span class="n">entropy_loss</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">centering</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">prefer_extremes</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">theano_rng</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Initialize the parameters of the Replicated Softmax. This merely</span>
+<span class="sd">        sets the correct values for an RBM in the defaults. (The only other</span>
+<span class="sd">        difference than using the specific pair of forward/backward activations</span>
+<span class="sd">        is the computation of free energy.)</span>
+
+<span class="sd">        .. note::</span>
+
+<span class="sd">          In order for this model to implement the real Replicated Softmax</span>
+<span class="sd">          Model of Salakhtudinov and Hinton, the ``activation`` and</span>
+<span class="sd">          ``backward_activation`` parameters have to remain in their default</span>
+<span class="sd">          form.</span>
+
+<span class="sd">        :type inputs: theano.tensor.var.TensorVariable</span>
+<span class="sd">        :param inputs: Symbolic variable that describes the input</span>
+<span class="sd">                       of the architecture (e.g., one minibatch of</span>
+<span class="sd">                       input images, or output of a previous layer)</span>
+
+
+<span class="sd">        :type n_in: int</span>
+<span class="sd">        :param n_in: Number of input units, the dimension of the space</span>
+<span class="sd">                     in which the data points live</span>
+
+<span class="sd">        :type n_out: int</span>
+<span class="sd">        :param n_out: The number of hidden units.</span>
+
+<span class="sd">        :type activation: theano.tensor.elemwise.Elemwise</span>
+<span class="sd">        :param activation: The nonlinearity applied at neuron</span>
+<span class="sd">                           output.</span>
+
+<span class="sd">        :type backward_activation: theano.tensor.elemwise.Elemwise</span>
+<span class="sd">        :param backward_activation: The nonlinearity applied at hidden neuron</span>
+<span class="sd">                           output. If not given, same as ``activation``. (Some</span>
+<span class="sd">                           RBMs, like the Replicated Softmax model, use a</span>
+<span class="sd">                           different forward and backward activation function.)</span>
+
+<span class="sd">        :type W: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param W: Theano variable pointing to a set of weights that should</span>
+<span class="sd">                  be shared between the autoencoder and another architecture;</span>
+<span class="sd">                  if autoencoder should be standalone, leave this as None.</span>
+<span class="sd">                  This set of weights refers to the transition from visible</span>
+<span class="sd">                  to hidden layer.</span>
+
+
+<span class="sd">        :type b: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param b: Theano variable pointing to a set of bias values that</span>
+<span class="sd">                  should be shared between the autoencoder and another</span>
+<span class="sd">                  architecture; if autoencoder should be standalone,</span>
+<span class="sd">                  leave this as None. This set of bias values refers</span>
+<span class="sd">                  to the transition from visible to hidden layer.</span>
+
+<span class="sd">                  .. note:</span>
+
+<span class="sd">                    The ``b`` name is used in the RBM for compatibility</span>
+<span class="sd">                    of class interface. Internally, the name ``b_hidden``</span>
+<span class="sd">                    is used to improve clarity of the sometimes more</span>
+<span class="sd">                    complicated math expressions, and for ontological</span>
+<span class="sd">                    symmetry with ``b_visible``.</span>
+
+<span class="sd">        :type b_hidden: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param b: Alias for b, used internally as the attribute name</span>
+<span class="sd">            to make the purpose clear.</span>
+
+<span class="sd">            .. warn:</span>
+
+<span class="sd">              Do not use both ``b`` and ``b_hidden`` at the same time!</span>
+<span class="sd">              The intended interface is ``b``, which is also used in</span>
+<span class="sd">              the ``link()`` class method to construct the RBM.</span>
+
+
+<span class="sd">        :type b_visible: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param b_visible: Theano variable pointing to a set of bias values</span>
+<span class="sd">                        that should be shared between the autoencoder and</span>
+<span class="sd">                        another architecture; if autoencoder should be</span>
+<span class="sd">                        standalone, leave this as None. This set of bias</span>
+<span class="sd">                        values refers to the transition from visible to</span>
+<span class="sd">                        hidden layer.</span>
+
+<span class="sd">        :type persistent: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param persistent: If you wish to train using Persistent Contrastive</span>
+<span class="sd">            Divergence, supply an initial state of the Markov chain. If set to</span>
+<span class="sd">            None (default), use Contrastive Divergence for training</span>
+<span class="sd">            (initialize the chain to the current data point).</span>
+
+<span class="sd">        :type CD_k: int</span>
+<span class="sd">        :param CD_k: How many Gibbs sampling steps should Contrastive</span>
+<span class="sd">            Divergence take in generating the negative particle.</span>
+
+<span class="sd">        :type CD_use_mean: Boolean</span>
+<span class="sd">        :param CD_use_mean: Should the (P)CD Gibbs chain end use the mean</span>
+<span class="sd">            activation of the visible units as the chain end? If ``False``,</span>
+<span class="sd">            uses the visible sample. If ``True``, uses the visible mean.</span>
+<span class="sd">            Default is ``True``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ReplicatedSoftmax</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">,</span>
+                 <span class="n">TT</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">,</span>
+                 <span class="n">TT</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">softmax</span><span class="p">,</span>
+                 <span class="n">W</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">b_hidden</span><span class="p">,</span> <span class="n">b_visible</span><span class="p">,</span>
+                 <span class="n">persistent</span><span class="p">,</span> <span class="n">CD_k</span><span class="p">,</span> <span class="n">CD_use_mean</span><span class="p">,</span> <span class="n">sparsity_target</span><span class="p">,</span>
+                 <span class="n">output_sparsity_target</span><span class="p">,</span>
+                 <span class="n">numpy_rng</span><span class="p">,</span> <span class="n">L1_norm</span><span class="p">,</span> <span class="n">L2_norm</span><span class="p">,</span> <span class="n">bias_decay</span><span class="p">,</span>
+                 <span class="n">entropy_loss</span><span class="p">,</span> <span class="n">centering</span><span class="p">,</span> <span class="n">prefer_extremes</span><span class="p">,</span>
+                 <span class="n">theano_rng</span><span class="p">)</span>
+
+        <span class="k">print</span> <span class="s">&#39;B: &#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span><span class="o">.</span><span class="n">broadcastable</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden_broadcastable</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">row</span><span class="p">(</span><span class="s">&#39;b_hidden_broadcastable&#39;</span><span class="p">,</span>
+                                             <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span>
+        <span class="k">print</span> <span class="s">&#39;B/dsh: &#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span><span class="o">.</span><span class="n">broadcastable</span>
+        <span class="k">print</span> <span class="s">&#39;Hidden type:&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span><span class="p">)</span>
+        <span class="n">TT</span><span class="o">.</span><span class="n">addbroadcast</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b_hidden_broadcastable</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden_broadcastable</span><span class="o">.</span><span class="n">tag</span><span class="o">.</span><span class="n">test_value</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span><span class="p">))</span>
+        <span class="k">print</span> <span class="s">&#39;B/dsh: &#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span><span class="o">.</span><span class="n">broadcastable</span>
+        <span class="c"># Need this for broadcasting the bias</span>
+                                          <span class="c"># vector to multiply by document sizes</span>
+                                          <span class="c"># in free_energy.</span>
+
+<div class="viewcode-block" id="ReplicatedSoftmax.free_energy"><a class="viewcode-back" href="../../../../safire.learning.models.replicated_softmax.html#safire.learning.models.replicated_softmax.ReplicatedSoftmax.free_energy">[docs]</a>    <span class="k">def</span> <span class="nf">free_energy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">visible</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the free energy of the model.</span>
+
+<span class="sd">        :type visible: theano.tensor.TensorType</span>
+<span class="sd">        :param visible: The state of the visible units (either 1/0, or mean -</span>
+<span class="sd">            not important).</span>
+<span class="sd">        </span>
+<span class="sd">        :rtype: theano.tensor.var.TensorVariable</span>
+<span class="sd">        :returns: The free energy of the model, given the visible activation.</span>
+<span class="sd">            Computed as </span>
+<span class="sd">            </span>
+<span class="sd">            .. math::</span>
+<span class="sd">               :label: free_energy</span>
+
+<span class="sd">                \mathcal{F}(x) = - \log \sum_h e^{-E(x,h)}</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">print</span> <span class="s">&#39;Running free energy.&#39;</span>
+
+        <span class="n">D</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">visible</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">exponent_term</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">visible</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="n">TT</span><span class="o">.</span><span class="n">outer</span><span class="p">(</span><span class="n">D</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span><span class="p">)</span>
+                        <span class="c">#TT.outer(D, self.b_hidden)</span>
+                        <span class="c"># D is a coefficient, b_hidden should</span>
+
+        <span class="n">hidden_term</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">TT</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">exponent_term</span><span class="p">)),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c"># This is the other and more crucial difference between an RBM and a RSM:</span>
+        <span class="c"># multiplying hidden bias by &quot;document length&quot;.</span>
+        
+
+        <span class="n">b_visible_term</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">visible</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_visible</span><span class="p">)</span>
+
+        <span class="n">free_energy</span> <span class="o">=</span> <span class="o">-</span> <span class="n">hidden_term</span> <span class="o">-</span> <span class="n">b_visible_term</span>
+        <span class="k">return</span> <span class="n">free_energy</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

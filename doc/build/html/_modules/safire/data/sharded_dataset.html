@@ -1,0 +1,650 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.sharded_dataset &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.data.sharded_dataset</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Implements a dataset class that stores its data in separate files called</span>
+<span class="sd">&quot;shards&quot;. This is a compromise between speed (keeping the whole dataset</span>
+<span class="sd">in memory) and memory footprint (keeping the data on disk and reading from it</span>
+<span class="sd">on demand).</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">cPickle</span>
+<span class="kn">import</span> <span class="nn">gensim</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">from</span> <span class="nn">gensim.interfaces</span> <span class="kn">import</span> <span class="n">TransformedCorpus</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">safire.utils</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+<span class="kn">from</span> <span class="nn">safire.data.unsupervised_dataset</span> <span class="kn">import</span> <span class="n">UnsupervisedDataset</span>
+
+<div class="viewcode-block" id="ShardedDataset"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset">[docs]</a><span class="k">class</span> <span class="nc">ShardedDataset</span><span class="p">(</span><span class="n">UnsupervisedDataset</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A dataset that stores its data in separate files called</span>
+<span class="sd">    &quot;shards&quot;. This is a compromise between speed (keeping the whole dataset</span>
+<span class="sd">    in memory) and memory footprint (keeping the data on disk and reading from</span>
+<span class="sd">    it on demand). All saving/loading is done using the cPickle mechanism.</span>
+
+<span class="sd">    .. note::</span>
+
+<span class="sd">      The dataset is **read-only**, there is - as opposed to gensim&#39;s Similarity</span>
+<span class="sd">      class, which works similarly - no way of adding documents to the dataset</span>
+<span class="sd">      for now.</span>
+
+<span class="sd">    On initialization, will read from a corpus and build the dataset. This only</span>
+<span class="sd">    needs to be done once (and it may take quite a long time):</span>
+
+<span class="sd">    &gt;&gt;&gt; icorp = data_loader.load_image_corpus()</span>
+<span class="sd">    &gt;&gt;&gt; sdata = ShardedDataset(output_prefix, icorp)</span>
+
+<span class="sd">    The ``output_prefix`` gives the path to the dataset file. The individual</span>
+<span class="sd">    shareds are saved as ``output_prefix.0``, ``output_prefix.1``, etc.</span>
+
+<span class="sd">    On further initialization with the same ``output_prefix`` (more precisely:</span>
+<span class="sd">    the output prefix leading to the same file), will load the already built</span>
+<span class="sd">    dataset unless the ``override`` option is given.</span>
+
+<span class="sd">    Internally, to retrieve data, the dataset keeps track of which shard is</span>
+<span class="sd">    currently open and on a __getitem__ request, either returns an item from</span>
+<span class="sd">    the current shard, or opens a new one. The shard size is constant, except</span>
+<span class="sd">    for the last shard.</span>
+
+<span class="sd">    TODO: Supports slice notation. [NOT IMPLEMENTED]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c">#@profile</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_prefix</span><span class="p">,</span> <span class="n">corpus</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">test_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">devel_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+                 <span class="n">shardsize</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the dataset. If ``output_prefix`` is not found,</span>
+<span class="sd">        builds the shards.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_prefix</span> <span class="o">=</span> <span class="n">output_prefix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">shardsize</span> <span class="o">=</span> <span class="n">shardsize</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">offsets</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_shards</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">dim</span> <span class="c"># This number may change during initialization/loading.</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span> <span class="o">=</span> <span class="bp">None</span> <span class="c"># Current shard (numpy ndarray)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_shard_n</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_offset</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing shard dataset with prefix </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">output_prefix</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">output_prefix</span><span class="p">))</span> <span class="ow">or</span> <span class="n">overwrite</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Building from corpus...&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">init_shards</span><span class="p">(</span><span class="n">output_prefix</span><span class="p">,</span> <span class="n">corpus</span><span class="p">,</span> <span class="n">shardsize</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">save</span><span class="p">()</span> <span class="c"># Save automatically, to facillitate re-loading</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Cloning existing...&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">init_by_clone</span><span class="p">()</span>
+
+        <span class="c"># Both methods of initialization initialize self.dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test_p</span> <span class="o">=</span> <span class="n">test_p</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">-</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_p</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">devel_p</span> <span class="o">=</span> <span class="n">devel_p</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> \
+                                 <span class="o">-</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">devel_p</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ShardedDataset.init_shards"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.init_shards">[docs]</a>    <span class="k">def</span> <span class="nf">init_shards</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_prefix</span><span class="p">,</span> <span class="n">corpus</span><span class="p">,</span> <span class="n">shardsize</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span>
+                    <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the shards from the corpus.&quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">gensim</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">is_corpus</span><span class="p">(</span><span class="n">corpus</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Cannot initialize shards withot a corpus to read&#39;</span>
+                             <span class="s">&#39; from! (Got: </span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">corpus</span><span class="p">))</span>
+
+        <span class="n">proposed_dim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_guess_n_features</span><span class="p">(</span><span class="n">corpus</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">proposed_dim</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Deriving dataset dimension from corpus: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">proposed_dim</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Dataset dimension derived from input corpus diffe&#39;</span>
+                             <span class="s">&#39;rs from initialization argument, using corpus.&#39;</span>
+                             <span class="s">&#39;(corpus </span><span class="si">%d</span><span class="s">, init arg </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">proposed_dim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">proposed_dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">offsets</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Running init from corpus.&#39;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">doc_chunk</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">gensim</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">grouper</span><span class="p">(</span><span class="n">corpus</span><span class="p">,</span>
+                                                           <span class="n">chunksize</span><span class="o">=</span><span class="n">shardsize</span><span class="p">)):</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Chunk no. </span><span class="si">%d</span><span class="s"> at </span><span class="si">%d</span><span class="s"> s&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span><span class="p">))</span>
+
+            <span class="n">current_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">offsets</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">current_shard</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">doc_chunk</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">),</span>
+                                        <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">doc</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">doc_chunk</span><span class="p">):</span>
+                <span class="n">doc</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">doc</span><span class="p">)</span>
+                <span class="n">current_shard</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="nb">list</span><span class="p">(</span><span class="n">doc</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">gensim</span><span class="o">.</span><span class="n">matutils</span><span class="o">.</span><span class="n">itervalues</span><span class="p">(</span><span class="n">doc</span><span class="p">))</span>
+
+            <span class="c"># Handles the updating as well.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">save_shard</span><span class="p">(</span><span class="n">current_shard</span><span class="p">)</span>
+
+        <span class="n">end_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Built </span><span class="si">%i</span><span class="s"> shards in </span><span class="si">%d</span><span class="s"> s.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_shards</span><span class="p">,</span>
+                                                   <span class="n">end_time</span> <span class="o">-</span> <span class="n">start_time</span><span class="p">))</span>
+
+    <span class="c">#@profile</span></div>
+<div class="viewcode-block" id="ShardedDataset.init_by_clone"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.init_by_clone">[docs]</a>    <span class="k">def</span> <span class="nf">init_by_clone</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes by copying over attributes of another ShardedDataset</span>
+<span class="sd">        instance saved to the output_prefix given at __init__().&quot;&quot;&quot;</span>
+        <span class="n">temp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_prefix</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_shards</span> <span class="o">=</span> <span class="n">temp</span><span class="o">.</span><span class="n">n_shards</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">=</span> <span class="n">temp</span><span class="o">.</span><span class="n">n_docs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">offsets</span> <span class="o">=</span> <span class="n">temp</span><span class="o">.</span><span class="n">offsets</span>
+
+        <span class="k">if</span> <span class="n">temp</span><span class="o">.</span><span class="n">dim</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loaded dataset dimension: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">temp</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Loaded dataset dimension differs from init arg &#39;</span>
+                             <span class="s">&#39;dimension, using loaded dim. &#39;</span>
+                             <span class="s">&#39;(loaded </span><span class="si">%d</span><span class="s">, init </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">temp</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">temp</span><span class="o">.</span><span class="n">dim</span> <span class="c"># To be consistent with the loaded data!</span>
+</div>
+<div class="viewcode-block" id="ShardedDataset.save_shard"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.save_shard">[docs]</a>    <span class="k">def</span> <span class="nf">save_shard</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">shard</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Pickles the given shard. If n is not given, will consider the shard</span>
+<span class="sd">        a new one.</span>
+
+<span class="sd">        If ``filename`` is given, will use that file name instead of generating</span>
+<span class="sd">        one.&quot;&quot;&quot;</span>
+        <span class="n">new_shard</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="k">if</span> <span class="n">n</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">n</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_shards</span> <span class="c"># Saving the *next* one by default.</span>
+            <span class="n">new_shard</span> <span class="o">=</span> <span class="bp">True</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">filename</span><span class="p">:</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_shard_name</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">pickle_handle</span><span class="p">:</span>
+            <span class="n">cPickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">shard</span><span class="p">,</span> <span class="n">pickle_handle</span><span class="p">,</span> <span class="n">protocol</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">new_shard</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">offsets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">offsets</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">shard</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shard</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">n_shards</span> <span class="o">+=</span> <span class="mi">1</span>
+</div>
+<div class="viewcode-block" id="ShardedDataset.load_shard"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.load_shard">[docs]</a>    <span class="k">def</span> <span class="nf">load_shard</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Loads (unpickles) the n-th shard as the &quot;live&quot; part of the dataset</span>
+<span class="sd">        into the Dataset object.&quot;&quot;&quot;</span>
+
+        <span class="c"># No-op if the shard is already open.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_shard_n</span> <span class="o">==</span> <span class="n">n</span><span class="p">:</span>
+            <span class="k">pass</span>
+
+        <span class="n">filename</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_shard_name</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Attemting to load nonexistent shard no. </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">n</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">unpickle_handle</span><span class="p">:</span>
+            <span class="n">shard</span> <span class="o">=</span> <span class="n">cPickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">unpickle_handle</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span> <span class="o">=</span> <span class="n">shard</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_shard_n</span> <span class="o">=</span> <span class="n">n</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">offsets</span><span class="p">[</span><span class="n">n</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="ShardedDataset.reset"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.reset">[docs]</a>    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Resets to no shard at all. Used for saving.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_shard_n</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_offset</span> <span class="o">=</span> <span class="bp">None</span>
+</div>
+<div class="viewcode-block" id="ShardedDataset.shard_by_offset"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.shard_by_offset">[docs]</a>    <span class="k">def</span> <span class="nf">shard_by_offset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Determines which shard the given offset belongs to. If the offset</span>
+<span class="sd">        is greater than the number of available documents, raises a</span>
+<span class="sd">        ValueError.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">offset</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Too high offset specified (</span><span class="si">%i</span><span class="s">), available docs: </span><span class="si">%i</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">offset</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">offset</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Negative offset currently not supported.&#39;</span><span class="p">)</span>
+
+        <span class="n">k</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">o</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">offsets</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">o</span> <span class="o">&gt;</span> <span class="n">offset</span><span class="p">:</span> <span class="c"># Condition should fire for every valid offset,</span>
+                           <span class="c"># since the last offset is n_docs (one-past-end).</span>
+                <span class="n">k</span> <span class="o">=</span> <span class="n">i</span> <span class="o">-</span> <span class="mi">1</span> <span class="c"># First offset is always 0, so i is at least 1.</span>
+                <span class="k">break</span>
+
+        <span class="k">return</span> <span class="n">k</span>
+</div>
+<div class="viewcode-block" id="ShardedDataset.in_current"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.in_current">[docs]</a>    <span class="k">def</span> <span class="nf">in_current</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Determines whether the given offset falls within the current</span>
+<span class="sd">        shard.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_offset</span> <span class="o">&lt;=</span> <span class="n">offset</span><span class="p">)</span> \
+               <span class="ow">and</span> <span class="p">(</span><span class="n">offset</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">offsets</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_shard_n</span><span class="o">+</span><span class="mi">1</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="ShardedDataset.in_next"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.in_next">[docs]</a>    <span class="k">def</span> <span class="nf">in_next</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Determines whether the given offset falls within the next shard.</span>
+<span class="sd">        This is a very small speedup: typically, we will be iterating through</span>
+<span class="sd">        the data forward. Could save considerable time with a very large number</span>
+<span class="sd">        of smaller shards.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_shard_n</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_shards</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span> <span class="c"># There&#39;s no next shard.</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">offsets</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_shard_n</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">offset</span><span class="p">)</span> \
+               <span class="ow">and</span> <span class="p">(</span><span class="n">offset</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">offsets</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_shard_n</span><span class="o">+</span><span class="mi">2</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="ShardedDataset.resize_shards"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.resize_shards">[docs]</a>    <span class="k">def</span> <span class="nf">resize_shards</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">shardsize</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Re-process the dataset to new shard size. This may take pretty long.</span>
+<span class="sd">        Also, note that you need some space on disk for this one (we&#39;re</span>
+<span class="sd">        assuming there is enough disk space for double the size of the dataset</span>
+<span class="sd">        and that there is enough memory for old + new shardsize).</span>
+
+<span class="sd">        :type shardsize: int</span>
+<span class="sd">        :param shardsize: The new shard size.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c"># Determine how many new shards there will be</span>
+        <span class="n">n_new_shards</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">shardsize</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">%</span> <span class="n">shardsize</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">n_new_shards</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="n">new_shard_names</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">new_offsets</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">new_shard_idx</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">n_new_shards</span><span class="p">):</span>
+            <span class="n">new_start</span> <span class="o">=</span> <span class="n">shardsize</span> <span class="o">*</span> <span class="n">new_shard_idx</span>
+            <span class="n">new_stop</span> <span class="o">=</span> <span class="n">new_start</span> <span class="o">+</span> <span class="n">shardsize</span>
+
+            <span class="c"># Last shard?</span>
+            <span class="k">if</span> <span class="n">new_stop</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="n">new_shard_idx</span> <span class="o">==</span> <span class="n">n_new_shards</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="s">&#39;Shard no. </span><span class="si">%i</span><span class="s"> that ends at </span><span class="si">%i</span><span class="s"> over last document (</span><span class="si">%i</span><span class="s">) is not the last projected shard (</span><span class="si">%i</span><span class="s">)???&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">new_shard_idx</span><span class="p">,</span> <span class="n">new_stop</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span><span class="p">,</span> <span class="n">n_new_shards</span><span class="p">)</span> <span class="c"># Sanity check</span>
+                <span class="n">new_stop</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span>
+
+            <span class="n">new_shard</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">new_start</span><span class="p">:</span><span class="n">new_stop</span><span class="p">]</span>
+            <span class="n">new_shard_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resized_shard_name</span><span class="p">(</span><span class="n">new_shard_idx</span><span class="p">)</span>
+            <span class="n">new_shard_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_shard_name</span><span class="p">)</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">save_shard</span><span class="p">(</span><span class="n">new_shard</span><span class="p">,</span> <span class="n">new_shard_idx</span><span class="p">,</span> <span class="n">new_shard_name</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="c"># Clean up on unsuccessful resize.</span>
+                <span class="k">for</span> <span class="n">new_shard_name</span> <span class="ow">in</span> <span class="n">new_shard_names</span><span class="p">:</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">new_shard_name</span><span class="p">)</span>
+                <span class="k">raise</span>
+
+            <span class="n">new_offsets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_stop</span><span class="p">)</span>
+
+        <span class="c"># Move old shard files out, new ones in. Complicated due to possibility</span>
+        <span class="c"># of exceptions.</span>
+        <span class="n">old_shard_names</span> <span class="o">=</span> <span class="p">[</span> <span class="bp">self</span><span class="o">.</span><span class="n">_shard_name</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_shards</span><span class="p">)]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">old_shard_n</span><span class="p">,</span> <span class="n">old_shard_name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">old_shard_names</span><span class="p">):</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">old_shard_name</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&#39;Exception occurred during old shard no. </span><span class="si">%i</span><span class="s"> removal: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">old_shard_n</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+            <span class="k">print</span> <span class="s">&#39;Attempting to at least move new shards in.&#39;</span>
+            <span class="c"># If something happens with cleaning up - try to at least get the</span>
+            <span class="c"># new guys in.</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">shard_n</span><span class="p">,</span> <span class="n">new_shard_name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">new_shard_names</span><span class="p">):</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">new_shard_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_shard_name</span><span class="p">(</span><span class="n">shard_n</span><span class="p">))</span>
+            <span class="c"># If something happens when we&#39;re in this stage, we&#39;re screwed.</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">print</span> <span class="n">e</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s">&#39;Resizing completely failed for some reason.&#39;</span>
+                                   <span class="s">&#39; Sorry, dataset is probably ruined...&#39;</span><span class="p">)</span>
+            <span class="k">finally</span><span class="p">:</span>
+                <span class="c"># Sets the new shard stats.</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">n_shards</span> <span class="o">=</span> <span class="n">n_new_shards</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">offsets</span> <span class="o">=</span> <span class="n">new_offsets</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">shardsize</span> <span class="o">=</span> <span class="n">shardsize</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+</div>
+    <span class="k">def</span> <span class="nf">_shard_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Generates the name for the n-th shard.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_prefix</span> <span class="o">+</span> <span class="s">&#39;.&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_resized_shard_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Generates the name for the n-th new shard temporary file when</span>
+<span class="sd">        resizing dataset. The file will then be re-named to standard shard name.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_prefix</span> <span class="o">+</span> <span class="s">&#39;.resize-temp.&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_guess_n_features</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">corpus</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Attempts to guess number of features in corpus.&quot;&quot;&quot;</span>
+        <span class="n">n_features</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">corpus</span><span class="p">,</span> <span class="s">&#39;dim&#39;</span><span class="p">):</span>
+            <span class="n">n_features</span> <span class="o">=</span> <span class="n">corpus</span><span class="o">.</span><span class="n">dim</span>
+        <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">corpus</span><span class="p">,</span> <span class="s">&#39;dictionary&#39;</span><span class="p">):</span>
+            <span class="n">n_features</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">corpus</span><span class="o">.</span><span class="n">dictionary</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">corpus</span><span class="p">,</span> <span class="s">&#39;n_out&#39;</span><span class="p">):</span>
+            <span class="n">n_features</span> <span class="o">=</span> <span class="n">corpus</span><span class="o">.</span><span class="n">n_out</span>
+        <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">corpus</span><span class="p">,</span> <span class="s">&#39;num_terms&#39;</span><span class="p">):</span>
+            <span class="n">n_features</span> <span class="o">=</span> <span class="n">corpus</span><span class="o">.</span><span class="n">num_terms</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">corpus</span><span class="p">,</span> <span class="n">TransformedCorpus</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">transcorp</span><span class="o">.</span><span class="n">dimension</span><span class="p">(</span><span class="n">corpus</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Couldn</span><span class="se">\&#39;</span><span class="s">t find number of features, refusing to guess.&#39;</span>
+                             <span class="s">&#39;(Type of corpus: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">type</span><span class="p">(</span><span class="n">corpus</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="ow">and</span> <span class="n">n_features</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Discovered inconsistent dataset dim (</span><span class="si">%i</span><span class="s">) and feature count from corpus (</span><span class="si">%i</span><span class="s">). Coercing to corpus dim.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span> <span class="n">n_features</span><span class="p">))</span>
+            <span class="c">#n_features = self.dim</span>
+
+        <span class="k">return</span> <span class="n">n_features</span>
+
+    <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span>
+
+    <span class="c">#@profile</span>
+    <span class="k">def</span> <span class="nf">_ensure_shard</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
+        <span class="c"># No shard loaded</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">shard_n</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">shard_by_offset</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">load_shard</span><span class="p">(</span><span class="n">shard_n</span><span class="p">)</span>
+        <span class="c"># Find appropriate shard, if necessary</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_current</span><span class="p">(</span><span class="n">offset</span><span class="p">):</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_next</span><span class="p">(</span><span class="n">offset</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">load_shard</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_shard_n</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">shard_n</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">shard_by_offset</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">load_shard</span><span class="p">(</span><span class="n">shard_n</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ShardedDataset.get_by_offset"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.get_by_offset">[docs]</a>    <span class="k">def</span> <span class="nf">get_by_offset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;As opposed to getitem, this one only accepts ints as offsets.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_shard</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span><span class="p">[</span><span class="n">offset</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_offset</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="c">#@profile</span></div>
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieves the given row of the dataset.</span>
+<span class="sd">        Slice notation support added, list support for ints added.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">offset</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="n">l_result</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">get_by_offset</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">offset</span><span class="p">]</span>
+            <span class="k">return</span> <span class="n">l_result</span>
+
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">offset</span><span class="p">,</span> <span class="nb">slice</span><span class="p">):</span>
+            <span class="n">start</span> <span class="o">=</span> <span class="n">offset</span><span class="o">.</span><span class="n">start</span>
+            <span class="n">stop</span> <span class="o">=</span> <span class="n">offset</span><span class="o">.</span><span class="n">stop</span>
+            <span class="k">if</span> <span class="n">stop</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span><span class="s">&#39;Requested slice offset </span><span class="si">%d</span><span class="s"> out of range (</span><span class="si">%d</span><span class="s"> docs)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">stop</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span><span class="p">))</span>
+
+            <span class="c"># - get range of shards over which to iterate</span>
+            <span class="n">first_shard</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">shard_by_offset</span><span class="p">(</span><span class="n">start</span><span class="p">)</span>
+
+            <span class="n">last_shard</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_shards</span> <span class="o">-</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">stop</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span><span class="p">:</span>
+                <span class="n">last_shard</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">shard_by_offset</span><span class="p">(</span><span class="n">stop</span><span class="p">)</span> <span class="c"># This fails on one-past</span>
+                <span class="c"># slice indexing; that&#39;s why there&#39;s a code branch here.</span>
+
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">load_shard</span><span class="p">(</span><span class="n">first_shard</span><span class="p">)</span>
+
+            <span class="c"># The easy case: both in one shard.</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">first_shard</span> <span class="o">==</span> <span class="n">last_shard</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span><span class="p">[</span><span class="n">start</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_offset</span><span class="p">:</span>
+                                          <span class="n">stop</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_offset</span><span class="p">]</span>
+
+            <span class="c"># The hard case: the slice is distributed across multiple shards</span>
+            <span class="c"># - initialize numpy.empty()</span>
+            <span class="n">s_result</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">stop</span> <span class="o">-</span> <span class="n">start</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">),</span>
+                                 <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+
+            <span class="c"># - gradually build it up. We will be using three set of start:stop</span>
+            <span class="c">#   indexes:</span>
+            <span class="c">#    - into the dataset (these are the indexes the caller works with)</span>
+            <span class="c">#    - into the current shard</span>
+            <span class="c">#    - into the result</span>
+
+
+            <span class="c"># Indexes into current result rows. These are always smaller than</span>
+            <span class="c"># the dataset indexes by ``start`` (as we move over the shards,</span>
+            <span class="c"># we&#39;re moving by the same number of rows through the result).</span>
+            <span class="n">result_start</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="n">result_stop</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">offsets</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_shard_n</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">start</span>
+
+            <span class="c"># Indexes into current shard. These are trickiest:</span>
+            <span class="c">#  - if in starting shard, these are from (start - current_offset)</span>
+            <span class="c">#    to self.shardsize</span>
+            <span class="c">#  - if in intermediate shard, these are from 0 to self.shardsize</span>
+            <span class="c">#  - if in ending shard, thesea re from 0 to (stop - current_offset)</span>
+            <span class="n">shard_start</span> <span class="o">=</span> <span class="n">start</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_offset</span>
+            <span class="n">shard_stop</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">offsets</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_shard_n</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_offset</span>
+
+            <span class="n">s_result</span><span class="p">[</span><span class="n">result_start</span><span class="p">:</span><span class="n">result_stop</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span><span class="p">[</span><span class="n">shard_start</span><span class="p">:</span><span class="n">shard_stop</span><span class="p">]</span>
+
+            <span class="c"># First and last get special treatment, these are in between</span>
+            <span class="k">for</span> <span class="n">shard_n</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">first_shard</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">last_shard</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">load_shard</span><span class="p">(</span><span class="n">shard_n</span><span class="p">)</span>
+
+                <span class="n">result_start</span> <span class="o">=</span> <span class="n">result_stop</span>
+                <span class="n">result_stop</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">shardsize</span>
+                <span class="n">shard_start</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="n">shard_stop</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">shardsize</span>
+
+                <span class="n">s_result</span><span class="p">[</span><span class="n">result_start</span><span class="p">:</span><span class="n">result_stop</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span><span class="p">[</span><span class="n">shard_start</span><span class="p">:</span><span class="n">shard_stop</span><span class="p">]</span>
+
+            <span class="c"># Last shard</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">load_shard</span><span class="p">(</span><span class="n">last_shard</span><span class="p">)</span>
+            <span class="n">result_start</span> <span class="o">=</span> <span class="n">result_stop</span>
+            <span class="n">result_stop</span> <span class="o">+=</span> <span class="n">stop</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_offset</span>
+            <span class="n">shard_start</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="n">shard_stop</span> <span class="o">=</span> <span class="n">stop</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_offset</span>
+
+            <span class="n">s_result</span><span class="p">[</span><span class="n">result_start</span><span class="p">:</span><span class="n">result_stop</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span><span class="p">[</span><span class="n">shard_start</span><span class="p">:</span><span class="n">shard_stop</span><span class="p">]</span>
+
+            <span class="k">return</span> <span class="n">s_result</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_by_offset</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">result</span>
+
+    <span class="c"># The obligatory Dataset mehtods.</span>
+<div class="viewcode-block" id="ShardedDataset.n_train_batches"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.n_train_batches">[docs]</a>    <span class="k">def</span> <span class="nf">n_train_batches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Determines how many batches of given size the training data will</span>
+<span class="sd">        be split into.</span>
+
+<span class="sd">        :type batch_size: int</span>
+<span class="sd">        :param batch_size: The intended size of one batch of the data.</span>
+
+<span class="sd">        :returns: The number of batches the training data will be split into</span>
+<span class="sd">            for the given ``batch_size``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span> <span class="o">/</span> <span class="n">batch_size</span>
+</div>
+<div class="viewcode-block" id="ShardedDataset.n_devel_batches"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.n_devel_batches">[docs]</a>    <span class="k">def</span> <span class="nf">n_devel_batches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Determines how many batches of given size the training data will</span>
+<span class="sd">        be split into.</span>
+
+<span class="sd">        :type batch_size: int</span>
+<span class="sd">        :param batch_size: The intended size of one batch of the data.</span>
+
+<span class="sd">        :returns: The number of batches the training data will be split into</span>
+<span class="sd">            for the given ``batch_size``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">)</span> <span class="o">/</span> <span class="n">batch_size</span>
+</div>
+<div class="viewcode-block" id="ShardedDataset.n_test_batches"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.n_test_batches">[docs]</a>    <span class="k">def</span> <span class="nf">n_test_batches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Determines how many batches of given size the training data will</span>
+<span class="sd">        be split into.</span>
+
+<span class="sd">        :type batch_size: int</span>
+<span class="sd">        :param batch_size: The intended size of one batch of the data.</span>
+
+<span class="sd">        :returns: The number of batches the training data will be split into</span>
+<span class="sd">            for the given ``batch_size``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span><span class="p">)</span> <span class="o">/</span> <span class="n">batch_size</span>
+</div>
+    <span class="k">def</span> <span class="nf">_get_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">subset</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span>
+                   <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieves a segment of the data, specified by the arguments.</span>
+
+<span class="sd">        :type subset: str</span>
+<span class="sd">        :param subset: One of ``&#39;train&#39;``, ``&#39;devel&#39;`` or ``&#39;test&#39;``.</span>
+<span class="sd">            Specifies which subset of the dataset should be used.</span>
+
+<span class="sd">        :type kind: str</span>
+<span class="sd">        :param kind: One of ``&#39;X&#39;`` or ``&#39;y&#39;``. Specifies whether we want</span>
+<span class="sd">            the inputs or the response.</span>
+
+<span class="sd">        :type b_index: int</span>
+<span class="sd">        :param b_index: The order of the batch in the dataset (0 for first,</span>
+<span class="sd">            1 for second, etc.)</span>
+
+<span class="sd">        :type b_size: int</span>
+<span class="sd">        :param b_size: Size of one batch.</span>
+
+<span class="sd">        :raises: ValueError</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">lbound</span> <span class="o">=</span> <span class="n">b_index</span> <span class="o">*</span> <span class="n">b_size</span>
+
+        <span class="k">if</span> <span class="n">subset</span> <span class="o">==</span> <span class="s">&#39;train&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;X&#39;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">lbound</span> <span class="o">+</span> <span class="n">b_size</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Too high batch index and/or batch size (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">); training dataset has only </span><span class="si">%d</span><span class="s"> documents.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">))</span>
+                <span class="n">batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">batch</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch kind specified: </span><span class="si">%s</span><span class="s"> (unsupervised datasets only support </span><span class="se">\&#39;</span><span class="s">X</span><span class="se">\&#39;</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">kind</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">subset</span> <span class="o">==</span> <span class="s">&#39;devel&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;X&#39;</span><span class="p">:</span>
+                <span class="n">lbound</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span>
+                <span class="k">if</span> <span class="n">lbound</span> <span class="o">+</span> <span class="n">b_size</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Too high batch index and/or batch size (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">); devel dataset has only </span><span class="si">%d</span><span class="s"> documents.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">))</span>
+                <span class="n">batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">batch</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch kind specified: </span><span class="si">%s</span><span class="s"> (unsupervised datasets only support </span><span class="se">\&#39;</span><span class="s">X</span><span class="se">\&#39;</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">kind</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">subset</span> <span class="o">==</span> <span class="s">&#39;test&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;X&#39;</span><span class="p">:</span>
+                <span class="n">lbound</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span>
+                <span class="k">if</span> <span class="n">lbound</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Too high batch index and/or batch size (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">); testing dataset has only </span><span class="si">%d</span><span class="s"> documents.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span><span class="p">))</span>
+                <span class="n">batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">batch</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch kind specified: </span><span class="si">%s</span><span class="s"> (unsupervised datasets only support </span><span class="se">\&#39;</span><span class="s">X</span><span class="se">\&#39;</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">kind</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch subset specified: </span><span class="si">%s</span><span class="s"> (datasets only supports </span><span class="se">\&#39;</span><span class="s">train</span><span class="se">\&#39;</span><span class="s">, </span><span class="se">\&#39;</span><span class="s">devel</span><span class="se">\&#39;</span><span class="s">, </span><span class="se">\&#39;</span><span class="s">test</span><span class="se">\&#39;</span><span class="s">).&#39;</span> <span class="o">%</span> <span class="n">subset</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_build_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Given the first index of a batch and batch size, builds the batch</span>
+<span class="sd">        from the corpus.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">lbound</span><span class="p">:</span><span class="n">lbound</span><span class="o">+</span><span class="n">batch_size</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">result</span>
+
+<div class="viewcode-block" id="ShardedDataset.save"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.save">[docs]</a>    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Saves itself in clean state (after calling reset()) to the</span>
+<span class="sd">        output_prefix file.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_prefix</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">pickle_handle</span><span class="p">:</span>
+            <span class="n">cPickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pickle_handle</span><span class="p">)</span>
+</div>
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="ShardedDataset.load"><a class="viewcode-back" href="../../../safire.data.sharded_dataset.html#safire.data.sharded_dataset.ShardedDataset.load">[docs]</a>    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">output_prefix</span><span class="p">):</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_prefix</span><span class="p">,</span> <span class="s">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">unpickle_handle</span><span class="p">:</span>
+            <span class="n">dataset</span> <span class="o">=</span> <span class="n">cPickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">unpickle_handle</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">dataset</span>
+</pre></div></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

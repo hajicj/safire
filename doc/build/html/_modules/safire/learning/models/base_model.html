@@ -1,0 +1,542 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.base_model &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.learning.models.base_model</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+
+<span class="c">#</span>
+<span class="c"># Logistic regression using Theano</span>
+<span class="c">#</span>
+<span class="kn">import</span> <span class="nn">codecs</span>
+<span class="kn">import</span> <span class="nn">cPickle</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">theano.tensor</span> <span class="kn">as</span> <span class="nn">TT</span>
+
+<span class="kn">import</span> <span class="nn">safire.utils</span>
+<span class="kn">from</span> <span class="nn">safire.learning.interfaces.model_handle</span> <span class="kn">import</span> <span class="n">ModelHandle</span>
+
+<span class="c"># TODO: Rewrite setup() as instance method??? Is it even possible?</span>
+<span class="c">#       Why: so that a learner will only get a model instance, not</span>
+<span class="c">#       a model class. (A model class can be passed, of course. However,</span>
+<span class="c">#       multiple learners might want to update some parameters in parallel.</span>
+<span class="c">#</span>
+<span class="c">#       !!!! BUT: we can run Model.setup() outside the learner, so the</span>
+<span class="c">#                 train_, devel_ and test_ functions refer to the same</span>
+<span class="c">#                 shared object, and pass these functions as parameters</span>
+<span class="c">#                 to learners, not the Model classes.</span>
+<span class="c">#</span>
+<span class="c">#       - this actually reduces coupling between Learner and Model classes,</span>
+<span class="c">#         since a learner may use validation completely unrelated to training</span>
+<span class="c">#         or the test data can be perfectly hidden from the model on setup().</span>
+<span class="c">#         ...which presupposes that there is Model.setup_train(), setup_test(),</span>
+<span class="c">#            setup_devel() which can be called separately with only the given</span>
+<span class="c">#            data.</span>
+
+<div class="viewcode-block" id="BaseModel"><a class="viewcode-back" href="../../../../safire.learning.models.base_model.html#safire.learning.models.base_model.BaseModel">[docs]</a><span class="k">class</span> <span class="nc">BaseModel</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="o">**</span><span class="n">model_init_kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Initialize the parameters of the logistic regression</span>
+
+<span class="sd">        A Logistic Regression layer is the end layer in classificatio</span>
+
+<span class="sd">        :type inputs: theano.tensor.TensorType</span>
+<span class="sd">        :param inputs: symbolic variable that descripbes the input</span>
+<span class="sd">                       of the architecture (e.g., one minibatch of</span>
+<span class="sd">                       input images, or output of a previous layer)</span>
+
+
+<span class="sd">        :type n_in: int</span>
+<span class="sd">        :param n_in: number of input units, the dimension of the space</span>
+<span class="sd">                     in which the data points live</span>
+
+<span class="sd">        :type n_out: int</span>
+<span class="sd">        :param n_out: number of output units, the dimension of the space</span>
+<span class="sd">                      in which the target lies</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">inputs</span> <span class="o">=</span> <span class="n">inputs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">=</span> <span class="n">n_in</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span> <span class="o">=</span> <span class="mi">0</span>
+        
+        <span class="c"># Deprecate? ... no no no, will use this in linking unsupervised</span>
+        <span class="c"># models.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_shapes</span> <span class="o">=</span> <span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_in</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span><span class="p">)]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_layers</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layers</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">outputs</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="p">[]</span>
+
+
+<div class="viewcode-block" id="BaseModel.error"><a class="viewcode-back" href="../../../../safire.learning.models.base_model.html#safire.learning.models.base_model.BaseModel.error">[docs]</a>    <span class="k">def</span> <span class="nf">error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns some measure of model error, to be used in validation</span>
+<span class="sd">        and testing to check on training progress.</span>
+<span class="sd">        </span>
+<span class="sd">        :type y: theano.tensor.TensorType</span>
+<span class="sd">        :param y: A response vector in supervised models -- and something</span>
+<span class="sd">                  else in unsupervised ones (most often the data).</span>
+<span class="sd">        </span>
+<span class="sd">        :raises: NotImplementedError()</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="BaseModel.save"><a class="viewcode-back" href="../../../../safire.learning.models.base_model.html#safire.learning.models.base_model.BaseModel.save">[docs]</a>    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">protocol</span><span class="o">=-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Saves the model in the form of an init kwarg dict, since not all</span>
+<span class="sd">        attributes of the instance can be pickled. Upon loading, the saved</span>
+<span class="sd">        model kwarg dict will be used as ``**kwargs`` (the ``load`` method</span>
+<span class="sd">        is a classmethod) for an initialization of the model.</span>
+
+<span class="sd">        **The _init_args_snapshot() method needs to be overriden by each model</span>
+<span class="sd">        to provide a dict of init args.**</span>
+
+<span class="sd">        :type filename: str</span>
+<span class="sd">        :param filename: The name of the file to which the model parameters</span>
+<span class="sd">                         should be stored.</span>
+
+<span class="sd">        :type protocol: int</span>
+<span class="sd">        :param protocol: The cPickle protocol to use (default: -1)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">pickling_object</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_export_pickleable_object</span><span class="p">()</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">pickle_handle</span><span class="p">:</span>
+            <span class="n">cPickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">pickling_object</span><span class="p">,</span> <span class="n">pickle_handle</span><span class="p">,</span> <span class="n">protocol</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="BaseModel.save_layer"><a class="viewcode-back" href="../../../../safire.learning.models.base_model.html#safire.learning.models.base_model.BaseModel.save_layer">[docs]</a>    <span class="k">def</span> <span class="nf">save_layer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">protocol</span><span class="o">=-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Saves one layer from the current model to the given file.</span>
+
+<span class="sd">        :type layer: int</span>
+<span class="sd">        :param layer: The index of the layer to save (starting from 0).</span>
+
+<span class="sd">        :type filename: str</span>
+<span class="sd">        :param filename: The file to which to save the layer model.</span>
+
+<span class="sd">        :type protocol: int</span>
+<span class="sd">        :param protocol: The pickling protocol to use (default: highest).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="n">layer</span> <span class="o">&lt;=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">),</span> <span class="s">&quot;Only </span><span class="si">%i</span><span class="s"> layers available (requested: </span><span class="si">%i</span><span class="s">)&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">protocol</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_export_pickleable_object</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Builds the object that will actually be pickled. Relies on the</span>
+<span class="sd">        ``_init_args_snapshot()`` method being implemented and adds the class</span>
+<span class="sd">        object, so that the model can be reconstructed without knowing its</span>
+<span class="sd">        type in advance.&quot;&quot;&quot;</span>
+        <span class="n">init_arg_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_args_snapshot</span><span class="p">()</span>
+        <span class="n">model_class</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__class__</span>
+
+        <span class="n">pickling_object</span> <span class="o">=</span> <span class="p">{</span> <span class="s">&#39;init_args&#39;</span><span class="p">:</span> <span class="n">init_arg_dict</span><span class="p">,</span>
+                            <span class="s">&#39;class&#39;</span><span class="p">:</span> <span class="n">model_class</span> <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">pickling_object</span>
+
+    <span class="k">def</span> <span class="nf">_init_args_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the list of init args so that the current model can</span>
+<span class="sd">        be exactly reconstructed using these arguments.&quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+
+
+    <span class="k">def</span> <span class="nf">_cost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the cost expression, binding the response variable for y.</span>
+<span class="sd">        Used during setup.</span>
+
+<span class="sd">        :type y: theano.tensor.vector</span>
+<span class="sd">        :param y: The response variable against which the cost is computed</span>
+<span class="sd">           </span>
+<span class="sd">        :raises: NotImplementedError()</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_training_updates</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the update expression for updating the model parameters</span>
+<span class="sd">        during training. The formula for updating an argument is</span>
+<span class="sd">            </span>
+<span class="sd">        .. math:</span>
+<span class="sd">            </span>
+<span class="sd">           \theta^{(k+1)} = \theta^{(k)} - learning\_rate * \frac{\partial cost}{\partial \theta} </span>
+
+<span class="sd">        Expects a &#39;learning_rate&#39; and &#39;cost&#39; kwarg.</span>
+<span class="sd">            </span>
+<span class="sd">        :type learning_rate: theano.config.floatX</span>
+<span class="sd">        :param learning_rate: The learning rate for parameter updates.</span>
+<span class="sd">                                  </span>
+<span class="sd">        :type cost: theano.tensor.TensorType</span>
+<span class="sd">        :param cost: The cost function of which we are computing</span>
+<span class="sd">                     the gradient.</span>
+<span class="sd">                         </span>
+<span class="sd">        :returns: A list of pairs (parameter, update_expression), to</span>
+<span class="sd">                  be passed directly to ``theano.function`` as the</span>
+<span class="sd">                  ``updates`` parameter.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+    
+    <span class="k">def</span> <span class="nf">_init_weights</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">rng</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">()):</span>
+        <span class="sd">&quot;&quot;&quot;Initialize a weights parameter. The weights are randomly</span>
+<span class="sd">        drawn from a uniform distribution over an interval specified</span>
+<span class="sd">        in the :func:`__init_weights_bounds` method, which</span>
+<span class="sd">        takes care of adjusting this interval for various activation</span>
+<span class="sd">        functions.</span>
+<span class="sd">        </span>
+<span class="sd">        :type name: str</span>
+<span class="sd">        :param name: The name of the weights parameter. Used in naming</span>
+<span class="sd">                     the created shared variable.</span>
+<span class="sd">        </span>
+<span class="sd">        :type shape: tuple(int,int)</span>
+<span class="sd">        :param shape: The shape of the weights matrix. The first number</span>
+<span class="sd">                      is typically the number of input neurons, the second</span>
+<span class="sd">                      number is the number of output neurons of the layer.</span>
+<span class="sd">        </span>
+<span class="sd">        :type rng: numpy.random.RandomState</span>
+<span class="sd">        :param rng: A random number generator from which the weights will</span>
+<span class="sd">                    be drawn.</span>
+<span class="sd">                    </span>
+<span class="sd">        :rtype: theano.tensor.sharedvar.TheanoSharedVariable</span>
+<span class="sd">        :returns: The initialized weights matrix.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">lbound</span><span class="p">,</span> <span class="n">rbound</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__init_weights_bounds</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">)</span>
+        <span class="n">W</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">random_shared_var</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">rbound</span><span class="p">,</span> <span class="n">rng</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">W</span>
+    
+    <span class="k">def</span> <span class="nf">_init_bias</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">length</span><span class="p">,</span> <span class="n">rng</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">()):</span>
+        <span class="sd">&quot;&quot;&quot;Initialize a bias parameter. The bias values are set to</span>
+<span class="sd">        zero (default behavior).</span>
+<span class="sd">        </span>
+<span class="sd">        :type name: str</span>
+<span class="sd">        :param name: The name of the bias parameter. Used in naming</span>
+<span class="sd">                     the created shared variable.</span>
+<span class="sd">        </span>
+<span class="sd">        :type length: int</span>
+<span class="sd">        :param length: The size of the bias vector (number of output neurons</span>
+<span class="sd">                       of the model).</span>
+<span class="sd">        </span>
+<span class="sd">        :type rng: numpy.random.RandomState</span>
+<span class="sd">        :param rng: A random number generator from which the weights will</span>
+<span class="sd">                    be drawn. Not currently used in the base model.</span>
+<span class="sd">                    </span>
+<span class="sd">        :rtype: theano.tensor.sharedvar.TheanoSharedVariable</span>
+<span class="sd">        :returns: The initialized bias vector.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">shared</span><span class="p">(</span><span class="n">value</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">length</span><span class="p">,),</span>
+                          <span class="n">dtype</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">),</span>
+                          <span class="n">name</span> <span class="o">=</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">b</span>
+        
+
+    <span class="k">def</span> <span class="nf">_init_param_consistency_check</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Checks the given parameter for type </span>
+<span class="sd">        (theano.tensor.sharedvar.TensorSharedVariable) and given shape.</span>
+<span class="sd">        If check fails, raises a ``TypeError``.</span>
+
+<span class="sd">        :type param: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param param: A parameter candidate. The type is the intended</span>
+<span class="sd">                      type; this function checks that it is so.</span>
+
+<span class="sd">        :type shape: tuple</span>
+<span class="sd">        :param shape: A tuple of integers that specifies the expected</span>
+<span class="sd">                      shape of param.</span>
+
+<span class="sd">        :raises: TypeError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c"># This method is name-mangled - no one should *ever* want to access it</span>
+        <span class="c"># anywhere but the model __init__ for checking supplied parameter</span>
+        <span class="c"># consistency.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">param</span><span class="p">,</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">sharedvar</span><span class="o">.</span><span class="n">TensorSharedVariable</span><span class="p">)</span>
+            <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">param</span><span class="p">,</span> <span class="n">theano</span><span class="o">.</span><span class="n">sandbox</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">var</span><span class="o">.</span><span class="n">CudaNdarraySharedVariable</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&#39;Init param check: expects theano shared variable as constructor parameter argument, not </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">param</span><span class="p">)))</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">param</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="n">shape</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&#39;Constructor parameter argument has incorrect shape </span><span class="si">%s</span><span class="s">, expects </span><span class="si">%s</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">param</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">shape</span><span class="p">)))</span>
+        
+    <span class="k">def</span> <span class="nf">__init_weights_bounds</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">activation</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns parameter initialization bounds for the given activation</span>
+<span class="sd">        function. Various models may want to override this, if there are</span>
+<span class="sd">        good mathematical reasons to do it.</span>
+<span class="sd">        </span>
+<span class="sd">        Currently defaults to ``TT.nnet.tanh`` values and can deal with</span>
+<span class="sd">        ``TT.nnet.sigmoid``.</span>
+<span class="sd">        </span>
+<span class="sd">        .. warn:</span>
+<span class="sd">        </span>
+<span class="sd">          This method is implemented in the</span>
+<span class="sd">        </span>
+<span class="sd">        :type activation: any</span>
+<span class="sd">        :param activation: An activation function.</span>
+<span class="sd">        </span>
+<span class="sd">        :rtype: tuple(theano.config.floatX, theano.config.floatX)</span>
+<span class="sd">        :returns: A tuple ``(lbound, rbound)`` that specifies the bounds</span>
+<span class="sd">                  of the interval from which parameter weights should be</span>
+<span class="sd">                  initialized. </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+<span class="c">#        raise NotImplementedError(&#39;BaseModel does not have sufficient &#39; </span>
+<span class="c">#            + &#39;information about the properties of the model to initialize &#39;</span>
+<span class="c">#            + &#39;parameter bounds.&#39;)</span>
+<span class="c"># NOTE: with fixing unsupervised models to contain both n_hidden and n_in,</span>
+<span class="c">#       we have a base model that does contain all the necessary information.</span>
+        <span class="k">if</span> <span class="n">activation</span> <span class="o">==</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">ReLU</span><span class="p">:</span>
+            <span class="n">lbound</span> <span class="o">=</span> <span class="mf">0.00001</span>
+            <span class="n">rbound</span> <span class="o">=</span> <span class="mf">0.5</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">rbound</span><span class="p">)</span>
+
+        <span class="n">n_neurons</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span>
+        <span class="n">lbound</span> <span class="o">=</span> <span class="o">-</span><span class="n">numpy</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">6.</span> <span class="o">/</span> <span class="n">n_neurons</span><span class="p">)</span>
+        <span class="n">rbound</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">6.</span> <span class="o">/</span> <span class="n">n_neurons</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">activation</span> <span class="o">==</span> <span class="n">TT</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">:</span>
+            <span class="n">lbound</span> <span class="o">*=</span> <span class="mi">4</span>
+            <span class="n">rbound</span> <span class="o">*=</span> <span class="mi">4</span>
+            
+        <span class="k">return</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">rbound</span><span class="p">)</span>
+    
+    <span class="k">def</span> <span class="nf">__initialize_parameter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">rbound</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes a parameter according to the specification and</span>
+<span class="sd">        appends it to the ``params`` attribute of the model. Low-level</span>
+<span class="sd">        method, just a wrapper for ``utils.random_shared_var`` that appends</span>
+<span class="sd">        the result to the correct place.</span>
+<span class="sd">        </span>
+<span class="sd">        :type name: str</span>
+<span class="sd">        :param name: The name of the parameter. Used in naming</span>
+<span class="sd">                     the created shared variable.</span>
+
+<span class="sd">        :type shape: </span>
+<span class="sd">        :param shape: The desired shape of the parameter.</span>
+
+<span class="sd">        :type lbound: theano.config.floatX</span>
+<span class="sd">        :param lbound: The lower bound of the values with which</span>
+<span class="sd">                       to initialize the parameter.</span>
+
+<span class="sd">        :type rbound: theano.config.floatX</span>
+<span class="sd">        :param rbound: The upper bound of the values with which</span>
+<span class="sd">                       to initialize the shared variable.</span>
+
+<span class="sd">        :type rng: numpy.random.RandomState</span>
+<span class="sd">        :param rng: Optionaly supply a random number generator.</span>
+<span class="sd">                    If ``None`` (default), creates a new one with</span>
+<span class="sd">                    a random seed.             </span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">random_shared_var</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span>
+                                                   <span class="n">rbound</span><span class="p">,</span> <span class="n">rng</span><span class="p">))</span>
+        
+
+    <span class="k">def</span> <span class="nf">__get_param_serialization_map</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Provides a list of references to theano shared variable params</span>
+<span class="sd">        that should be saved when saving the model. The important thing is</span>
+<span class="sd">        the order in which the parameters are returned: this function ensures</span>
+<span class="sd">        that on loading, the shared variable values are assigned to the</span>
+<span class="sd">        appropriate shared variables.</span>
+
+<span class="sd">        :rtype: list</span>
+<span class="sd">        :returns: A list of references to the model&#39;s parameters</span>
+<span class="sd">                  that are loaded from a saved model parameter file.</span>
+<span class="sd">                  This does not necessarily mean simply a (possibly</span>
+<span class="sd">                  re-ordered) copy of the models&#39;s ``params`` attribute;</span>
+<span class="sd">                  for instance models with pre-training will pickle</span>
+<span class="sd">                  also unsupervised layer biases, which are not linked</span>
+<span class="sd">                  to the supervised layers&#39; biases that are in the</span>
+<span class="sd">                  pretrained model&#39;s ``params`` list. </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_init_args</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns a list of the required kwargs the class needs to be</span>
+<span class="sd">        successfully initialized.</span>
+
+<span class="sd">        Only returns args that are OVER the minimum defined in the</span>
+<span class="sd">        BaseModel.__init__() function definition.</span>
+<span class="sd">        </span>
+<span class="sd">        :returns: Empty list.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[]</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_check_init_args</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Raises a TypeError if all _init_args() are not present in the given</span>
+<span class="sd">        args dictionary (will actually take any iterable, but there&#39;s no</span>
+<span class="sd">        point in doing this with anything else but **kwargs passed to </span>
+<span class="sd">        _setup()...)</span>
+<span class="sd">        </span>
+<span class="sd">        :type args: dict</span>
+<span class="sd">        :param args: The kwarg dictionary in which to look for required args.</span>
+<span class="sd">            </span>
+<span class="sd">        :raises: TypeError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">required_kwargs</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">_init_args</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">required_kwargs</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">arg</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;Arg </span><span class="se">\&#39;</span><span class="si">%s</span><span class="se">\&#39;</span><span class="s"> required by model class </span><span class="si">%s</span><span class="s"> not available&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">cls</span><span class="p">)))</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="BaseModel.setup"><a class="viewcode-back" href="../../../../safire.learning.models.base_model.html#safire.learning.models.base_model.BaseModel.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.13</span><span class="p">,</span> 
+              <span class="o">**</span><span class="n">model_init_kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Prepares the train_model, validate_model and test_model methods</span>
+<span class="sd">        on the given dataset and with the given parameters.</span>
+<span class="sd">        </span>
+<span class="sd">        .. Note::</span>
+<span class="sd">        </span>
+<span class="sd">          In this base class, all this method does is raise </span>
+<span class="sd">          a ``NotImplementedError``. To successfully run the setup, we need</span>
+<span class="sd">          to know whether the model is in an unsupervised or supervised (or</span>
+<span class="sd">          some other mixed) setting.</span>
+
+<span class="sd">        It is a CLASS METHOD, which during its run actually creates</span>
+<span class="sd">        an instance of the model. It is called as </span>
+
+<span class="sd">            &gt;&gt;&gt; model_handle = ModelClass.setup(dataset, params...)</span>
+
+<span class="sd">        :type data: Dataset</span>
+<span class="sd">        :param data: The dataset on which the model will be run.</span>
+
+<span class="sd">        :type model: BaseModel</span>
+<span class="sd">        :param model: A model instance that the setup should use.</span>
+
+<span class="sd">        :type batch_size: int</span>
+<span class="sd">        :param batch_size: how many data items will be in one minibatch</span>
+<span class="sd">                           (the data is split to minibatches for training,</span>
+<span class="sd">                           validation and testing)</span>
+
+<span class="sd">        :type model_init_kwargs: kwargs</span>
+<span class="sd">        :param model_init_kwargs: Various keyword arguments that get passed</span>
+<span class="sd">                                  to the model constructor. See constructor</span>
+<span class="sd">                                  argument documentation.</span>
+<span class="sd">                                            </span>
+<span class="sd">        :raises: NotImplementedError                            </span>
+<span class="sd">        &quot;&quot;&quot;</span>        
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s">&#39;Cannot call setup() of BaseModel.&#39;</span><span class="p">)</span>
+</div>
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="BaseModel.load"><a class="viewcode-back" href="../../../../safire.learning.models.base_model.html#safire.learning.models.base_model.BaseModel.load">[docs]</a>    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">load_any</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Loads a saved model.</span>
+
+<span class="sd">        When explicitly loading a model, we should know the class in advance,</span>
+<span class="sd">        so it is not necessary to process the ``class`` member of the pickled</span>
+<span class="sd">        dict. However, at least a warning is given if the pickled class and</span>
+<span class="sd">        load()-calling class do not agree.</span>
+
+<span class="sd">        :type load_any: bool</span>
+<span class="sd">        :param load_any: If set to ``True``, will return an object of the type</span>
+<span class="sd">            saved in the ``class`` member of the pickled dict. If False, will</span>
+<span class="sd">            load the caller model class. Set to True if you want a factory-like</span>
+<span class="sd">            behavior of BaseModel.load() (Useful for situations where you do</span>
+<span class="sd">            not know the class in advance, such as resuming in learners.)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">pickled_object</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">_load_pickleable_object</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">cls</span> <span class="o">!=</span> <span class="n">pickled_object</span><span class="p">[</span><span class="s">&#39;class&#39;</span><span class="p">]:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Caller class (</span><span class="si">%s</span><span class="s">) and pickled class (</span><span class="si">%s</span><span class="s">) do not match.&#39;</span> <span class="o">%</span>
+                         <span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">pickled_object</span><span class="p">[</span><span class="s">&#39;class&#39;</span><span class="p">]))</span>
+        <span class="k">if</span> <span class="n">load_any</span><span class="p">:</span>
+            <span class="n">loader_class</span> <span class="o">=</span> <span class="n">pickled_object</span><span class="p">[</span><span class="s">&#39;class&#39;</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">loader_class</span> <span class="o">=</span> <span class="n">cls</span>
+
+        <span class="n">init_arg_dict</span> <span class="o">=</span> <span class="n">pickled_object</span><span class="p">[</span><span class="s">&#39;init_args&#39;</span><span class="p">]</span>
+
+        <span class="n">obj</span> <span class="o">=</span> <span class="n">loader_class</span><span class="p">(</span><span class="o">**</span><span class="n">init_arg_dict</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">obj</span>
+</div>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_load_pickleable_object</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Loads only the pickleable object and doesn&#39;t initialize the model.</span>
+<span class="sd">        Useful for loading models without knowing their type first - you can</span>
+<span class="sd">        then initialize them using the ``class`` member of the pickled</span>
+<span class="sd">        object.&quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">unpickle_handle</span><span class="p">:</span>
+            <span class="n">pickled_object</span> <span class="o">=</span> <span class="n">cPickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">unpickle_handle</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">pickled_object</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

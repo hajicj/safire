@@ -1,0 +1,521 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.dataset2corpus &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for scripts.dataset2corpus</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="kn">import</span> <span class="nn">cProfile</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">pstats</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">StringIO</span>
+
+<span class="kn">from</span> <span class="nn">gensim</span> <span class="kn">import</span> <span class="n">corpora</span>
+<span class="kn">from</span> <span class="nn">gensim.models</span> <span class="kn">import</span> <span class="n">TfidfModel</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">from</span> <span class="nn">safire.data.imagenetcorpus</span> <span class="kn">import</span> <span class="n">ImagenetCorpus</span>
+<span class="kn">from</span> <span class="nn">safire.data.sharded_dataset</span> <span class="kn">import</span> <span class="n">ShardedDataset</span>
+<span class="kn">from</span> <span class="nn">safire.data.sharded_multimodal_dataset</span> <span class="kn">import</span> \
+    <span class="n">UnsupervisedShardedVTextCorpusDataset</span>
+
+<span class="kn">import</span> <span class="nn">safire.utils</span>
+<span class="kn">from</span> <span class="nn">safire.data.vtextcorpus</span> <span class="kn">import</span> <span class="n">VTextCorpus</span>
+<span class="kn">from</span> <span class="nn">safire.data.loaders</span> <span class="kn">import</span> <span class="n">MultimodalShardedDatasetLoader</span>
+<span class="kn">from</span> <span class="nn">safire.data.filters.positionaltagfilter</span> <span class="kn">import</span> <span class="n">PositionalTagTokenFilter</span>
+<span class="kn">from</span> <span class="nn">safire.data.frequency_based_transform</span> <span class="kn">import</span> <span class="n">FrequencyBasedTransformer</span>
+<span class="kn">from</span> <span class="nn">safire.utils.transformers</span> <span class="kn">import</span> <span class="n">GlobalUnitScalingTransform</span><span class="p">,</span> \
+    <span class="n">LeCunnVarianceScalingTransform</span><span class="p">,</span> <span class="n">GeneralFunctionTransform</span><span class="p">,</span> \
+    <span class="n">NormalizationTransform</span><span class="p">,</span> <span class="n">CappedNormalizationTransform</span>
+
+
+<span class="n">description</span><span class="o">=</span><span class="s">&quot;&quot;&quot;</span>
+<span class="s">Given a vtlist, serializes the dataset using gensim.corpora.MmCorpus.serialize</span>
+<span class="s">and saves the VTextCorpus used for reading the vtlist.</span>
+
+<span class="s">Usage:</span>
+
+<span class="s">   dataset2corpus -l dataset.vtlist -r path/to/dataset/root [-s] [-g]</span>
+<span class="s">                  -o dataset.mmcorp -c dataset.vtcorp</span>
+
+<span class="s">The difference between the -o and -c option is that -o serializes the</span>
+<span class="s">data themselves, while -c exports the corpus object around the data.</span>
+<span class="s">&quot;&quot;&quot;</span>
+<span class="c">#logging.basicConfig(format=&#39;%(asctime)s : %(levelname)s : %(message)s&#39;, level=logging.INFO)</span>
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+<span class="c">########################################################</span>
+
+<span class="k">def</span> <span class="nf">_create_transformer</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Wrapper for transformer creation, used for profiling.&quot;&quot;&quot;</span>
+    <span class="n">transformer</span> <span class="o">=</span> <span class="n">FrequencyBasedTransformer</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">transformer</span>
+
+
+<div class="viewcode-block" id="build_argument_parser"><a class="viewcode-back" href="../../scripts.dataset2corpus.html#scripts.dataset2corpus.build_argument_parser">[docs]</a><span class="k">def</span> <span class="nf">build_argument_parser</span><span class="p">():</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="n">description</span><span class="p">,</span> <span class="n">add_help</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-r&#39;</span><span class="p">,</span> <span class="s">&#39;--root&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The path to&#39;</span><span class="o">+</span>
+                         <span class="s">&#39; the directory which is the root of a dataset.&#39;</span><span class="o">+</span>
+                         <span class="s">&#39; (Will be passed to a Loader as a root.)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-n&#39;</span><span class="p">,</span> <span class="s">&#39;--name&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The dataset name passed to the&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; Loader. Has to correspond to the *.vtlist file name.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-s&#39;</span><span class="p">,</span> <span class="s">&#39;--sentences&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Consider &#39;</span> <span class="o">+</span>
+                         <span class="s">&#39;each sentence of a vtext file as a separate &#39;</span> <span class="o">+</span>
+                         <span class="s">&#39;document (default behavior is document per file)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-i&#39;</span><span class="p">,</span> <span class="s">&#39;--input_label&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;For image processing, which is time-consuming: &#39;</span>
+                             <span class="s">&#39;use this label to process the given *input*&#39;</span>
+                             <span class="s">&#39; corpus. (Useful for layering tanh, UCov., etc.)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-l&#39;</span><span class="p">,</span> <span class="s">&#39;--label&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                         <span class="n">help</span><span class="o">=</span><span class="s">&#39;The corpus label. This is to help distinguish &#39;</span><span class="o">+</span>
+                         <span class="s">&#39;corpora made with different filtering &amp; transformat&#39;</span><span class="o">+</span>
+                         <span class="s">&#39;ion options. Also controls saving names.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--images&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will create an image corpus instead of&#39;</span>
+                             <span class="s">&#39; a text corpus. Note that the script currently &#39;</span>
+                             <span class="s">&#39;only supports creating the default image corpus.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--scale&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Will scale the image dataset to the unit interval&#39;</span>
+                             <span class="s">&#39;with the given number as the cutoff for 1.0 after&#39;</span>
+                             <span class="s">&#39; scaling.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--uniform_covariance&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will scale the data so that all items&#39;</span>
+                             <span class="s">&#39; have the same covariance according to LeCunn</span><span class="se">\&#39;</span><span class="s">s&#39;</span>
+                             <span class="s">&#39; 1998 paper, eq. 13.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--tanh&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will run the data through a tanh sigmoid&#39;</span>
+                             <span class="s">&#39;function. The higher the number, the steeper&#39;</span>
+                             <span class="s">&#39; the function.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--normalize&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will normalize each data item to sum to&#39;</span>
+                             <span class="s">&#39; the given number.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--capped_normalize&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+                        <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will normalize each data item to sum to &#39;</span>
+                             <span class="s">&#39;the maximum possible number so that no value in &#39;</span>
+                             <span class="s">&#39;the corpus will be higher than the given number.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--dataset_only&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will assume the tcorp/icorp and mmcorp for the &#39;</span>
+                             <span class="s">&#39;given label have already been initialized and will&#39;</span>
+                             <span class="s">&#39; only create the dataset. Will overwrite.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--shardsize&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The output sharded dataset will have this shard &#39;</span>
+                             <span class="s">&#39;size.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--pos&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The string of individual POS tags that &#39;</span><span class="o">+</span>
+                        <span class="s">&#39;should be retained inthe corpus. Example: </span><span class="se">\&#39;</span><span class="s">NADV</span><span class="se">\&#39;</span><span class="s"> &#39;</span><span class="o">+</span>
+                        <span class="s">&#39;for nouns, adjectives, adverbs and verbs.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-k&#39;</span><span class="p">,</span> <span class="s">&#39;--top_k&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Keep only this amount of most frequent &#39;</span><span class="o">+</span>
+                        <span class="s">&#39;words as features.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--discard_top&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Discard this many &#39;</span><span class="o">+</span>
+                        <span class="s">&#39;most frequent features. (Useful for pruning stoplist&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; words.)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--tfidf&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Apply a TfIdf transformation BEFORE frequency&#39;</span>
+                             <span class="s">&#39;filtering. (Can be combined with --post_tfidf.)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--post_tfidf&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Apply a TfIdf transformation AFTER frequency &#39;</span>
+                             <span class="s">&#39;filtering. (Can be combined with --tfidf.)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--pfilter&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If used, only lets a certain proportion or number&#39;</span>
+                             <span class="s">&#39; of sentences from the beginning of a document &#39;</span>
+                             <span class="s">&#39;contribute to the document. Use float for a &#39;</span>
+                             <span class="s">&#39;proportion, int for a fixed number.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--pfilter_fullfreq&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If used, counts frequencies for words that pass&#39;</span>
+                             <span class="s">&#39; through --pfilter from the whole document, not&#39;</span>
+                             <span class="s">&#39; just from the sentences that pass pfilter.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--filter_capital&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will filter out all words starting with &#39;</span>
+                             <span class="s">&#39;capital letters.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_shdat&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will NOT automatically create the &#39;</span>
+                             <span class="s">&#39;sharded dataset with the given label.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_overwrite_shdat&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will overwrite an existing dataset.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--serializer&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Which &#39;</span><span class="o">+</span>
+                        <span class="s">&#39;gensim serializer to use: Mm, SvmLight, Blei, Low&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-c&#39;</span><span class="p">,</span> <span class="s">&#39;--clear&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;If given,&#39;</span><span class="o">+</span>
+                        <span class="s">&#39;instead of creating a corpus, will attempt to clear &#39;</span><span class="o">+</span>
+                        <span class="s">&#39;all corpora in the dataset with the infix given by &#39;</span><span class="o">+</span>
+                        <span class="s">&#39;the --label argument.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--profile_serialization&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If given, will profile the serialization.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--profile_transformation&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If given, will profile frequency-based &#39;</span>
+                             <span class="s">&#39;transformation initialization time.&#39;</span><span class="p">)</span>
+
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-v&#39;</span><span class="p">,</span> <span class="s">&#39;--verbose&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; INFO logging messages.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--debug&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on debug &#39;</span><span class="o">+</span>
+                        <span class="s">&#39;prints.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">parser</span>
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../scripts.dataset2corpus.html#scripts.dataset2corpus.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing dataset loader with root </span><span class="si">%s</span><span class="s">, name </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+    <span class="n">loader</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">clear</span><span class="p">:</span>
+
+        <span class="n">fnames</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">required_text_corpus_names</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Clearing corpora with label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">fnames</span><span class="p">:</span>
+            <span class="n">full_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">loader</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">loader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">corpus_dir</span><span class="p">,</span>
+                                     <span class="n">name</span><span class="p">)</span>
+
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Attempting to clear file </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">full_name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">full_name</span><span class="p">):</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">full_name</span><span class="p">)</span>
+
+        <span class="c"># TODO: Clear dataset</span>
+        <span class="n">output_prefix</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">output_prefix</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+
+        <span class="k">return</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">images</span><span class="p">:</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">dataset_only</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Building dataset only (assumes icorp and mmcorp)...&#39;</span><span class="p">)</span>
+            <span class="n">idata</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load_img</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="p">{</span> <span class="s">&#39;overwrite&#39;</span> <span class="p">:</span> <span class="bp">True</span><span class="p">,</span>
+                                                  <span class="s">&#39;shardsize&#39;</span> <span class="p">:</span> <span class="n">args</span><span class="o">.</span><span class="n">shardsize</span><span class="p">})</span>
+            <span class="n">idata</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+            <span class="k">return</span>
+
+        <span class="k">if</span> <span class="n">loader</span><span class="o">.</span><span class="n">has_image_corpora</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">):</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Overwriting image corpora with label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">input_label</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">input_label</span> <span class="o">==</span> <span class="s">&#39;.&#39;</span><span class="p">:</span>
+                <span class="n">args</span><span class="o">.</span><span class="n">input_label</span> <span class="o">=</span> <span class="bp">None</span>
+            <span class="n">icorp</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load_image_corpus</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">input_label</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c"># Build the default corpus.</span>
+            <span class="n">image_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">loader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">image_vectors</span><span class="p">)</span>
+            <span class="n">icorp</span> <span class="o">=</span> <span class="n">ImagenetCorpus</span><span class="p">(</span><span class="n">image_file</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;;&#39;</span><span class="p">,</span>
+                                   <span class="n">dim</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">)</span>
+        <span class="n">corpus_to_serialize</span> <span class="o">=</span> <span class="n">icorp</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">uniform_covariance</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Transforming to uniform covariance.&#39;</span><span class="p">)</span>
+            <span class="n">covariance_transform</span> <span class="o">=</span> <span class="n">LeCunnVarianceScalingTransform</span><span class="p">(</span>
+                                                            <span class="n">corpus_to_serialize</span><span class="p">)</span>
+            <span class="n">corpus_to_serialize</span> <span class="o">=</span> <span class="n">covariance_transform</span><span class="p">[</span><span class="n">corpus_to_serialize</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">scale</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Scaling with cutoff at </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">scale</span><span class="p">)</span>
+            <span class="n">scaling_transform</span> <span class="o">=</span> <span class="n">GlobalUnitScalingTransform</span><span class="p">(</span><span class="n">icorp</span><span class="p">,</span>
+                                                            <span class="n">cutoff</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">scale</span><span class="p">)</span>
+            <span class="n">corpus_to_serialize</span> <span class="o">=</span> <span class="n">scaling_transform</span><span class="p">[</span><span class="n">corpus_to_serialize</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">tanh</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Squishing through the tanh function with coef. </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">tanh</span><span class="p">)</span>
+            <span class="n">tanh_transform</span> <span class="o">=</span> <span class="n">GeneralFunctionTransform</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">tanh</span><span class="p">,</span>
+                                                      <span class="n">multiplicative_coef</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">tanh</span><span class="p">)</span>
+            <span class="n">corpus_to_serialize</span> <span class="o">=</span> <span class="n">tanh_transform</span><span class="p">[</span><span class="n">corpus_to_serialize</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">normalize</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Normalizing each data point to </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">normalize</span><span class="p">)</span>
+            <span class="n">norm_transform</span> <span class="o">=</span> <span class="n">NormalizationTransform</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">normalize</span><span class="p">)</span>
+            <span class="n">corpus_to_serialize</span> <span class="o">=</span> <span class="n">norm_transform</span><span class="p">[</span><span class="n">corpus_to_serialize</span><span class="p">]</span>
+
+        <span class="c"># i1 = icorp.__iter__().next()</span>
+        <span class="c"># s1 = corpus_to_serialize.__iter__().next()</span>
+        <span class="c"># print i1[:20]</span>
+        <span class="c"># print s1[:20]</span>
+
+        <span class="n">loader</span><span class="o">.</span><span class="n">serialize_image_corpus</span><span class="p">(</span><span class="n">corpus_to_serialize</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+        <span class="n">loader</span><span class="o">.</span><span class="n">save_image_corpus</span><span class="p">(</span><span class="n">corpus_to_serialize</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+
+        <span class="n">output_prefix</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">img_output_prefix</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+        <span class="n">dataset</span> <span class="o">=</span> <span class="n">ShardedDataset</span><span class="p">(</span><span class="n">output_prefix</span><span class="p">,</span> <span class="n">corpus_to_serialize</span><span class="p">,</span>
+                                 <span class="n">shardsize</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">shardsize</span><span class="p">,</span>
+                                 <span class="n">overwrite</span><span class="o">=</span><span class="p">(</span><span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_overwrite_shdat</span><span class="p">))</span>
+        <span class="n">dataset</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+        <span class="k">return</span>
+
+    <span class="c">###########################################################################</span>
+
+    <span class="c"># Text processing #</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">dataset_only</span><span class="p">:</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Only creating dataset, assuming serialized corpus available for </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+        <span class="n">output_prefix</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">text_output_prefix</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+
+        <span class="n">vt_corpus_filename</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">required_text_corpus_names</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">vt_full_filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">loader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">corpus_dir</span><span class="p">,</span>
+                                        <span class="n">vt_corpus_filename</span><span class="p">)</span>
+
+
+        <span class="n">mm_corpus_filename</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">required_text_corpus_names</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">mm_full_filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">loader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">corpus_dir</span><span class="p">,</span>
+                                        <span class="n">mm_corpus_filename</span><span class="p">)</span>
+
+        <span class="n">dataset</span> <span class="o">=</span> <span class="n">UnsupervisedShardedVTextCorpusDataset</span><span class="p">(</span><span class="n">output_prefix</span><span class="p">,</span>
+                                            <span class="n">vt_corpus_filename</span><span class="o">=</span><span class="n">vt_full_filename</span><span class="p">,</span>
+                                            <span class="n">mm_corpus_filename</span><span class="o">=</span><span class="n">mm_full_filename</span><span class="p">,</span>
+                                            <span class="n">shardsize</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">shardsize</span><span class="p">,</span>
+                                            <span class="n">overwrite</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">overwrite_shdat</span><span class="p">)</span>
+        <span class="n">dataset</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">save</span><span class="p">()</span> <span class="c"># Save the ShardedDataset, not the wrapper</span>
+
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">input_label</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading corpus with label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">input_label</span><span class="p">)</span>
+        <span class="n">corpus_to_serialize</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load_text_corpus</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">input_label</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">vtargs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;VTextCorpus will have label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+            <span class="n">vtargs</span><span class="p">[</span><span class="s">&#39;label&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">label</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">pos</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Constructing POS filter with values </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">pos</span><span class="p">)))</span>
+            <span class="n">vtargs</span><span class="p">[</span><span class="s">&#39;token_filter&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">PositionalTagTokenFilter</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">pos</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">pfilter</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Constructing positional filter: </span><span class="si">%d</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">pfilter</span><span class="p">)</span>
+            <span class="c"># If a fixed number of sentences is requested, use this.</span>
+            <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">pfilter</span> <span class="o">%</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">args</span><span class="o">.</span><span class="n">pfilter</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">pfilter</span><span class="p">)</span>
+            <span class="n">vtargs</span><span class="p">[</span><span class="s">&#39;pfilter&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">pfilter</span>
+            <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">pfilter_fullfreq</span><span class="p">:</span>
+                <span class="n">vtargs</span><span class="p">[</span><span class="s">&#39;pfilter_full_freqs&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">pfilter_fullfreq</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">filter_capital</span><span class="p">:</span>
+            <span class="n">vtargs</span><span class="p">[</span><span class="s">&#39;filter_capital&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">True</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Deriving corpus from loader with vtargs </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">vtargs</span><span class="p">))</span>
+        <span class="n">vtcorp</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">get_text_corpus</span><span class="p">(</span><span class="n">vtargs</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Corpus: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">vtcorp</span><span class="p">))</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;  vtlist: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">input</span><span class="p">))</span>
+
+        <span class="n">corpus_to_serialize</span> <span class="o">=</span> <span class="n">vtcorp</span>  <span class="c"># Holds the data</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">tfidf</span><span class="p">:</span>
+
+        <span class="n">tfidf</span> <span class="o">=</span> <span class="n">TfidfModel</span><span class="p">(</span><span class="n">corpus_to_serialize</span><span class="p">)</span>
+        <span class="n">corpus_to_serialize</span> <span class="o">=</span> <span class="n">tfidf</span><span class="p">[</span><span class="n">corpus_to_serialize</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">top_k</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Running transformer with k=</span><span class="si">%i</span><span class="s">, discard_top=</span><span class="si">%i</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">args</span><span class="o">.</span><span class="n">top_k</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">discard_top</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">profile_transformation</span><span class="p">:</span>
+            <span class="n">report</span><span class="p">,</span> <span class="n">transformer</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">profile_run</span><span class="p">(</span><span class="n">_create_transformer</span><span class="p">,</span>
+                                     <span class="n">corpus_to_serialize</span><span class="p">,</span>
+                                     <span class="n">args</span><span class="o">.</span><span class="n">top_k</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">discard_top</span><span class="p">)</span>
+            <span class="c"># Profiling output</span>
+            <span class="k">print</span> <span class="n">report</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">transformer</span> <span class="o">=</span> <span class="n">FrequencyBasedTransformer</span><span class="p">(</span><span class="n">corpus_to_serialize</span><span class="p">,</span>
+                                                <span class="n">args</span><span class="o">.</span><span class="n">top_k</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">discard_top</span><span class="p">)</span>
+
+        <span class="n">corpus_to_serialize</span> <span class="o">=</span> <span class="n">transformer</span><span class="o">.</span><span class="n">_apply</span><span class="p">(</span><span class="n">corpus_to_serialize</span><span class="p">)</span>
+
+        <span class="c"># Cannot save the TransformedCorpus that comes out of TfidfModel</span>
+        <span class="c"># - transform original VTextCorpus instead.</span>
+        <span class="c">#corpus_to_save = transformer._apply(corpus_to_save)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">post_tfidf</span><span class="p">:</span>
+
+        <span class="n">post_tfidf</span> <span class="o">=</span> <span class="n">TfidfModel</span><span class="p">(</span><span class="n">corpus_to_serialize</span><span class="p">)</span>
+        <span class="n">corpus_to_serialize</span> <span class="o">=</span> <span class="n">post_tfidf</span><span class="p">[</span><span class="n">corpus_to_serialize</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">uniform_covariance</span><span class="p">:</span>
+
+        <span class="n">ucov</span> <span class="o">=</span> <span class="n">LeCunnVarianceScalingTransform</span><span class="p">(</span><span class="n">corpus_to_serialize</span><span class="p">)</span>
+        <span class="n">corpus_to_serialize</span> <span class="o">=</span> <span class="n">ucov</span><span class="p">[</span><span class="n">corpus_to_serialize</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">tanh</span><span class="p">:</span>
+
+        <span class="n">tanh_transform</span> <span class="o">=</span> <span class="n">GeneralFunctionTransform</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">tanh</span><span class="p">,</span>
+                                                  <span class="n">multiplicative_coef</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">tanh</span><span class="p">)</span>
+        <span class="n">corpus_to_serialize</span> <span class="o">=</span> <span class="n">tanh_transform</span><span class="p">[</span><span class="n">corpus_to_serialize</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">capped_normalize</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Normalizing each data point to max. value </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">capped_normalize</span><span class="p">)</span>
+            <span class="n">cnorm_transform</span> <span class="o">=</span> <span class="n">CappedNormalizationTransform</span><span class="p">(</span><span class="n">corpus_to_serialize</span><span class="p">,</span>
+                                                          <span class="n">args</span><span class="o">.</span><span class="n">capped_normalize</span><span class="p">)</span>
+            <span class="n">corpus_to_serialize</span> <span class="o">=</span> <span class="n">cnorm_transform</span><span class="p">[</span><span class="n">corpus_to_serialize</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">normalize</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Normalizing each data point to </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">normalize</span><span class="p">)</span>
+            <span class="n">norm_transform</span> <span class="o">=</span> <span class="n">NormalizationTransform</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">normalize</span><span class="p">)</span>
+            <span class="n">corpus_to_serialize</span> <span class="o">=</span> <span class="n">norm_transform</span><span class="p">[</span><span class="n">corpus_to_serialize</span><span class="p">]</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Serializing...&#39;</span><span class="p">)</span>
+    <span class="n">cnames</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">required_text_corpus_names</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+
+    <span class="n">data_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">loader</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">loader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">corpus_dir</span><span class="p">,</span> <span class="n">cnames</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">obj_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">loader</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">loader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">corpus_dir</span><span class="p">,</span> <span class="n">cnames</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;  Data name: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">cnames</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;  Obj name:  </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">cnames</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+
+    <span class="n">serializer</span> <span class="o">=</span> <span class="n">corpora</span><span class="o">.</span><span class="n">MmCorpus</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">serializer</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">serializer</span> <span class="o">==</span> <span class="s">&#39;SvmLight&#39;</span><span class="p">:</span>
+            <span class="n">serializer</span> <span class="o">=</span> <span class="n">corpora</span><span class="o">.</span><span class="n">SvmLightCorpus</span>
+        <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">serializer</span> <span class="o">==</span> <span class="s">&#39;Blei&#39;</span><span class="p">:</span>
+            <span class="n">serializer</span> <span class="o">=</span> <span class="n">corpora</span><span class="o">.</span><span class="n">BleiCorpus</span>
+        <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">serializer</span> <span class="o">==</span> <span class="s">&#39;Low&#39;</span><span class="p">:</span>
+            <span class="n">serializer</span> <span class="o">=</span> <span class="n">corpora</span><span class="o">.</span><span class="n">LowCorpus</span>
+        <span class="k">elif</span> <span class="n">serializer</span> <span class="o">==</span> <span class="s">&#39;Mm&#39;</span><span class="p">:</span>
+            <span class="n">serializer</span> <span class="o">=</span> <span class="n">corpora</span><span class="o">.</span><span class="n">MmCorpus</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">profile_serialization</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Profiling serialization.&#39;</span><span class="p">)</span>
+        <span class="n">profiler_results</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">profile_run</span><span class="p">(</span><span class="n">serializer</span><span class="o">.</span><span class="n">serialize</span><span class="p">,</span>
+                                                       <span class="n">data_name</span><span class="p">,</span>
+                                                       <span class="n">corpus_to_serialize</span><span class="p">)</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Profiling results:&#39;</span><span class="p">)</span>
+        <span class="k">print</span> <span class="n">profiler_results</span><span class="o">.</span><span class="n">getvalue</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">serializer</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="n">data_name</span><span class="p">,</span> <span class="n">corpus_to_serialize</span><span class="p">)</span>
+
+    <span class="c"># We are saving the VTextCorpus rather than the transformed corpus,</span>
+    <span class="c"># in order to be able to load it.</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Corpus stats: </span><span class="si">%d</span><span class="s"> documents, </span><span class="si">%d</span><span class="s"> features.&#39;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="nb">len</span><span class="p">(</span><span class="n">corpus_to_serialize</span><span class="p">),</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">transcorp</span><span class="o">.</span><span class="n">dimension</span><span class="p">(</span><span class="n">corpus_to_serialize</span><span class="p">)))</span>
+
+    <span class="n">corpus_to_serialize</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">obj_name</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_shdat</span><span class="p">:</span>
+
+        <span class="n">output_prefix</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">text_output_prefix</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">)</span>
+
+        <span class="n">dataset</span> <span class="o">=</span> <span class="n">ShardedDataset</span><span class="p">(</span><span class="n">output_prefix</span><span class="p">,</span> <span class="n">corpus_to_serialize</span><span class="p">,</span>
+                                 <span class="n">shardsize</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">shardsize</span><span class="p">,</span>
+                                 <span class="n">overwrite</span><span class="o">=</span><span class="p">(</span><span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_overwrite_shdat</span><span class="p">))</span>
+        <span class="n">dataset</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+
+    <span class="c"># Or: should we save the transformed corpus? That would save both the</span>
+    <span class="c"># original vtcorp and the transformation object...</span>
+    <span class="c">#### corpus_to_serialize.save(obj_name)</span>
+
+    <span class="k">return</span>
+
+     
+<span class="c">##############</span>
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">build_argument_parser</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+    <span class="n">main</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

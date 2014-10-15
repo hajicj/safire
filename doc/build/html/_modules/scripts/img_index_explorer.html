@@ -1,0 +1,574 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.img_index_explorer &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for scripts.img_index_explorer</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">operator</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">from</span> <span class="nn">safire.data.text_browser</span> <span class="kn">import</span> <span class="n">TextBrowser</span>
+<span class="kn">import</span> <span class="nn">safire.utils</span>
+<span class="kn">import</span> <span class="nn">safire.utils.matutils</span> <span class="kn">as</span> <span class="nn">matutils</span>
+<span class="kn">from</span> <span class="nn">safire.data.image_browser</span> <span class="kn">import</span> <span class="n">ImageBrowser</span>
+<span class="kn">from</span> <span class="nn">safire.data.loaders</span> <span class="kn">import</span> <span class="n">MultimodalDatasetLoader</span><span class="p">,</span> <span class="n">IndexLoader</span><span class="p">,</span> \
+    <span class="n">ModelLoader</span><span class="p">,</span> <span class="n">MultimodalShardedDatasetLoader</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+<span class="c">##############################################################################</span>
+
+<div class="viewcode-block" id="build_argument_parser"><a class="viewcode-back" href="../../scripts.img_index_explorer.html#scripts.img_index_explorer.build_argument_parser">[docs]</a><span class="k">def</span> <span class="nf">build_argument_parser</span><span class="p">():</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="n">__doc__</span><span class="p">,</span> <span class="n">add_help</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-r&#39;</span><span class="p">,</span> <span class="s">&#39;--root&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The path to&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; the directory which is the root of a dataset.&#39;</span> <span class="o">+</span>
+                        <span class="s">&#39; (Will be passed to a Loader as a root.)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-n&#39;</span><span class="p">,</span> <span class="s">&#39;--name&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The dataset name passed to the&#39;</span> <span class="o">+</span>
+                        <span class="s">&#39; Loader. Has to correspond to the *.vtlist file name.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-i1&#39;</span><span class="p">,</span> <span class="s">&#39;--img_label_1&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Label of the first corpus/dataset/index triplet.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-i2&#39;</span><span class="p">,</span> <span class="s">&#39;--img_label_2&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Label of the second corpus/dataset/index triplet.&#39;</span>
+                             <span class="s">&#39;If not given, the </span><span class="se">\&#39;</span><span class="s">compare</span><span class="se">\&#39;</span><span class="s"> command in &#39;</span>
+                             <span class="s">&#39;interactive mode will only output images from one&#39;</span>
+                             <span class="s">&#39; index.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-b&#39;</span><span class="p">,</span> <span class="s">&#39;--image_browser&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Full path to the image id-filename map for the &#39;</span>
+                             <span class="s">&#39;image browser.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-t&#39;</span><span class="p">,</span> <span class="s">&#39;--text_browser_label&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;VTextCorpus label in the given data root. If &#39;</span>
+                             <span class="s">&#39;given, will initialize a TextBrowser to inspect&#39;</span>
+                             <span class="s">&#39; text documents related to the images. Will look&#39;</span>
+                             <span class="s">&#39; for the DataDirLayout default vtext-image-map.csv&#39;</span>
+                             <span class="s">&#39; file.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--quantitative&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Instead of entering interactive mode for manual &#39;</span>
+                             <span class="s">&#39;exploration, enters interactive mode for &#39;</span>
+                             <span class="s">&#39;comparing the retrieval performance of i2 vs i1.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-v&#39;</span><span class="p">,</span> <span class="s">&#39;--verbose&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; INFO logging messages.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--debug&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on debug &#39;</span><span class="o">+</span>
+                        <span class="s">&#39;prints.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">parser</span>
+
+</div>
+<div class="viewcode-block" id="print_interactive_help"><a class="viewcode-back" href="../../scripts.img_index_explorer.html#scripts.img_index_explorer.print_interactive_help">[docs]</a><span class="k">def</span> <span class="nf">print_interactive_help</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Prints the help message for interactive mode.&quot;&quot;&quot;</span>
+    <span class="k">print</span> <span class="s">&#39;Image index explorer interactive mode help</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;==========================================</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;Commands:</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;  h        ... help</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;  c ID     ... compare most similar for given corpus ID (number)</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;  d N      ... set browser to display N most similar images.</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;  s ID     ... show most similar for given corpus ID (number)</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;  b ID N K ... show N most similar, then each k-th most similar.</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;  p ID     ... plot the sorted similarities of query results.</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;  w        ... switch on/off displaying text together with images.</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;  r        ... switch on/off randomized image ordering.</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;  q|e      ... exit (will ask for confirmation)</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;On the </span><span class="se">\&#39;</span><span class="s">c</span><span class="se">\&#39;</span><span class="s"> command, will show two columns of most similar images</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;with the similarities. Will show query image on top.&#39;</span>
+
+</div>
+<div class="viewcode-block" id="run_interactive"><a class="viewcode-back" href="../../scripts.img_index_explorer.html#scripts.img_index_explorer.run_interactive">[docs]</a><span class="k">def</span> <span class="nf">run_interactive</span><span class="p">(</span><span class="n">icorp_1</span><span class="p">,</span> <span class="n">idata_1</span><span class="p">,</span> <span class="n">index_1</span><span class="p">,</span> <span class="n">icorp_2</span><span class="p">,</span> <span class="n">idata_2</span><span class="p">,</span> <span class="n">index_2</span><span class="p">,</span>
+                    <span class="n">image_browser</span><span class="p">,</span> <span class="n">text_browser</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Runs an interactive index explorer script.&quot;&quot;&quot;</span>
+
+    <span class="n">exit_commands</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">([</span><span class="s">&#39;q&#39;</span><span class="p">,</span> <span class="s">&#39;e&#39;</span><span class="p">])</span>
+    <span class="n">num_best_commands</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">([</span><span class="s">&#39;d&#39;</span><span class="p">])</span>
+    <span class="n">buckets_commands</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">([</span><span class="s">&#39;b&#39;</span><span class="p">])</span>
+    <span class="n">display_commands</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">([</span><span class="s">&#39;s&#39;</span><span class="p">])</span>
+    <span class="n">help_commands</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">([</span><span class="s">&#39;h&#39;</span><span class="p">])</span>
+    <span class="n">compare_commands</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">([</span><span class="s">&#39;c&#39;</span><span class="p">])</span>
+    <span class="n">plot_commands</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">([</span><span class="s">&#39;p&#39;</span><span class="p">])</span>
+    <span class="n">with_text_commands</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">([</span><span class="s">&#39;w&#39;</span><span class="p">])</span>
+    <span class="n">do_shuffle_commands</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">([</span><span class="s">&#39;r&#39;</span><span class="p">])</span>
+
+    <span class="n">default_num_best</span> <span class="o">=</span> <span class="mi">5</span>
+
+    <span class="n">idata_1_iter</span> <span class="o">=</span> <span class="n">idata_1</span><span class="o">.</span><span class="n">__iter__</span><span class="p">()</span>
+    <span class="n">idata_1_ctr</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+    <span class="n">index_1</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="n">default_num_best</span>
+
+    <span class="k">if</span> <span class="n">index_2</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">idata_2_iter</span> <span class="o">=</span> <span class="n">idata_2</span><span class="o">.</span><span class="n">__iter__</span><span class="p">()</span>
+        <span class="n">idata_2_ctr</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="n">index_2</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="n">default_num_best</span>
+
+    <span class="c"># If true, will display texts together with images.</span>
+    <span class="n">with_text</span> <span class="o">=</span> <span class="bp">False</span>
+
+    <span class="c"># If true, will shuffle images on display.</span>
+    <span class="n">do_shuffle</span> <span class="o">=</span> <span class="bp">False</span>
+
+    <span class="n">exit_interactive</span> <span class="o">=</span> <span class="bp">False</span>
+    <span class="k">while</span> <span class="ow">not</span> <span class="n">exit_interactive</span><span class="p">:</span>
+
+        <span class="n">user_input</span> <span class="o">=</span> <span class="nb">raw_input</span><span class="p">(</span><span class="s">&#39;--&gt; &#39;</span><span class="p">)</span>
+        <span class="n">split_input</span> <span class="o">=</span> <span class="n">user_input</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">split_input</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">command</span><span class="p">,</span> <span class="n">options</span> <span class="o">=</span> <span class="n">split_input</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="n">split_input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">options</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Command: </span><span class="si">%s</span><span class="s">, options: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">command</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">options</span><span class="p">)))</span>
+
+        <span class="c"># Execute command</span>
+        <span class="k">if</span> <span class="n">command</span> <span class="ow">in</span> <span class="n">help_commands</span><span class="p">:</span>
+            <span class="n">print_interactive_help</span><span class="p">()</span>
+            <span class="k">continue</span>
+
+        <span class="k">elif</span> <span class="n">command</span> <span class="ow">in</span> <span class="n">with_text_commands</span><span class="p">:</span>
+
+            <span class="k">if</span> <span class="n">with_text</span><span class="p">:</span>
+                <span class="n">with_text</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">text_browser</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="k">print</span> <span class="s">&#39;Error: cannot switch on text display without a &#39;</span> \
+                          <span class="s">&#39;text browser.&#39;</span>
+                    <span class="k">continue</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">with_text</span> <span class="o">=</span> <span class="bp">True</span>
+
+        <span class="k">elif</span> <span class="n">command</span> <span class="ow">in</span> <span class="n">do_shuffle_commands</span><span class="p">:</span>
+
+            <span class="n">do_shuffle</span> <span class="o">=</span> <span class="p">(</span><span class="ow">not</span> <span class="n">do_shuffle</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">command</span> <span class="ow">in</span> <span class="n">num_best_commands</span><span class="p">:</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">options</span><span class="p">:</span>
+                <span class="k">print</span> <span class="s">&#39;Error: must supply num_best command with options.&#39;</span>
+                <span class="k">continue</span>
+
+            <span class="n">new_num_best</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
+
+            <span class="n">index_1</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="n">new_num_best</span><span class="o">+</span><span class="mi">1</span> <span class="c"># First image is always query img.</span>
+
+            <span class="c"># So that we can work in single-index mode:</span>
+            <span class="k">if</span> <span class="n">index_2</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">index_2</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="n">new_num_best</span>
+
+            <span class="k">continue</span>
+
+        <span class="k">elif</span> <span class="n">command</span> <span class="ow">in</span> <span class="n">display_commands</span><span class="p">:</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">image_no</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="n">image_no</span> <span class="o">=</span> <span class="n">icorp_1</span><span class="o">.</span><span class="n">doc2id</span><span class="p">[</span><span class="n">options</span><span class="p">]</span>
+            <span class="c">#image_id = icorp_1.id2doc[image_no]</span>
+
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Querying for image no. </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">image_no</span><span class="p">)</span>
+
+            <span class="n">query</span> <span class="o">=</span> <span class="n">idata_1</span><span class="o">.</span><span class="n">get_sparse</span><span class="p">(</span><span class="n">image_no</span><span class="p">)</span>
+
+            <span class="n">result</span> <span class="o">=</span> <span class="n">index_1</span><span class="p">[</span><span class="n">query</span><span class="p">]</span> <span class="c"># We want to display the first image here.</span>
+
+            <span class="n">inos</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">result</span><span class="p">)</span>
+
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Inos to retrieve: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">inos</span><span class="p">))</span>
+            <span class="n">iids</span> <span class="o">=</span> <span class="p">[</span> <span class="n">icorp_1</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">imno</span><span class="p">]</span> <span class="k">for</span> <span class="n">imno</span> <span class="ow">in</span> <span class="n">inos</span> <span class="p">]</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;IIDs to retrieve: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">iids</span><span class="p">))</span>
+
+            <span class="n">similarities</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">result</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">do_shuffle</span><span class="p">:</span>
+                <span class="n">iids</span><span class="p">,</span> <span class="n">similarities</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">shuffle_together</span><span class="p">(</span><span class="n">iids</span><span class="p">,</span> <span class="n">similarities</span><span class="p">)</span>
+
+            <span class="n">image</span> <span class="o">=</span> <span class="n">image_browser</span><span class="o">.</span><span class="n">build_tiled_image</span><span class="p">(</span><span class="n">iids</span><span class="p">,</span> <span class="n">similarities</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">with_text</span> <span class="ow">and</span> <span class="n">text_browser</span><span class="p">:</span>
+
+                <span class="n">image_id</span> <span class="o">=</span> <span class="n">icorp_1</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">image_no</span><span class="p">]</span>
+                <span class="n">docids</span> <span class="o">=</span> <span class="n">text_browser</span><span class="o">.</span><span class="n">im2text</span><span class="p">[</span><span class="n">image_id</span><span class="p">]</span>
+
+                <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;DocIDs: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">docids</span><span class="p">))</span>
+
+                <span class="n">text_browser</span><span class="o">.</span><span class="n">show_multiple</span><span class="p">(</span><span class="n">docids</span><span class="p">)</span>
+
+            <span class="n">image</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+        <span class="k">elif</span> <span class="n">command</span> <span class="ow">in</span> <span class="n">plot_commands</span><span class="p">:</span>
+
+            <span class="n">num_best</span> <span class="o">=</span> <span class="n">index_1</span><span class="o">.</span><span class="n">num_best</span>
+            <span class="n">index_1</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="bp">None</span>
+
+            <span class="n">image_no</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
+            <span class="c">#image_id = icorp_1.id2doc[image_no]</span>
+
+            <span class="n">query</span> <span class="o">=</span> <span class="n">idata_1</span><span class="o">.</span><span class="n">get_sparse</span><span class="p">(</span><span class="n">image_no</span><span class="p">)</span>
+
+            <span class="n">result</span> <span class="o">=</span> <span class="n">index_1</span><span class="p">[</span><span class="n">query</span><span class="p">]</span> <span class="c"># We want to display the first image here.</span>
+
+            <span class="c"># When querying without num_best set, the similarities are returned</span>
+            <span class="c"># as a list.</span>
+            <span class="c">#similarities = map(operator.itemgetter(1), result)</span>
+            <span class="n">sorted_similarities</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">reverse</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="mi">6</span><span class="p">))</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">121</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">sorted_similarities</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&#39;Sorted similarities for query image </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">image_no</span><span class="p">)</span>
+            <span class="c">#plt.subplot(122)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">sorted_similarities</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">normed</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">histtype</span><span class="o">=</span><span class="s">&#39;step&#39;</span><span class="p">,</span>
+                     <span class="n">orientation</span><span class="o">=</span><span class="s">&#39;horizontal&#39;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;red&#39;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&#39;Smiliarities, w. histogram&#39;</span><span class="p">)</span>
+
+            <span class="c"># Plot the image features for the given image</span>
+            <span class="n">features</span> <span class="o">=</span> <span class="n">idata_1</span><span class="p">[</span><span class="n">image_no</span><span class="p">]</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">122</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">features</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">features</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">normed</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">histtype</span><span class="o">=</span><span class="s">&#39;step&#39;</span><span class="p">,</span>
+                     <span class="n">orientation</span><span class="o">=</span><span class="s">&#39;horizontal&#39;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;red&#39;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&#39;Activations, w. histogram&#39;</span><span class="p">)</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+            <span class="n">index_1</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="n">num_best</span>
+
+
+        <span class="k">elif</span> <span class="n">command</span> <span class="ow">in</span> <span class="n">buckets_commands</span><span class="p">:</span>
+
+            <span class="n">image_no</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">K</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">options</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
+            <span class="c">#image_id = icorp_1.id2doc[image_no]</span>
+
+            <span class="n">query</span> <span class="o">=</span> <span class="n">idata_1</span><span class="o">.</span><span class="n">get_sparse</span><span class="p">(</span><span class="n">image_no</span><span class="p">)</span>
+
+            <span class="c"># For bucket inspection, we want the whole result</span>
+            <span class="n">nb</span> <span class="o">=</span> <span class="n">index_1</span><span class="o">.</span><span class="n">num_best</span>
+            <span class="n">index_1</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="bp">None</span>
+
+            <span class="n">raw_result</span> <span class="o">=</span> <span class="n">index_1</span><span class="p">[</span><span class="n">query</span><span class="p">]</span>
+
+            <span class="n">index_1</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="n">nb</span> <span class="c"># Back to previous state...</span>
+
+            <span class="n">result</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">raw_result</span><span class="p">)),</span> <span class="n">raw_result</span><span class="p">)</span>
+            <span class="n">sorted_results</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+                                    <span class="n">reverse</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+            <span class="n">top_results</span> <span class="o">=</span> <span class="n">sorted_results</span><span class="p">[:</span><span class="n">N</span><span class="p">]</span>
+
+            <span class="n">sample_step</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">sorted_results</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="n">N</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span> <span class="o">/</span> <span class="n">K</span>
+            <span class="n">sample_ids</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">sorted_results</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span> <span class="o">*</span> <span class="n">sample_step</span><span class="p">)</span>
+            <span class="n">sample_ids</span><span class="o">.</span><span class="n">reverse</span><span class="p">()</span>
+
+            <span class="n">sample_results</span> <span class="o">=</span> <span class="p">[</span> <span class="n">sorted_results</span><span class="p">[</span><span class="n">sid</span><span class="p">]</span> <span class="k">for</span> <span class="n">sid</span> <span class="ow">in</span> <span class="n">sample_ids</span> <span class="p">]</span>
+
+            <span class="n">all_results</span> <span class="o">=</span> <span class="n">top_results</span> <span class="o">+</span> <span class="n">sample_results</span>
+            <span class="n">all_imnos</span><span class="p">,</span> <span class="n">all_similarities</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">all_results</span><span class="p">))</span>
+            <span class="n">all_iids</span> <span class="o">=</span> <span class="p">[</span><span class="n">icorp_1</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">imno</span><span class="p">]</span> <span class="k">for</span> <span class="n">imno</span> <span class="ow">in</span> <span class="n">all_imnos</span><span class="p">]</span>
+
+            <span class="k">if</span> <span class="n">do_shuffle</span><span class="p">:</span>
+                <span class="n">all_iids</span><span class="p">,</span> <span class="n">all_similarities</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">shuffle_together</span><span class="p">(</span><span class="n">all_iids</span><span class="p">,</span> <span class="n">all_similarities</span><span class="p">)</span>
+
+            <span class="n">image</span> <span class="o">=</span> <span class="n">image_browser</span><span class="o">.</span><span class="n">build_tiled_image</span><span class="p">(</span><span class="n">all_iids</span><span class="p">,</span> <span class="n">all_similarities</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">with_text</span> <span class="ow">and</span> <span class="n">text_browser</span><span class="p">:</span>
+
+                <span class="n">image_id</span> <span class="o">=</span> <span class="n">icorp_1</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">image_no</span><span class="p">]</span>
+                <span class="n">docids</span> <span class="o">=</span> <span class="n">text_browser</span><span class="o">.</span><span class="n">im2text</span><span class="p">[</span><span class="n">image_id</span><span class="p">]</span>
+
+                <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;DocIDs: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">docids</span><span class="p">))</span>
+
+                <span class="n">text_browser</span><span class="o">.</span><span class="n">show_multiple</span><span class="p">(</span><span class="n">docids</span><span class="p">)</span>
+
+            <span class="n">image</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+        <span class="k">elif</span> <span class="n">command</span> <span class="ow">in</span> <span class="n">compare_commands</span><span class="p">:</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">options</span><span class="p">:</span>
+                <span class="k">print</span> <span class="s">&#39;Error: must supply compare command with options.&#39;</span>
+                <span class="k">continue</span>
+
+            <span class="k">if</span> <span class="n">index_2</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">print</span> <span class="s">&#39;Error: cannot compare with only one index supplied.&#39;</span>
+                <span class="k">continue</span>
+
+            <span class="n">image_no</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
+            <span class="n">image_id</span> <span class="o">=</span> <span class="n">icorp_1</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">image_no</span><span class="p">]</span>
+
+            <span class="n">query_1</span> <span class="o">=</span> <span class="n">idata_1</span><span class="o">.</span><span class="n">get_sparse</span><span class="p">(</span><span class="n">image_no</span><span class="p">)</span>
+            <span class="n">query_2</span> <span class="o">=</span> <span class="n">idata_2</span><span class="o">.</span><span class="n">get_sparse</span><span class="p">(</span><span class="n">image_no</span><span class="p">)</span>
+
+            <span class="n">result_1</span> <span class="o">=</span> <span class="n">index_1</span><span class="p">[</span><span class="n">query_1</span><span class="p">][</span><span class="mi">1</span><span class="p">:]</span>
+            <span class="n">result_2</span> <span class="o">=</span> <span class="n">index_2</span><span class="p">[</span><span class="n">query_2</span><span class="p">][</span><span class="mi">1</span><span class="p">:]</span>
+
+            <span class="n">inos_1</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">result_1</span><span class="p">))</span>
+            <span class="n">iids_1</span> <span class="o">=</span> <span class="p">[</span><span class="n">icorp_1</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">imno</span><span class="p">]</span> <span class="k">for</span> <span class="n">imno</span> <span class="ow">in</span> <span class="n">inos_1</span><span class="p">]</span>
+            <span class="n">similarities_1</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">result_1</span><span class="p">))</span>
+            <span class="n">images_1</span> <span class="o">=</span> <span class="n">image_browser</span><span class="o">.</span><span class="n">load_images</span><span class="p">(</span><span class="n">iids_1</span><span class="p">,</span> <span class="n">similarities_1</span><span class="p">)</span>
+
+            <span class="n">inos_2</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">result_2</span><span class="p">))</span>
+            <span class="n">iids_2</span> <span class="o">=</span> <span class="p">[</span><span class="n">icorp_2</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">imno</span><span class="p">]</span> <span class="k">for</span> <span class="n">imno</span> <span class="ow">in</span> <span class="n">inos_2</span><span class="p">]</span>
+            <span class="n">similarities_2</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">result_2</span><span class="p">))</span>
+            <span class="n">images_2</span> <span class="o">=</span> <span class="n">image_browser</span><span class="o">.</span><span class="n">load_images</span><span class="p">(</span><span class="n">iids_2</span><span class="p">,</span> <span class="n">similarities_2</span><span class="p">)</span>
+
+            <span class="n">comparison</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">image_comparison_report</span><span class="p">(</span><span class="n">images_1</span><span class="p">,</span> <span class="n">images_2</span><span class="p">)</span>
+
+            <span class="n">query_image</span> <span class="o">=</span> <span class="n">image_browser</span><span class="o">.</span><span class="n">load_image</span><span class="p">(</span><span class="n">image_id</span><span class="p">)</span>
+            <span class="n">comparison_w_header</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">add_header_image</span><span class="p">(</span><span class="n">comparison</span><span class="p">,</span>
+                                                                <span class="n">query_image</span><span class="p">)</span>
+
+            <span class="n">comparison_w_header</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+            <span class="k">continue</span>
+
+        <span class="k">elif</span> <span class="n">command</span> <span class="ow">in</span> <span class="n">exit_commands</span><span class="p">:</span>
+            <span class="n">confirmation</span> <span class="o">=</span> <span class="nb">raw_input</span><span class="p">(</span><span class="s">&#39;-[y/n]-&gt; &#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">confirmation</span> <span class="ow">in</span> <span class="n">exit_commands</span> <span class="ow">or</span> <span class="n">confirmation</span> <span class="o">==</span> <span class="s">&#39;&#39;</span><span class="p">:</span>
+                <span class="n">exit_interactive</span> <span class="o">=</span> <span class="bp">True</span>
+                <span class="k">continue</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&#39;Invalid command </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">command</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../scripts.img_index_explorer.html#scripts.img_index_explorer.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing loaders with root </span><span class="si">%s</span><span class="s">, name </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+
+    <span class="n">dloader</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">mloader</span> <span class="o">=</span> <span class="n">ModelLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">iloader</span> <span class="o">=</span> <span class="n">IndexLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading first image corpus with label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">img_label_1</span><span class="p">)</span>
+
+    <span class="n">icorp_1</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">transcorp</span><span class="o">.</span><span class="n">bottom_corpus</span><span class="p">(</span><span class="n">dloader</span><span class="o">.</span><span class="n">load_image_corpus</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">img_label_1</span><span class="p">))</span>
+    <span class="n">idata_1</span> <span class="o">=</span> <span class="n">dloader</span><span class="o">.</span><span class="n">load_img</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">img_label_1</span><span class="p">)</span>
+    <span class="n">index_1</span> <span class="o">=</span> <span class="n">iloader</span><span class="o">.</span><span class="n">load_index</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">img_label_1</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;icorp_1.id2doc length: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">icorp_1</span><span class="o">.</span><span class="n">id2doc</span><span class="p">))</span>
+
+    <span class="n">icorp_2</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">idata_2</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">index_2</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">img_label_2</span><span class="p">:</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading second image corpus with label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">img_label_2</span><span class="p">)</span>
+
+        <span class="n">icorp_2</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">transcorp</span><span class="o">.</span><span class="n">bottom_corpus</span><span class="p">(</span><span class="n">dloader</span><span class="o">.</span><span class="n">load_image_corpus</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">img_label_2</span><span class="p">))</span>
+        <span class="n">idata_2</span> <span class="o">=</span> <span class="n">dloader</span><span class="o">.</span><span class="n">load_img</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">img_label_2</span><span class="p">)</span>
+        <span class="n">index_2</span> <span class="o">=</span> <span class="n">iloader</span><span class="o">.</span><span class="n">load_index</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">img_label_2</span><span class="p">)</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;icorp_2.id2doc length: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">icorp_2</span><span class="o">.</span><span class="n">id2doc</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">index_1</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">index_2</span><span class="p">):</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Using indexes of unequal length: i1 </span><span class="si">%d</span><span class="s">, i2 </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">index_1</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">index_2</span><span class="p">)</span>
+                                                                           <span class="p">))</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">idata_1</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">idata_2</span><span class="p">):</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Using datasets of unequal length: i1 </span><span class="si">%d</span><span class="s">, i2 </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">idata_1</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">idata_2</span><span class="p">)</span>
+                                                                           <span class="p">))</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">icorp_1</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">icorp_2</span><span class="p">):</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Using corpora of unequal length: i1 </span><span class="si">%d</span><span class="s">, i2 </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">icorp_1</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">icorp_2</span><span class="p">)</span>
+                                                                           <span class="p">))</span>
+
+
+    <span class="k">else</span><span class="p">:</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Running in single-index mode; comparison functionality not available.&#39;</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading image browser from file </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">image_browser</span><span class="p">)</span>
+
+    <span class="c"># Load image browser</span>
+    <span class="n">image_browser</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">image_browser</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">image_browser</span><span class="p">):</span>
+            <span class="n">rel_browser_map</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">image_browser</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">rel_browser_map</span><span class="p">):</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s">&#39;Using image browser map relative to input &#39;</span>
+                <span class="s">&#39;root, are you sure? (</span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">rel_browser_map</span><span class="p">)</span>
+                <span class="n">args</span><span class="o">.</span><span class="n">image_browser</span> <span class="o">=</span> <span class="n">rel_browser_map</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Image browser map not found!&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">image_browser</span><span class="p">)</span> <span class="k">as</span> <span class="n">image_browser_handle</span><span class="p">:</span>
+            <span class="n">image_browser</span> <span class="o">=</span> <span class="n">ImageBrowser</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">image_browser_handle</span><span class="p">)</span>
+
+    <span class="k">print</span> <span class="s">&#39;Image browser: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">image_browser</span>
+
+    <span class="n">text_browser</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="c"># Load text browser and text-image map</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">text_browser_label</span><span class="p">:</span>
+        <span class="n">vtcorp</span> <span class="o">=</span> <span class="n">dloader</span><span class="o">.</span><span class="n">load_text_corpus</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">text_browser_label</span><span class="p">)</span>
+
+        <span class="c"># Populate text-image maps</span>
+        <span class="n">text2im_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">dloader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">textdoc2imdoc</span><span class="p">)</span>
+        <span class="n">text2im</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">im2text</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">text2im_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">t2i_handle</span><span class="p">:</span>
+
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">t2i_handle</span><span class="p">:</span>
+                <span class="n">text_id</span><span class="p">,</span> <span class="n">img_id</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">text_id</span> <span class="ow">in</span> <span class="n">text2im</span><span class="p">:</span>
+                    <span class="n">text2im</span><span class="p">[</span><span class="n">text_id</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">img_id</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">text2im</span><span class="p">[</span><span class="n">text_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">img_id</span><span class="p">]</span>
+
+                <span class="k">if</span> <span class="n">img_id</span> <span class="ow">in</span> <span class="n">im2text</span><span class="p">:</span>
+                    <span class="n">im2text</span><span class="p">[</span><span class="n">img_id</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">text_id</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">im2text</span><span class="p">[</span><span class="n">img_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">text_id</span><span class="p">]</span>
+
+        <span class="n">text_browser</span> <span class="o">=</span> <span class="n">TextBrowser</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">vtcorp</span><span class="p">,</span>
+                                   <span class="n">text2im</span><span class="o">=</span><span class="n">text2im</span><span class="p">,</span> <span class="n">im2text</span><span class="o">=</span><span class="n">im2text</span><span class="p">,</span>
+                                   <span class="n">first_n_sentences</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">quantitative</span><span class="p">:</span>
+        <span class="n">n_samples</span> <span class="o">=</span> <span class="mi">1000</span>
+        <span class="n">num_best</span> <span class="o">=</span> <span class="mi">10</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Performing quantitative evaluation of i2 predicting i1 &#39;</span>
+                     <span class="s">&#39;with 1000 samples, 10 best&#39;</span><span class="p">)</span>
+
+        <span class="n">choose_from</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">index_1</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">index_2</span><span class="p">)))</span>
+        <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">choose_from</span><span class="p">)</span>
+        <span class="n">sample_imnos</span> <span class="o">=</span> <span class="n">choose_from</span><span class="p">[:</span><span class="n">n_samples</span><span class="p">]</span>
+
+        <span class="n">index_1</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="n">num_best</span>
+        <span class="n">index_2</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="n">num_best</span>
+
+        <span class="n">qr_1</span> <span class="o">=</span> <span class="p">[</span> <span class="n">index_1</span><span class="p">[</span><span class="n">idata_1</span><span class="o">.</span><span class="n">get_sparse</span><span class="p">(</span><span class="n">imno</span><span class="p">)]</span> <span class="k">for</span> <span class="n">imno</span> <span class="ow">in</span> <span class="n">sample_imnos</span> <span class="p">]</span>
+        <span class="n">qr_2</span> <span class="o">=</span> <span class="p">[</span> <span class="n">index_2</span><span class="p">[</span><span class="n">idata_2</span><span class="o">.</span><span class="n">get_sparse</span><span class="p">(</span><span class="n">imno</span><span class="p">)]</span> <span class="k">for</span> <span class="n">imno</span> <span class="ow">in</span> <span class="n">sample_imnos</span> <span class="p">]</span>
+        <span class="n">qresults</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">qr_1</span><span class="p">,</span> <span class="n">qr_2</span><span class="p">)</span>
+
+        <span class="n">precisions</span> <span class="o">=</span> <span class="p">[</span> <span class="n">matutils</span><span class="o">.</span><span class="n">precision</span><span class="p">(</span><span class="n">qr2</span><span class="p">,</span> <span class="n">qr1</span><span class="p">)</span> <span class="k">for</span> <span class="n">qr1</span><span class="p">,</span> <span class="n">qr2</span> <span class="ow">in</span> <span class="n">qresults</span> <span class="p">]</span>
+        <span class="n">recalls</span> <span class="o">=</span> <span class="p">[</span> <span class="n">matutils</span><span class="o">.</span><span class="n">recall</span><span class="p">(</span><span class="n">qr2</span><span class="p">,</span> <span class="n">qr1</span><span class="p">)</span> <span class="k">for</span> <span class="n">qr1</span><span class="p">,</span> <span class="n">qr2</span> <span class="ow">in</span> <span class="n">qresults</span> <span class="p">]</span>
+        <span class="n">f_scores</span> <span class="o">=</span> <span class="p">[</span> <span class="n">matutils</span><span class="o">.</span><span class="n">f_score</span><span class="p">(</span><span class="n">qr2</span><span class="p">,</span> <span class="n">qr1</span><span class="p">)</span> <span class="k">for</span> <span class="n">qr1</span><span class="p">,</span> <span class="n">qr2</span> <span class="ow">in</span> <span class="n">qresults</span> <span class="p">]</span>
+
+        <span class="n">avg_prec</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">precisions</span><span class="p">)</span>
+        <span class="n">avg_rec</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">recalls</span><span class="p">)</span>
+        <span class="n">avg_fsc</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">f_scores</span><span class="p">)</span>
+
+        <span class="k">print</span> <span class="s">&#39;Averages:</span><span class="se">\n\t</span><span class="s">Prec: </span><span class="si">%.3f</span><span class="se">\n\t</span><span class="s"> Rec: </span><span class="si">%.3f</span><span class="se">\n\t</span><span class="s">F.sc: </span><span class="si">%.3f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">avg_prec</span><span class="p">,</span> <span class="n">avg_rec</span><span class="p">,</span> <span class="n">avg_fsc</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c"># Run interactive part</span>
+        <span class="n">run_interactive</span><span class="p">(</span><span class="n">icorp_1</span><span class="p">,</span> <span class="n">idata_1</span><span class="p">,</span> <span class="n">index_1</span><span class="p">,</span>
+                        <span class="n">icorp_2</span><span class="p">,</span> <span class="n">idata_2</span><span class="p">,</span> <span class="n">index_2</span><span class="p">,</span>
+                        <span class="n">image_browser</span><span class="p">,</span> <span class="n">text_browser</span><span class="p">)</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">build_argument_parser</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+    <span class="n">main</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

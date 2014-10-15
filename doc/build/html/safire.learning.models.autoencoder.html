@@ -1,0 +1,172 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.autoencoder module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.learning.models.autoencoder">
+<span id="safire-learning-models-autoencoder-module"></span><h1>safire.learning.models.autoencoder module<a class="headerlink" href="#module-safire.learning.models.autoencoder" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.learning.models.autoencoder.Autoencoder">
+<em class="property">class </em><tt class="descclassname">safire.learning.models.autoencoder.</tt><tt class="descname">Autoencoder</tt><big>(</big><em>inputs</em>, <em>n_in</em>, <em>n_out=100</em>, <em>activation=&lt;theano.tensor.elemwise.Elemwise object at 0x000000000ACAB4A8&gt;</em>, <em>backward_activation=&lt;theano.tensor.elemwise.Elemwise object at 0x000000000ACAB4A8&gt;</em>, <em>reconstruction='cross-entropy'</em>, <em>W=None</em>, <em>W_prime=None</em>, <em>b=None</em>, <em>b_prime=None</em>, <em>tied_weights=True</em>, <em>rng=&lt;mtrand.RandomState object at 0x000000000BE2DA50&gt;</em>, <em>theano_rng=None</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/autoencoder.html#Autoencoder"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.autoencoder.Autoencoder" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="safire.learning.models.base_unsupervised_model.html#safire.learning.models.base_unsupervised_model.BaseUnsupervisedModel" title="safire.learning.models.base_unsupervised_model.BaseUnsupervisedModel"><tt class="xref py py-class docutils literal"><span class="pre">safire.learning.models.base_unsupervised_model.BaseUnsupervisedModel</span></tt></a></p>
+<p>The Autoencoder model.</p>
+<p>Optimizes reconstruction error with a cross-entropy loss function.</p>
+<dl class="method">
+<dt id="safire.learning.models.autoencoder.Autoencoder.error">
+<tt class="descname">error</tt><big>(</big><em>X</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/autoencoder.html#Autoencoder.error"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.autoencoder.Autoencoder.error" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the mean reconstruction cross-entropy on X.
+This is the same number which is used for model cost to optimize
+in gradient descent, since without gold-standard data, we have
+nothing to really compute any error on. So, validation and
+testing can use this function in guarding against overfitting.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>X</strong> (<em>theano.tensor.TensorType</em>) &#8211; A training batch. In comparison to a supervised model,
+which computes cost on some response vector, the
+unsupervised model has to compute cost on the inputs.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The reconstruction cross-entropy (as a number)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.autoencoder.Autoencoder.mean_h_given_v">
+<tt class="descname">mean_h_given_v</tt><big>(</big><em>inputs</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/autoencoder.html#Autoencoder.mean_h_given_v"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.autoencoder.Autoencoder.mean_h_given_v" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the activation of the hidden units.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>inputs</strong> (<em>theano.tensor.TensorType</em>) &#8211; Values of the visible units (i.e. rows of data).</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The activation on hidden units, as symbolic expression</td>
+</tr>
+</tbody>
+</table>
+<p>bound to <tt class="docutils literal"><span class="pre">inputs</span></tt>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.autoencoder.Autoencoder.mean_v_given_h">
+<tt class="descname">mean_v_given_h</tt><big>(</big><em>hidden_values</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/autoencoder.html#Autoencoder.mean_v_given_h"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.autoencoder.Autoencoder.mean_v_given_h" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the activation of the visible units on reconstruction.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>hidden_values</strong> (<em>theano.tensor.TensorType</em>) &#8211; Values of the hidden units.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The activation on visible units, as symbolic expression</td>
+</tr>
+</tbody>
+</table>
+<p>bound to <tt class="docutils literal"><span class="pre">hidden_values</span></tt>. This is the reconstructed activation.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.autoencoder.Autoencoder.sample_h_given_v">
+<tt class="descname">sample_h_given_v</tt><big>(</big><em>visible</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/autoencoder.html#Autoencoder.sample_h_given_v"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.autoencoder.Autoencoder.sample_h_given_v" title="Permalink to this definition">¶</a></dt>
+<dd><p>Samples the hidden layer given the visible layer.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.autoencoder.Autoencoder.sample_v_given_h">
+<tt class="descname">sample_v_given_h</tt><big>(</big><em>hidden</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/autoencoder.html#Autoencoder.sample_v_given_h"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.autoencoder.Autoencoder.sample_v_given_h" title="Permalink to this definition">¶</a></dt>
+<dd><p>Samples the visible layer given the hidden layer.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.learning.models.autoencoder.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

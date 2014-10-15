@@ -1,0 +1,310 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.interfaces.safire_transformer &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.learning.interfaces.safire_transformer</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Implements the TransformationABC interface, so that SAFIRE</span>
+<span class="sd">neural network models can be plugged into a gensim-style</span>
+<span class="sd">pipeline.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">cPickle</span>
+
+<span class="kn">import</span> <span class="nn">gensim.utils</span>
+<span class="kn">import</span> <span class="nn">gensim.matutils</span>
+<span class="kn">from</span> <span class="nn">gensim.interfaces</span> <span class="kn">import</span> <span class="n">TransformationABC</span><span class="p">,</span> <span class="n">TransformedCorpus</span>
+<span class="kn">from</span> <span class="nn">gensim.similarities</span> <span class="kn">import</span> <span class="n">Similarity</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">theano.printing</span>
+
+<span class="kn">from</span> <span class="nn">safire.learning.interfaces</span> <span class="kn">import</span> <span class="n">ModelHandle</span>
+<span class="kn">from</span> <span class="nn">safire.utils</span> <span class="kn">import</span> <span class="n">profile_run</span>
+
+
+<div class="viewcode-block" id="SafireTransformer"><a class="viewcode-back" href="../../../../safire.learning.interfaces.safire_transformer.html#safire.learning.interfaces.safire_transformer.SafireTransformer">[docs]</a><span class="k">class</span> <span class="nc">SafireTransformer</span><span class="p">(</span><span class="n">TransformationABC</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Wraps a SAFIRE model into a gensim-style transformation object.</span>
+
+<span class="sd">    Initialized with a Model Handle, Dataset and Learner:</span>
+
+<span class="sd">    &gt;&gt;&gt; dataset = loader.load()</span>
+<span class="sd">    &gt;&gt;&gt; model_handle = MultilayerPerceptron.setup(dataset, ...)</span>
+<span class="sd">    &gt;&gt;&gt; learner = BaseSGDLearner(n_epochs=3, b_size=100)</span>
+<span class="sd">    &gt;&gt;&gt; transformer = SafireTransformer(model_handle, learner, dataset)</span>
+
+<span class="sd">    *This initialization will run the training,* in line with other gensim</span>
+<span class="sd">    transformers (models) that train on initialization.</span>
+
+<span class="sd">    If you want to load a handle with an already trained model, initialize</span>
+<span class="sd">    the transformer without a Learner and Dataset:</span>
+
+<span class="sd">    &gt;&gt;&gt; model_handle = MultilayerPerceptron.setup(dataset, ...)</span>
+<span class="sd">    &gt;&gt;&gt; model_handle.save(&#39;multilayerperceptron.mhandle&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; loaded_model_handle = ModelHandle.load(&#39;multilayerperceptron.mhandle&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; transformer = SafireTransformer(loaded_model_handle)</span>
+
+<span class="sd">    This is much faster and the preferred way of doing this, especially for</span>
+<span class="sd">    runtime initialization.</span>
+
+<span class="sd">    Computing outputs</span>
+<span class="sd">    -----------------</span>
+
+<span class="sd">    The items passed to the transformer through ``__getitem__`` will be</span>
+<span class="sd">    passed as inputs to the neural network inside the model handle, as</span>
+<span class="sd">    inputs to the ``run`` theano compiled function. The outputs of ``run``</span>
+<span class="sd">    will be collected and returned again as a corpus.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">learner</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">eps</span><span class="o">=</span><span class="mf">1e-09</span><span class="p">,</span> <span class="n">chunksize</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">attempt_resume</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">profile_training</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the transformer. If necessary, performs model training</span>
+<span class="sd">        (when the ``dataset`` and ``learner`` arguments are given).</span>
+
+<span class="sd">        :type model_handle: safire.learning.interfaces.ModelHandle</span>
+<span class="sd">        :param model_handle: A :class:`ModelHandle`.</span>
+
+<span class="sd">        :type dataset: safire.data.dataset.Dataset</span>
+<span class="sd">        :param dataset: A Safire :class:`Dataset` that should be used for</span>
+<span class="sd">            training the model. If not supplied, no training is performed.</span>
+<span class="sd">            **This is currently inconsistent with gensim: we want a dataset,</span>
+<span class="sd">            gensim uses corpora** to feed data to model training.</span>
+
+<span class="sd">        :type learner: safire.learning.learners.base_sgd_learner.BaseSGDLearner</span>
+<span class="sd">        :param learner: A :class:`BaseSGDLearner` that will be used to train</span>
+<span class="sd">            the model. If not supplied, no training is performed.</span>
+
+<span class="sd">        :type eps: float</span>
+<span class="sd">        :param eps: A threshold under which output values will be considered</span>
+<span class="sd">            noise and not included in the sparse output.</span>
+
+<span class="sd">            .. warning::</span>
+
+<span class="sd">                Currently not implemented, the gensim builtin ``eps`` of 1e-09</span>
+<span class="sd">                is used.</span>
+
+<span class="sd">        :type chunksize: int</span>
+<span class="sd">        :param chunksize: The batch size by which input documents will be fed</span>
+<span class="sd">            to the transformer. It is faster to chunk a larger corpus than to</span>
+<span class="sd">            transform it one-by-one, because the conversion machinery involved</span>
+<span class="sd">            in feeding the input to the underlying Theano model and getting it</span>
+<span class="sd">            back is much less efficient than the mathematical operations on the</span>
+<span class="sd">            input matrix.</span>
+
+<span class="sd">        :type attempt_resume: bool</span>
+<span class="sd">        :param attempt_resume: If set, the learner will attempt to resume</span>
+<span class="sd">            training an earlier model.</span>
+
+<span class="sd">        :type profile_training: bool</span>
+<span class="sd">        :param profile_training: If set, will profile the learner run.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_handle</span> <span class="o">=</span> <span class="n">model_handle</span>
+
+        <span class="k">if</span> <span class="n">dataset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">learner</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Training SAFIRE model...&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">profile_training</span><span class="p">:</span>
+                <span class="n">s</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">profile_run</span><span class="p">(</span><span class="n">learner</span><span class="o">.</span><span class="n">run</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span>
+                                   <span class="n">resume</span><span class="o">=</span><span class="n">attempt_resume</span><span class="p">)</span>
+                <span class="k">print</span> <span class="s">&#39;Profiling training:&#39;</span>
+                <span class="k">print</span> <span class="n">s</span><span class="o">.</span><span class="n">getvalue</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">learner</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">resume</span><span class="o">=</span><span class="n">attempt_resume</span><span class="p">)</span>
+
+        <span class="c"># Shortcuts to dimension checking</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_handle</span><span class="o">.</span><span class="n">n_in</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_handle</span><span class="o">.</span><span class="n">n_out</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">chunksize</span> <span class="o">=</span> <span class="n">chunksize</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">eps</span> <span class="o">=</span> <span class="n">eps</span> <span class="c"># Using this is not implemented.</span>
+
+<div class="viewcode-block" id="SafireTransformer.save"><a class="viewcode-back" href="../../../../safire.learning.interfaces.safire_transformer.html#safire.learning.interfaces.safire_transformer.SafireTransformer.save">[docs]</a>    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fname</span><span class="p">,</span> <span class="n">protocol</span><span class="o">=-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Saves the transformer. Saving is achieved by getting the handle</span>
+<span class="sd">        pickleable object and adding the other instance attributes, then</span>
+<span class="sd">        pickling this dict.&quot;&quot;&quot;</span>
+
+        <span class="n">pickleable_obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_export_pickleable_obj</span><span class="p">()</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">pickle_handle</span><span class="p">:</span>
+            <span class="n">cPickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">pickleable_obj</span><span class="p">,</span> <span class="n">pickle_handle</span><span class="p">,</span> <span class="n">protocol</span><span class="o">=</span><span class="n">protocol</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_export_pickleable_obj</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Exports a dicitonary that can directly be pickled to sufficiently</span>
+<span class="sd">        describe the transformer.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">init_args</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;handle&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_handle</span><span class="o">.</span><span class="n">_export_pickleable_obj</span><span class="p">(),</span>
+            <span class="s">&#39;handle_class&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_handle</span><span class="o">.</span><span class="n">__class__</span><span class="p">,</span> <span class="c"># Generality...</span>
+            <span class="s">&#39;chunksize&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">chunksize</span><span class="p">,</span>
+            <span class="s">&#39;eps&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">eps</span>
+        <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">init_args</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bow</span><span class="p">,</span> <span class="n">chunksize</span><span class="o">=</span><span class="mi">1000</span><span class="p">):</span>
+
+        <span class="c"># We want to do the _apply thing only when the corpus</span>
+        <span class="c"># is a stream-style yield()-ing corpus, not when it&#39;s</span>
+        <span class="c"># a list of sparse vectors. What _apply does is it goes</span>
+        <span class="c"># through the corpus in chunks, by setting the chunksize</span>
+        <span class="c"># parameter of TransformedCorpus.</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">bow</span><span class="p">,</span> <span class="n">gensim</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">CorpusABC</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply</span><span class="p">(</span><span class="n">bow</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">chunksize</span><span class="p">)</span>
+
+        <span class="c"># Convert chunk to dense. We can use the fact that the array of</span>
+        <span class="c"># sparse vectors obtained from a corpus is itself a corpus.</span>
+        <span class="c"># Both input dense dimensions are known.</span>
+        <span class="c">#</span>
+        <span class="c"># Note that the ``corpus2dense`` function returns a numpy ndarray with</span>
+        <span class="c"># documents as *columns*, while the safire model expects documents as</span>
+        <span class="c"># *rows*.</span>
+        <span class="n">is_corpus</span><span class="p">,</span> <span class="n">bow</span> <span class="o">=</span> <span class="n">gensim</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">is_corpus</span><span class="p">(</span><span class="n">bow</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_corpus</span><span class="p">:</span> <span class="c"># If we got a single item: make a one-item corpus</span>
+                          <span class="c"># from it, to simplify code path.</span>
+            <span class="n">bow</span> <span class="o">=</span> <span class="p">[</span><span class="n">bow</span><span class="p">]</span>
+
+        <span class="n">dense_bow</span> <span class="o">=</span> <span class="n">gensim</span><span class="o">.</span><span class="n">matutils</span><span class="o">.</span><span class="n">corpus2dense</span><span class="p">(</span><span class="n">bow</span><span class="p">,</span>
+                                                 <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span><span class="p">,</span>
+                                                 <span class="nb">len</span><span class="p">(</span><span class="n">bow</span><span class="p">))</span><span class="o">.</span><span class="n">T</span>
+        <span class="c"># Transposition!!! (Due to gensim&#39;s corpus2dense returning documents</span>
+        <span class="c"># as columns)</span>
+
+        <span class="c"># logging.debug(&#39;Debug print of self.model_handle.run():&#39;)</span>
+        <span class="c"># logging.debug(theano.printing.debugprint(self.model_handle.run.maker.fgraph.outputs[0]))</span>
+        <span class="c"># theano.printing.pp(self.model_handle.run.maker.fgraph.outputs[0])</span>
+        <span class="c"># theano.printing.pydotprint(self.model_handle.run,</span>
+        <span class="c">#                            outfile=&#39;run.pydotprint.png&#39;,</span>
+        <span class="c">#                            with_ids=True)</span>
+        <span class="c"># theano.printing.pydotprint(self.model_handle.train,</span>
+        <span class="c">#                            outfile=&#39;train.pydotprint.png&#39;,</span>
+        <span class="c">#                            with_ids=True)</span>
+        <span class="c"># theano.printing.pydotprint(self.model_handle.validate,</span>
+        <span class="c">#                            outfile=&#39;validate.pydotprint.png&#39;,</span>
+        <span class="c">#                            with_ids=True)</span>
+        <span class="c"># theano.printing.pydotprint(self.model_handle.test,</span>
+        <span class="c">#                            outfile=&#39;test.pydotprint.png&#39;,</span>
+        <span class="c">#                            with_ids=True)</span>
+
+        <span class="c"># Run the model on the dense representation of input.</span>
+        <span class="n">dense_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_handle</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">dense_bow</span><span class="p">)</span>
+
+        <span class="n">sparse_out</span> <span class="o">=</span> <span class="n">gensim</span><span class="o">.</span><span class="n">matutils</span><span class="o">.</span><span class="n">Dense2Corpus</span><span class="p">(</span><span class="n">dense_out</span><span class="p">,</span>
+                                                  <span class="n">documents_columns</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                                  <span class="n">eps</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">eps</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">sparse_out</span>
+
+    <span class="k">def</span> <span class="nf">_apply</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">corpus</span><span class="p">,</span> <span class="n">chunksize</span><span class="o">=</span><span class="mi">1000</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        :param corpus:</span>
+<span class="sd">        :param chunksize:</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="n">TransformedCorpus</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">corpus</span><span class="p">,</span> <span class="n">chunksize</span><span class="p">)</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SafireTransformer.load"><a class="viewcode-back" href="../../../../safire.learning.interfaces.safire_transformer.html#safire.learning.interfaces.safire_transformer.SafireTransformer.load">[docs]</a>    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">fname</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Loads a SafireTransformer pickle dump created with the ``save()``</span>
+<span class="sd">        mehtod of a SafireTransformer instance.&quot;&quot;&quot;</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="s">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">unpickle_handle</span><span class="p">:</span>
+            <span class="n">pickled_obj</span> <span class="o">=</span> <span class="n">cPickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">unpickle_handle</span><span class="p">)</span>
+
+        <span class="n">handle_cls</span> <span class="o">=</span> <span class="n">pickled_obj</span><span class="p">[</span><span class="s">&#39;handle_class&#39;</span><span class="p">]</span>
+        <span class="n">handle</span> <span class="o">=</span> <span class="n">handle_cls</span><span class="o">.</span><span class="n">_load_from_save_dict</span><span class="p">(</span><span class="n">pickled_obj</span><span class="p">[</span><span class="s">&#39;handle&#39;</span><span class="p">])</span>
+        <span class="n">transformer</span> <span class="o">=</span> <span class="n">cls</span><span class="p">(</span><span class="n">handle</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">transformer</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

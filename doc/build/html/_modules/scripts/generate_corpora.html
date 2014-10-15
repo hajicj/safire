@@ -1,0 +1,376 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.generate_corpora &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for scripts.generate_corpora</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">generate_corpora.py : automatizes corpus generation in a new dataset.</span>
+
+<span class="sd">Implements/expects basic naming conventions for infixes.</span>
+
+<span class="sd">A &quot;grid search&quot; approach over multiple parameters is taken. Each parameter is</span>
+<span class="sd">called an *axis* of the parameter space:</span>
+
+<span class="sd">* ``pos`` - Part of Speech filtering: None, NADV, NAV, N</span>
+
+<span class="sd">* ``top_k`` - frequency filtering: None, 20010/10, 10010/10, 5010/10 (always</span>
+<span class="sd">  leaves out the 10 most frequent tokens)</span>
+
+<span class="sd">* ``pfilter`` - positional filtering: None, 5, 0.5</span>
+
+<span class="sd">* ``pfilter_fullfreq`` - positional filtering full freqs: None, True</span>
+
+<span class="sd">* ``tfidf`` - TF-IDF transformation: None, Yes</span>
+
+<span class="sd">By default, all axes are on. You can switch them off by providing the</span>
+<span class="sd">``--defaults axisname`` option (``--defaults pfilter tfidf``, etc.).</span>
+
+<span class="sd">Corpora that are found will not be overwritten, unless the ``--overwrite``</span>
+<span class="sd">option is given.</span>
+
+<span class="sd">Infix naming</span>
+<span class="sd">==============</span>
+
+<span class="sd">The infixes are assembled in the following order::</span>
+
+<span class="sd">  .pos.freq.pfilter.pfilter_fullfreq.tfidf</span>
+
+<span class="sd">The infixes for individual axes (if the given axis is not applied, no infix</span>
+<span class="sd">is generated; not even the dot):</span>
+
+<span class="sd">======================= ==============================================</span>
+<span class="sd">axis                    infixes</span>
+<span class="sd">======================= ==============================================</span>
+<span class="sd">Part of Speech          ``.NADV``, ``.NAV``, ``.N``</span>
+<span class="sd">Frequency filter        ``.top20010``, ``.top10010``, ``.top5010``</span>
+<span class="sd">Positional filter       ``.pf5``, ``.pf05``</span>
+<span class="sd">``pfilter_fullfreq``    ``.pFF``</span>
+<span class="sd">tfidf                   ``.tfidf``</span>
+<span class="sd">======================= ==============================================</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">collections</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">import</span> <span class="nn">dataset2corpus</span>
+<span class="kn">from</span> <span class="nn">safire.data.loaders</span> <span class="kn">import</span> <span class="n">MultimodalShardedDatasetLoader</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+<span class="c"># This is what we are iterating over.</span>
+<span class="n">axes</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">OrderedDict</span><span class="p">([</span>
+    <span class="p">(</span><span class="s">&#39;pos&#39;</span><span class="p">,</span> <span class="p">[</span><span class="bp">None</span><span class="p">,</span> <span class="s">&#39;NADV&#39;</span><span class="p">,</span> <span class="s">&#39;NAV&#39;</span><span class="p">,</span> <span class="s">&#39;NA&#39;</span><span class="p">,</span> <span class="s">&#39;N&#39;</span><span class="p">]),</span>
+    <span class="p">(</span><span class="s">&#39;top_k&#39;</span><span class="p">,</span> <span class="p">[</span><span class="bp">None</span><span class="p">,</span> <span class="mi">20010</span><span class="p">,</span> <span class="mi">10010</span><span class="p">,</span> <span class="mi">5010</span><span class="p">,</span> <span class="mi">1010</span><span class="p">]),</span>
+    <span class="p">(</span><span class="s">&#39;pfilter&#39;</span><span class="p">,</span> <span class="p">[</span><span class="bp">None</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">10</span><span class="p">]),</span>
+    <span class="p">(</span><span class="s">&#39;pfilter_fullfreq&#39;</span><span class="p">,</span> <span class="p">[</span><span class="bp">False</span><span class="p">,</span> <span class="bp">True</span><span class="p">]),</span>
+    <span class="p">(</span><span class="s">&#39;tfidf&#39;</span><span class="p">,</span> <span class="p">[</span><span class="bp">True</span><span class="p">,</span> <span class="bp">False</span><span class="p">]),</span>
+    <span class="p">(</span><span class="s">&#39;post_tfidf&#39;</span><span class="p">,</span> <span class="p">[</span><span class="bp">False</span><span class="p">])</span> <span class="c"># Turns out this is a bad idea.</span>
+<span class="p">])</span>
+
+<span class="n">label_prefixes</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">OrderedDict</span><span class="p">([</span>
+    <span class="p">(</span><span class="s">&#39;pos&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;top_k&#39;</span><span class="p">,</span> <span class="s">&#39;top&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;pfilter&#39;</span><span class="p">,</span> <span class="s">&#39;pf&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;pfilter_fullfreq&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;tfidf&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;post_tfidf&#39;</span><span class="p">,</span> <span class="s">&#39;&#39;</span><span class="p">)</span>
+<span class="p">])</span>
+
+<span class="n">label_substitutions</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">OrderedDict</span><span class="p">([</span>
+    <span class="p">(</span><span class="s">&#39;pfilter_fullfreq&#39;</span><span class="p">,</span> <span class="s">&#39;pff&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s">&#39;post_tfidf&#39;</span><span class="p">,</span> <span class="s">&#39;ptfidf&#39;</span><span class="p">)</span>
+<span class="p">])</span>
+
+<span class="c">##############################################################################</span>
+
+<div class="viewcode-block" id="generate_args_string"><a class="viewcode-back" href="../../scripts.generate_corpora.html#scripts.generate_corpora.generate_args_string">[docs]</a><span class="k">def</span> <span class="nf">generate_args_string</span><span class="p">(</span><span class="o">*</span><span class="n">arg_dicts</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;arg_dicts are dictionaries with argname : arg value pairs,</span>
+<span class="sd">    args are named arguments.&quot;&quot;&quot;</span>
+
+    <span class="c"># Collect args</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">arg_dict</span> <span class="ow">in</span> <span class="n">arg_dicts</span><span class="p">:</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">arg_dict</span><span class="o">.</span><span class="n">items</span><span class="p">()))</span>
+
+    <span class="n">args</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">()))</span>
+
+    <span class="c"># Create the string forms</span>
+    <span class="n">args_as_strings</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">argname</span><span class="p">,</span> <span class="n">argvalue</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+
+        <span class="k">if</span> <span class="n">argvalue</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">continue</span>
+
+        <span class="c"># Flags</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">argvalue</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+            <span class="n">args_as_strings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;--&#39;</span> <span class="o">+</span> <span class="n">argname</span><span class="p">)</span>
+            <span class="k">continue</span>
+
+        <span class="c"># Non-flags</span>
+        <span class="n">args_as_strings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;--&#39;</span> <span class="o">+</span> <span class="n">argname</span><span class="p">)</span>
+
+        <span class="c"># String args are iterable, but they are single arguments...</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">argvalue</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">args_as_strings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">argvalue</span><span class="p">)</span>
+            <span class="k">continue</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c"># nargs=&#39;+&#39;?</span>
+            <span class="nb">iter</span><span class="p">(</span><span class="n">argvalue</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">aval</span> <span class="ow">in</span> <span class="n">argvalue</span><span class="p">:</span>
+                <span class="n">args_as_strings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">aval</span><span class="p">))</span>
+        <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+            <span class="c"># Single-value args</span>
+            <span class="n">args_as_strings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">argvalue</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">args_as_strings</span>
+
+</div>
+<div class="viewcode-block" id="generate_d2c_label"><a class="viewcode-back" href="../../scripts.generate_corpora.html#scripts.generate_corpora.generate_d2c_label">[docs]</a><span class="k">def</span> <span class="nf">generate_d2c_label</span><span class="p">(</span><span class="o">*</span><span class="n">argdicts</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Generates a label for the given configuration of args.&quot;&quot;&quot;</span>
+
+    <span class="n">kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">argdicts</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">a</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">i</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="c">#print &#39;label kwargs: %s&#39; % str(kwargs)</span>
+
+    <span class="n">label_fields</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;&#39;</span><span class="p">]</span>
+
+    <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">axes</span><span class="p">:</span>
+        <span class="c">#print &#39;Axis: %s&#39; % axis</span>
+        <span class="n">avalue</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span>
+        <span class="n">prefix</span> <span class="o">=</span> <span class="n">label_prefixes</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">avalue</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">avalue</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">axis</span> <span class="ow">in</span> <span class="n">label_substitutions</span><span class="p">:</span>
+                    <span class="n">axis</span> <span class="o">=</span> <span class="n">label_substitutions</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span>
+                <span class="n">label_fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">prefix</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">axis</span><span class="p">))</span> <span class="c"># Flags</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">label_fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">prefix</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">avalue</span><span class="p">))</span>
+
+    <span class="n">label</span> <span class="o">=</span> <span class="s">&#39;.&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">label_fields</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">label</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../scripts.generate_corpora.html#scripts.generate_corpora.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Executing generate_corpora.py...&#39;</span><span class="p">)</span>
+
+    <span class="n">default_values</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">default_axes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">defaults</span><span class="p">:</span>
+        <span class="n">default_axes</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">defaults</span>
+        <span class="n">default_values</span> <span class="o">=</span> <span class="p">{</span> <span class="n">a</span> <span class="p">:</span> <span class="n">axes</span><span class="p">[</span><span class="n">a</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">default_axes</span> <span class="p">}</span>
+
+    <span class="n">iter_axes</span> <span class="o">=</span> <span class="p">[</span> <span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">axes</span> <span class="k">if</span> <span class="n">a</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">default_axes</span> <span class="p">]</span>
+    <span class="n">iter_values</span> <span class="o">=</span> <span class="p">[</span> <span class="n">axes</span><span class="p">[</span><span class="n">a</span><span class="p">]</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">iter_axes</span> <span class="p">]</span>
+
+    <span class="c"># Prepare configurations</span>
+
+    <span class="n">configurations</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">walk_config</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">product</span><span class="p">(</span><span class="o">*</span><span class="n">iter_values</span><span class="p">):</span>
+        <span class="n">config_dict</span> <span class="o">=</span> <span class="p">{</span> <span class="n">iter_axes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="p">:</span> <span class="n">walk_config</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">walk_config</span><span class="p">))</span> <span class="p">}</span>
+
+        <span class="c">#print config_dict # DEBUG</span>
+
+        <span class="n">d2c_parser</span> <span class="o">=</span> <span class="n">dataset2corpus</span><span class="o">.</span><span class="n">build_argument_parser</span><span class="p">()</span>
+        <span class="n">d2c_label</span> <span class="o">=</span> <span class="n">generate_d2c_label</span><span class="p">(</span><span class="n">default_values</span><span class="p">,</span> <span class="n">config_dict</span><span class="p">)</span>
+
+        <span class="c">#print &#39;Label: %s&#39; % d2c_label</span>
+
+        <span class="n">d2c_args_input</span> <span class="o">=</span> <span class="n">generate_args_string</span><span class="p">(</span><span class="n">default_values</span><span class="p">,</span> <span class="n">config_dict</span><span class="p">,</span>
+                                              <span class="n">discard_top</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="n">d2c_label</span><span class="p">,</span>
+                                              <span class="n">root</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+                                              <span class="c">#verbose=args.verbose,</span>
+                                              <span class="c">#debug=args.debug)</span>
+
+        <span class="c">#print &#39;Args string: %s&#39; % str(d2c_args_input)</span>
+
+        <span class="n">d2c_args</span> <span class="o">=</span> <span class="n">d2c_parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">(</span><span class="n">d2c_args_input</span><span class="p">)</span>
+
+        <span class="c">#print d2c_args # DEBUG</span>
+
+        <span class="n">configurations</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">d2c_label</span><span class="p">,</span> <span class="n">d2c_args</span><span class="p">))</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Total: </span><span class="si">%d</span><span class="s"> configurations&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">configurations</span><span class="p">))</span>
+
+    <span class="c"># Generate corpora</span>
+    <span class="n">dloader</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">d2c_args</span> <span class="ow">in</span> <span class="n">configurations</span><span class="p">:</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">clear</span><span class="p">:</span>
+            <span class="n">d2c_args</span><span class="o">.</span><span class="n">clear</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">dloader</span><span class="o">.</span><span class="n">has_text_corpora</span><span class="p">(</span><span class="n">label</span><span class="p">):</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Clearing: corpus </span><span class="si">%s</span><span class="s"> doesn</span><span class="se">\&#39;</span><span class="s">t exist, skipping.&#39;</span> <span class="o">%</span> <span class="n">label</span><span class="p">)</span>
+                <span class="k">print</span> <span class="s">&#39;Clearing: corpus </span><span class="si">%s</span><span class="s"> doesn</span><span class="se">\&#39;</span><span class="s">t exist, skipping.&#39;</span> <span class="o">%</span> <span class="n">label</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">dry_run</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Would clear corpus </span><span class="si">%s</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="n">label</span><span class="p">)</span>
+                <span class="k">print</span> <span class="s">&#39;Would clear corpus </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">label</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Clearing corpus </span><span class="si">%s</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="n">label</span><span class="p">)</span>
+                <span class="k">print</span> <span class="s">&#39;Clearing corpus </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">label</span>
+                <span class="n">dataset2corpus</span><span class="o">.</span><span class="n">main</span><span class="p">(</span><span class="n">d2c_args</span><span class="p">)</span>
+            <span class="k">continue</span>
+
+        <span class="k">if</span> <span class="n">dloader</span><span class="o">.</span><span class="n">has_text_corpora</span><span class="p">(</span><span class="n">label</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">overwrite</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Corpus </span><span class="si">%s</span><span class="s"> exists, skipping.&#39;</span> <span class="o">%</span> <span class="n">label</span><span class="p">)</span>
+                <span class="k">print</span> <span class="s">&#39;Corpus </span><span class="si">%s</span><span class="s"> exists, skipping.&#39;</span> <span class="o">%</span> <span class="n">label</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Would overwrite existing corpus </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">label</span><span class="p">)</span>
+                <span class="k">print</span> <span class="s">&#39;Would overwrite existing corpus </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">label</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">dry_run</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Would generate corpus </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">label</span><span class="p">)</span>
+                <span class="k">print</span> <span class="s">&#39;Would generate corpus </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">label</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Generating corpus </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">label</span><span class="p">)</span>
+                <span class="n">dataset2corpus</span><span class="o">.</span><span class="n">main</span><span class="p">(</span><span class="n">d2c_args</span><span class="p">)</span>
+
+
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Exiting generate_corpora.py.&#39;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="build_argument_parser"><a class="viewcode-back" href="../../scripts.generate_corpora.html#scripts.generate_corpora.build_argument_parser">[docs]</a><span class="k">def</span> <span class="nf">build_argument_parser</span><span class="p">():</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="n">__doc__</span><span class="p">,</span> <span class="n">add_help</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                    <span class="n">formatter_class</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">RawDescriptionHelpFormatter</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-r&#39;</span><span class="p">,</span> <span class="s">&#39;--root&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The path to&#39;</span><span class="o">+</span>
+                         <span class="s">&#39; the directory which is the root of a dataset.&#39;</span><span class="o">+</span>
+                         <span class="s">&#39; (Will be passed to a Loader as a root.)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-n&#39;</span><span class="p">,</span> <span class="s">&#39;--name&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The dataset name passed to the&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; Loader. Has to correspond to the *.vtlist file name.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-d&#39;</span><span class="p">,</span> <span class="s">&#39;--defaults&#39;</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s">&#39;+&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Specify which axes should use their default &#39;</span>
+                             <span class="s">&#39;values.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-y&#39;</span><span class="p">,</span> <span class="s">&#39;--dry_run&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, doesn</span><span class="se">\&#39;</span><span class="s">t actually create the files, only &#39;</span>
+                             <span class="s">&#39;logs which corpora would be created.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-c&#39;</span><span class="p">,</span> <span class="s">&#39;--clear&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, attempts to removes the given corpora &#39;</span>
+                             <span class="s">&#39;instead of generating them.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--overwrite&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will re-build existing corpora as well.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-v&#39;</span><span class="p">,</span> <span class="s">&#39;--verbose&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on INFO logging messages.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--debug&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on DEBUG logging messages. (May get very &#39;</span>
+                             <span class="s">&#39;verbose.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">parser</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">build_argument_parser</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+    <span class="n">main</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

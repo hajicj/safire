@@ -1,0 +1,10 @@
+Metadata-Version: 1.0
+Name: safire
+Version: 0.0.1r2
+Summary: A deep learning and experiment management library.
+Home-page: http://ufal.mff.cuni.cz/grants/cemi
+Author: Jan Hajic jr.
+Author-email: hajicj@ufal.mff.cuni.cz
+License: LGPL
+Description: UNKNOWN
+Platform: UNKNOWN

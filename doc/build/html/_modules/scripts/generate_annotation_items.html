@@ -1,0 +1,363 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.generate_annotation_items &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for scripts.generate_annotation_items</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">``generate_annotation_items.py`` is a script that generates annotation items</span>
+<span class="sd">using a certain search strategy from SAFIRE text and image data.</span>
+
+<span class="sd">The default search strategy chooses for each text K pictures such that their</span>
+<span class="sd">similarity to the picture actually used for the text is varied.</span>
+
+<span class="sd">The basic algorithm chooses the K/2 most similar images to the input image</span>
+<span class="sd">and then chooses K/2 more uniformly distributed across the similarity spectrum.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">operator</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">safire</span>
+<span class="kn">from</span> <span class="nn">safire.data.loaders</span> <span class="kn">import</span> <span class="n">IndexLoader</span><span class="p">,</span> <span class="n">MultimodalShardedDatasetLoader</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../scripts.generate_annotation_items.html#scripts.generate_annotation_items.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Executing generate_annotation_items.py...&#39;</span><span class="p">)</span>
+
+
+    <span class="c"># Load index</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading index with label </span><span class="si">%s</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">index_label</span><span class="p">)</span>
+    <span class="n">iloader</span> <span class="o">=</span> <span class="n">IndexLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">index</span> <span class="o">=</span> <span class="n">iloader</span><span class="o">.</span><span class="n">load_index</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">index_label</span><span class="p">)</span>
+
+    <span class="n">index</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="bp">None</span> <span class="c"># NOT working with this</span>
+
+    <span class="c"># Load dataset/corpus</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading dataset and corpus with label </span><span class="si">%s</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">index_label</span><span class="p">)</span>
+    <span class="n">dloader</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">icorp</span> <span class="o">=</span> <span class="n">dloader</span><span class="o">.</span><span class="n">load_image_corpus</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">index_label</span><span class="p">)</span>
+    <span class="n">idata</span> <span class="o">=</span> <span class="n">dloader</span><span class="o">.</span><span class="n">load_img</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">index_label</span><span class="p">)</span>
+
+    <span class="c"># Load text-image map</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading text-image map.&#39;</span><span class="p">)</span>
+    <span class="n">t2i_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">iloader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">textdoc2imdoc</span><span class="p">)</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">t2i_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">t2i_handle</span><span class="p">:</span>
+        <span class="n">text2im</span><span class="p">,</span> <span class="n">im2text</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">parse_csv_map</span><span class="p">(</span><span class="n">t2i_handle</span><span class="p">)</span>
+
+    <span class="c"># Load image ID-image file map</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading iid-image file map.&#39;</span><span class="p">)</span>
+    <span class="n">i2f_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">iloader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">imgid2imgfile</span><span class="p">)</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">i2f_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">i2f_handle</span><span class="p">:</span>
+        <span class="n">iid2imgf</span><span class="p">,</span> <span class="n">imgf2iid</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">parse_csv_map</span><span class="p">(</span><span class="n">i2f_handle</span><span class="p">)</span>
+
+    <span class="c"># Parse vtlist</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Processing vtlist.&#39;</span><span class="p">)</span>
+    <span class="n">vtlist</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">iloader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">vtlist</span><span class="p">)</span>
+    <span class="n">vtlines</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">vtlist</span><span class="p">)</span> <span class="k">as</span> <span class="n">vtlist_handle</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">vl</span> <span class="ow">in</span> <span class="n">vtlist_handle</span><span class="p">:</span>
+            <span class="n">vtlines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">vl</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+    <span class="n">vtlines</span> <span class="o">=</span> <span class="n">vtlines</span><span class="p">[</span><span class="n">args</span><span class="o">.</span><span class="n">skip_first_vtl</span><span class="p">:]</span>
+    <span class="n">vtlines_cutoff</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">vtlines</span><span class="p">)</span> <span class="o">*</span> <span class="n">args</span><span class="o">.</span><span class="n">p_items</span><span class="p">)</span>
+    <span class="n">vtlines_cut</span> <span class="o">=</span> <span class="n">vtlines</span><span class="p">[:</span><span class="n">vtlines_cutoff</span><span class="p">]</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39; Total vtlines left: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">vtlines_cut</span><span class="p">))</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Generating annotation items...&#39;</span><span class="p">)</span>
+
+    <span class="n">lines_to_prepend</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">continue_previous</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Will append new items to previously generated file.&#39;</span><span class="p">)</span>
+        <span class="n">prev_annot_inputs</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span>
+                                         <span class="n">iloader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">annotation_inputs</span><span class="p">)</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">continue_indexing</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">prev_annot_inputs</span><span class="p">)</span> <span class="k">as</span> <span class="n">prev_handle</span><span class="p">:</span>
+            <span class="n">lines_to_prepend</span> <span class="o">=</span> <span class="p">[</span> <span class="n">l</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">prev_handle</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span> <span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">continue_indexing</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Will continue indexing from previously generated file.&#39;</span><span class="p">)</span>
+        <span class="n">prev_annot_inputs</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span>
+                                         <span class="n">iloader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">annotation_inputs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">prev_annot_inputs</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Cannot continue: annotation input file &#39;</span>
+                             <span class="s">&#39;</span><span class="si">%s</span><span class="s"> not found in root </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">iloader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">annotation_inputs</span><span class="p">,</span>
+                                                          <span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">))</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">prev_annot_inputs</span><span class="p">)</span> <span class="k">as</span> <span class="n">prev_handle</span><span class="p">:</span>
+            <span class="n">prev_lines</span> <span class="o">=</span> <span class="n">prev_handle</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+        <span class="n">last_idx</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">prev_lines</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">first_index</span> <span class="o">=</span> <span class="n">last_idx</span> <span class="o">+</span> <span class="mi">1</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Continuing indexing from </span><span class="si">%d</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">first_index</span><span class="p">)</span>
+    <span class="n">annot_item_idx</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">first_index</span>
+
+    <span class="c"># Create annotation items</span>
+    <span class="n">annot_items</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">text</span> <span class="ow">in</span> <span class="n">vtlines_cut</span><span class="p">:</span>
+
+        <span class="n">iid</span> <span class="o">=</span> <span class="n">text2im</span><span class="p">[</span><span class="n">text</span><span class="p">]</span>
+        <span class="n">imno</span> <span class="o">=</span> <span class="n">icorp</span><span class="o">.</span><span class="n">doc2id</span><span class="p">[</span><span class="n">iid</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="c"># Use the first available image only.</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="n">idata</span><span class="o">.</span><span class="n">get_sparse</span><span class="p">(</span><span class="n">imno</span><span class="p">)</span>
+
+        <span class="n">qresults</span> <span class="o">=</span> <span class="n">index</span><span class="p">[</span><span class="n">query</span><span class="p">]</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">qresults</span><span class="p">)),</span> <span class="n">qresults</span><span class="p">)</span>
+        <span class="n">sorted_results</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">reverse</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="c"># Omit original picture?</span>
+        <span class="n">p_keep_best</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">p_keep_best</span> <span class="o">&lt;</span> <span class="n">args</span><span class="o">.</span><span class="n">p_original</span><span class="p">:</span>
+            <span class="n">sorted_results</span> <span class="o">=</span> <span class="n">sorted_results</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+
+        <span class="c"># Select top and sampled pictures</span>
+        <span class="n">top_results</span> <span class="o">=</span> <span class="n">sorted_results</span><span class="p">[:</span><span class="n">args</span><span class="o">.</span><span class="n">n_top_imgs</span><span class="p">]</span>
+
+        <span class="n">sampled_results</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">n_sampled</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">n_total_imgs</span> <span class="o">-</span> <span class="n">args</span><span class="o">.</span><span class="n">n_top_imgs</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">n_total_imgs</span> <span class="o">-</span> <span class="n">args</span><span class="o">.</span><span class="n">n_top_imgs</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">randomize_steps</span><span class="p">:</span>
+                <span class="n">sampled_results</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">random_steps</span><span class="p">(</span>
+                    <span class="n">sorted_results</span><span class="p">[</span><span class="n">args</span><span class="o">.</span><span class="n">n_top_imgs</span><span class="p">:],</span> <span class="n">n_sampled</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">sampled_results</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">uniform_steps</span><span class="p">(</span>
+                    <span class="n">sorted_results</span><span class="p">[</span><span class="n">args</span><span class="o">.</span><span class="n">n_top_imgs</span><span class="p">:],</span> <span class="n">n_sampled</span><span class="p">)</span>
+
+        <span class="n">all_results</span> <span class="o">=</span> <span class="n">top_results</span> <span class="o">+</span> <span class="n">sampled_results</span>
+
+        <span class="c"># Randomize order</span>
+        <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">all_results</span><span class="p">)</span>
+
+        <span class="c"># Retrieve image files</span>
+        <span class="n">imnos</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">all_results</span><span class="p">)</span>
+        <span class="n">iids</span> <span class="o">=</span> <span class="p">[</span> <span class="n">icorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">imnos</span> <span class="p">]</span>
+        <span class="n">ifnames</span> <span class="o">=</span> <span class="p">[</span> <span class="n">iid2imgf</span><span class="p">[</span><span class="n">ii</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">ii</span> <span class="ow">in</span> <span class="n">iids</span><span class="p">]</span>
+
+        <span class="c"># Format output</span>
+        <span class="n">output_line</span> <span class="o">=</span> <span class="s">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span>
+            <span class="c">#str(annot_item_idx),</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">label</span><span class="p">),</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">priority</span><span class="p">),</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">prefer_user</span><span class="p">),</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">text</span><span class="p">),</span>
+            <span class="s">&#39;;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">ifnames</span><span class="p">)</span>
+        <span class="p">])</span>
+
+        <span class="c"># Print output</span>
+        <span class="n">annot_items</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">output_line</span><span class="p">)</span>
+
+        <span class="c"># Increment item indexer</span>
+        <span class="n">annot_item_idx</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">if</span> <span class="n">annot_item_idx</span> <span class="o">%</span> <span class="mi">500</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;At annot_item_idx </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">annot_item_idx</span><span class="p">)</span>
+
+    <span class="c"># Generate duplicates</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Generating duplicates.&#39;</span><span class="p">)</span>
+
+    <span class="n">n_duplicates</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">p_duplicates</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">annot_items</span><span class="p">))</span>
+    <span class="n">duplicates</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">annot_items</span><span class="p">,</span> <span class="n">n_duplicates</span><span class="p">)</span>
+
+    <span class="c"># Rewrite duplicate IDs!</span>
+    <span class="c"># for i, d in enumerate(duplicates):</span>
+    <span class="c">#     did = annot_item_idx + i</span>
+    <span class="c">#     d_with_correct_id = str(did) + &#39; &#39; + d.split()[1:]</span>
+    <span class="c">#     annot_items.append(d_with_correct_id)</span>
+    <span class="n">annot_items</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">duplicates</span><span class="p">)</span>
+
+    <span class="c"># Make sure duplicates are evenly distributed</span>
+    <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">annot_items</span><span class="p">)</span>
+
+    <span class="c"># Add IDs to the shuffled list</span>
+    <span class="n">annot_items_with_id</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">item</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">annot_items</span><span class="p">):</span>
+        <span class="n">item_id</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="n">args</span><span class="o">.</span><span class="n">first_index</span>
+        <span class="n">new_item</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">item_id</span><span class="p">)</span> <span class="o">+</span> <span class="s">&#39; &#39;</span> <span class="o">+</span> <span class="n">item</span>
+        <span class="n">annot_items_with_id</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_item</span><span class="p">)</span>
+    <span class="n">annot_items</span> <span class="o">=</span> <span class="n">annot_items_with_id</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Substituting texts instead of vtexts...&#39;</span><span class="p">)</span>
+    <span class="n">annot_items_vt2t</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">annot_items</span><span class="p">:</span>
+        <span class="n">fields</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+        <span class="n">fields</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">=</span> <span class="n">fields</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s">&#39;.vt.&#39;</span><span class="p">,</span> <span class="s">&#39;.&#39;</span><span class="p">)</span>
+        <span class="n">annot_items_vt2t</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">fields</span><span class="p">))</span>
+    <span class="n">annot_items</span> <span class="o">=</span> <span class="n">annot_items_vt2t</span>
+
+    <span class="k">if</span> <span class="n">lines_to_prepend</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Prepending lines from previous annotation inputs file...&#39;</span><span class="p">)</span>
+        <span class="n">annot_items</span> <span class="o">=</span> <span class="n">lines_to_prepend</span> <span class="o">+</span> <span class="n">annot_items</span>
+
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Printing annotation items...&#39;</span><span class="p">)</span>
+
+    <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">annot_items</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Exiting generate_annotation_items.py.&#39;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="build_argument_parser"><a class="viewcode-back" href="../../scripts.generate_annotation_items.html#scripts.generate_annotation_items.build_argument_parser">[docs]</a><span class="k">def</span> <span class="nf">build_argument_parser</span><span class="p">():</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="n">__doc__</span><span class="p">,</span> <span class="n">add_help</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-r&#39;</span><span class="p">,</span> <span class="s">&#39;--root&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The path to&#39;</span><span class="o">+</span>
+                         <span class="s">&#39; the directory which is the root of a dataset.&#39;</span><span class="o">+</span>
+                         <span class="s">&#39; (Will be passed to a Loader as a root.)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-n&#39;</span><span class="p">,</span> <span class="s">&#39;--name&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The dataset name passed to the&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; Loader. Has to correspond to the *.vtlist file name.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-i&#39;</span><span class="p">,</span> <span class="s">&#39;--index_label&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The image index label.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-p&#39;</span><span class="p">,</span> <span class="s">&#39;--priority&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The basic item priority.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-l&#39;</span><span class="p">,</span> <span class="s">&#39;--label&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;basic&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The annotation item label.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-u&#39;</span><span class="p">,</span> <span class="s">&#39;--prefer_user&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;-&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;To which user should the items be preferrably &#39;</span>
+                             <span class="s">&#39;assigned.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-f&#39;</span><span class="p">,</span> <span class="s">&#39;--first_index&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The first ID from which to start indexing items.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--continue_indexing&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will read the starting annotation ID by &#39;</span>
+                             <span class="s">&#39;continuing the annotation_inputs.csv file in the&#39;</span>
+                             <span class="s">&#39; root dir. If the file is not found, an exception&#39;</span>
+                             <span class="s">&#39; is raised.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-c&#39;</span><span class="p">,</span> <span class="s">&#39;--continue_previous&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will append new lines to the annotation &#39;</span>
+                             <span class="s">&#39;input file already in --root. (Behaves as if &#39;</span>
+                             <span class="s">&#39;--continue_indexing was also set.) Raises a&#39;</span>
+                             <span class="s">&#39; ValueError if the annotation file does not &#39;</span>
+                             <span class="s">&#39;exist.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--n_top_imgs&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;How many images should be the most similar ones.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--n_total_imgs&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;How many images there should be in one item.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--randomize_steps&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will randomly select step sizes in the&#39;</span>
+                             <span class="s">&#39; sampled images instead of a fixed step size.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--p_items&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The proportion of images from the beginning of the&#39;</span>
+                             <span class="s">&#39; vtlist that will be used for annotation.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--p_duplicates&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The proportion of duplicate items in the list. The&#39;</span>
+                             <span class="s">&#39;total number of items will be &#39;</span>
+                             <span class="s">&#39;n_items / (1 - p_duplicates).&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--p_original&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The probability that the original picture will be&#39;</span>
+                             <span class="s">&#39; included with the annotation item, if available.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--skip_first_vtl&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Start at this index in the input vtlist.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-v&#39;</span><span class="p">,</span> <span class="s">&#39;--verbose&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on INFO logging messages.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--debug&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on DEBUG logging messages. (May get very &#39;</span>
+                             <span class="s">&#39;verbose.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">parser</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">build_argument_parser</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+    <span class="n">main</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

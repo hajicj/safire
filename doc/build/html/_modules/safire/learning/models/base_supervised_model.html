@@ -1,0 +1,335 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.base_supervised_model &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.learning.models.base_supervised_model</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+
+<span class="c">#</span>
+<span class="c"># Logistic regression using Theano</span>
+<span class="c">#</span>
+<span class="kn">import</span> <span class="nn">pdb</span>
+
+
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">theano.tensor</span> <span class="kn">as</span> <span class="nn">TT</span>
+
+<span class="kn">import</span> <span class="nn">safire.utils</span> <span class="kn">as</span> <span class="nn">utils</span>
+
+<span class="kn">from</span> <span class="nn">safire.learning.models.base_model</span> <span class="kn">import</span> <span class="n">BaseModel</span>
+<span class="kn">from</span> <span class="nn">safire.learning.interfaces.model_handle</span> <span class="kn">import</span> <span class="n">ModelHandle</span>
+
+<span class="c"># TODO: Rewrite setup() as instance method??? Is it even possible?</span>
+<span class="c">#       Why: so that a learner will only get a model instance, not</span>
+<span class="c">#       a model class. (A model class can be passed, of course. However,</span>
+<span class="c">#       multiple learners might want to update some parameters in parallel.</span>
+<span class="c">#</span>
+<span class="c">#       !!!! BUT: we can run Model.setup() outside the learner, so the</span>
+<span class="c">#                 train_, devel_ and test_ functions refer to the same</span>
+<span class="c">#                 shared object, and pass these functions as parameters</span>
+<span class="c">#                 to learners, not the Model classes.</span>
+<span class="c">#</span>
+<span class="c">#       - this actually reduces coupling between Learner and Model classes,</span>
+<span class="c">#         since a learner may use validation completely unrelated to training</span>
+<span class="c">#         or the test data can be perfectly hidden from the model on setup().</span>
+<span class="c">#         ...which presupposes that there is Model.setup_train(), setup_test(),</span>
+<span class="c">#            setup_devel() which can be called separately with only the given</span>
+<span class="c">#            data.</span>
+
+<div class="viewcode-block" id="BaseSupervisedModel"><a class="viewcode-back" href="../../../../safire.learning.models.base_supervised_model.html#safire.learning.models.base_supervised_model.BaseSupervisedModel">[docs]</a><span class="k">class</span> <span class="nc">BaseSupervisedModel</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Initialize the parameters of the logistic regression.</span>
+
+<span class="sd">        A Logistic Regression layer is the end layer in classification.</span>
+
+<span class="sd">        :type inputs: theano.tensor.TensorType</span>
+<span class="sd">        :param inputs: symbolic variable that descripbes the input</span>
+<span class="sd">                       of the architecture (e.g., one minibatch of</span>
+<span class="sd">                       input images, or output of a previous layer)</span>
+
+
+<span class="sd">        :type n_in: int</span>
+<span class="sd">        :param n_in: number of input units, the dimension of the space</span>
+<span class="sd">                     in which the data points live</span>
+
+<span class="sd">        :type n_out: int</span>
+<span class="sd">        :param n_out: number of output units, the dimension of the space</span>
+<span class="sd">                      in which the target lies</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">inputs</span> <span class="o">=</span> <span class="n">inputs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">=</span> <span class="n">n_in</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span> <span class="o">=</span> <span class="n">n_out</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_layers</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_shapes</span> <span class="o">=</span> <span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_in</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span><span class="p">)]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layers</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="p">]</span> <span class="c"># &quot;Simple&quot; (one-layer) models are themselves</span>
+                             <span class="c"># the one and only layer the model consists of</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">outputs</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="p">[]</span>
+
+
+<div class="viewcode-block" id="BaseSupervisedModel.error"><a class="viewcode-back" href="../../../../safire.learning.models.base_supervised_model.html#safire.learning.models.base_supervised_model.BaseSupervisedModel.error">[docs]</a>    <span class="k">def</span> <span class="nf">error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the proportion of incorrectly classified instances.</span>
+<span class="sd">        </span>
+<span class="sd">        :type y: theano.tensor.TensorType</span>
+<span class="sd">        :param y: A response vector.</span>
+<span class="sd">        </span>
+<span class="sd">        :raises: NotImplementedError()</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+    <span class="k">def</span> <span class="nf">_cost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the cost expression, binding the response variable for y.</span>
+<span class="sd">        Used during setup.</span>
+
+<span class="sd">        :type y: theano.tensor.vector</span>
+<span class="sd">        :param y: The response variable against which the cost is computed</span>
+<span class="sd">           </span>
+<span class="sd">        :raises: NotImplementedError()</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_training_updates</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the update expression for updating the model parameters</span>
+<span class="sd">        during training. The formula for updating an argument is</span>
+<span class="sd">            </span>
+<span class="sd">        .. math:</span>
+<span class="sd">            </span>
+<span class="sd">           \theta^{(k+1)} = \theta^{(k)} - learning\_rate * \frac{\partial cost}{\partial \theta} </span>
+
+<span class="sd">        Expects a &#39;learning_rate&#39; and &#39;cost&#39; kwarg.</span>
+<span class="sd">            </span>
+<span class="sd">        :type learning_rate: theano.config.floatX</span>
+<span class="sd">        :param learning_rate: The learning rate for parameter updates.</span>
+<span class="sd">                                  </span>
+<span class="sd">        :type cost: theano.tensor.TensorType</span>
+<span class="sd">        :param cost: The cost function of which we are computing</span>
+<span class="sd">                     the gradient.</span>
+<span class="sd">                         </span>
+<span class="sd">        :returns: A list of pairs (parameter, update_expression), to</span>
+<span class="sd">                  be passed directly to ``theano.function`` as the</span>
+<span class="sd">                  ``updates`` parameter.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">utils</span><span class="o">.</span><span class="n">check_kwargs</span><span class="p">(</span><span class="n">kwargs</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;learning_rate&#39;</span><span class="p">,</span> <span class="s">&#39;cost&#39;</span><span class="p">])</span>
+
+        <span class="n">learning_rate</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;learning_rate&#39;</span><span class="p">]</span>
+        <span class="n">bound_cost</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;cost&#39;</span><span class="p">]</span>
+
+        <span class="n">updates</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">:</span>
+            <span class="n">gradient</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">cost</span> <span class="o">=</span> <span class="n">bound_cost</span><span class="p">,</span> <span class="n">wrt</span> <span class="o">=</span> <span class="n">param</span><span class="p">)</span>
+            <span class="n">updates</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">param</span><span class="p">,</span> <span class="n">param</span> <span class="o">-</span> <span class="n">learning_rate</span> <span class="o">*</span> <span class="n">gradient</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">updates</span>
+    
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_init_args</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns a list of the required kwargs the class needs to be</span>
+<span class="sd">        successfully initialized.</span>
+
+<span class="sd">        Only returns args that are OVER the minimum defined in the</span>
+<span class="sd">        BaseModel.__init__() function definition.</span>
+<span class="sd">        </span>
+<span class="sd">        :returns: Empty list.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[]</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_check_init_args</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Raises a TypeError if all _init_args() are not present in the given</span>
+<span class="sd">        args dictionary (will actually take any iterable, but there&#39;s no</span>
+<span class="sd">        point in doing this with anything else but **kwargs passed to </span>
+<span class="sd">        _setup()...)</span>
+<span class="sd">        </span>
+<span class="sd">        :type args: dict</span>
+<span class="sd">        :param args: The kwarg dictionary in which to look for required args.</span>
+<span class="sd">            </span>
+<span class="sd">        :raises: TypeError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">required_kwargs</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">_init_args</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">required_kwargs</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">arg</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&quot;Arg </span><span class="se">\&#39;</span><span class="si">%s</span><span class="se">\&#39;</span><span class="s"> required by model class </span><span class="si">%s</span><span class="s"> not available&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">cls</span><span class="p">)))</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="BaseSupervisedModel.setup"><a class="viewcode-back" href="../../../../safire.learning.models.base_supervised_model.html#safire.learning.models.base_supervised_model.BaseSupervisedModel.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.13</span><span class="p">,</span> 
+              <span class="o">**</span><span class="n">model_init_kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Prepares the train_model, validate_model and test_model methods</span>
+<span class="sd">        on the given dataset and with the given parameters.</span>
+
+<span class="sd">        It is a CLASS METHOD, which during its run actually creates</span>
+<span class="sd">        an instance of the model. It is called as </span>
+
+<span class="sd">            &gt;&gt;&gt; model_handle = ModelClass.setup(dataset, params...)</span>
+
+<span class="sd">        :type data: Dataset</span>
+<span class="sd">        :param data: The dataset on which the model will be run.</span>
+
+<span class="sd">        :type model: BaseSupervisedModel</span>
+<span class="sd">        :param model: A model instance that the setup should use.</span>
+
+<span class="sd">        :type batch_size: int</span>
+<span class="sd">        :param batch_size: how many data items will be in one minibatch</span>
+<span class="sd">                           (the data is split to minibatches for training,</span>
+<span class="sd">                           validation and testing)</span>
+
+<span class="sd">        :type model_init_kwargs: kwargs</span>
+<span class="sd">        :param model_init_kwargs: Various keyword arguments that get passed</span>
+<span class="sd">                                  to the model constructor. See constructor</span>
+<span class="sd">                                  argument documentation.</span>
+<span class="sd">                                     </span>
+<span class="sd">        :returns: ``ModelHandle(model, train_f, validate_f, test_f)``</span>
+<span class="sd">                  where &#39;model&#39; is the Model instance initialized during</span>
+<span class="sd">                  :func:`setup` and the ``_func`` variables are compiled</span>
+<span class="sd">                  theano.functions to use in a learner.                            </span>
+
+
+<span class="sd">        &quot;&quot;&quot;</span>        
+        <span class="n">index</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">lscalar</span><span class="p">()</span> <span class="c"># index of minibatch</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="s">&#39;X&#39;</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span>   <span class="c"># data as a matrix</span>
+
+        <span class="c"># Integer labels for classification</span>
+        <span class="c">#y = TT.ivector(&#39;y&#39;)  # labels as int (see data.loader.as_shared)</span>
+
+        <span class="c"># Float labels for regression</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="s">&#39;Y&#39;</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span>
+
+        <span class="c"># Check for kwargs ... obsolete?</span>
+<span class="c">#        cls._check_init_args(model_init_kwargs)</span>
+
+        <span class="c"># Construct the model instance, or use supplied and do sanity checks.</span>
+        <span class="k">if</span> <span class="n">model</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">model</span> <span class="o">=</span> <span class="n">cls</span><span class="p">(</span><span class="n">inputs</span><span class="o">=</span><span class="n">X</span><span class="p">,</span> <span class="n">n_in</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">n_out</span><span class="p">,</span> 
+                        <span class="o">**</span><span class="n">model_init_kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c"># Sanity (dimensionality...) checks: </span>
+            <span class="c"># - Are we passing a model of the same type as we&#39;re trying</span>
+            <span class="c">#   to set up?</span>
+            <span class="c"># - Are we passing a dataset that the model can work on?</span>
+            <span class="k">assert</span> <span class="n">cls</span> <span class="o">==</span> <span class="nb">type</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="n">model</span><span class="o">.</span><span class="n">n_in</span> <span class="o">==</span> <span class="n">data</span><span class="o">.</span><span class="n">n_in</span>
+            <span class="k">assert</span> <span class="n">model</span><span class="o">.</span><span class="n">n_out</span> <span class="o">==</span> <span class="n">data</span><span class="o">.</span><span class="n">n_out</span>
+
+        <span class="c"># The cost to minimize during training: negative log-likelihood</span>
+        <span class="c"># of the training data (symbolic)</span>
+        <span class="n">bound_cost</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">_cost</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+
+        <span class="c"># Specify how to update the parameters of the model as a list of</span>
+        <span class="c"># (variable, update expression) pairs.</span>
+        <span class="n">updates</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">_training_updates</span><span class="p">(</span><span class="n">cost</span><span class="o">=</span><span class="n">bound_cost</span><span class="p">,</span> 
+                                          <span class="n">learning_rate</span><span class="o">=</span><span class="n">learning_rate</span><span class="p">)</span>
+
+        <span class="c"># Compile a Theano function that trains the model: returns the cost</span>
+        <span class="c"># (negative log-likelihood) and updates the model parameters based</span>
+        <span class="c"># on the rules defined in updates.</span>
+        <span class="n">train_model</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="n">inputs</span> <span class="o">=</span> <span class="p">[</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">],</span>
+                <span class="n">outputs</span> <span class="o">=</span> <span class="n">bound_cost</span><span class="p">,</span>
+                <span class="n">updates</span> <span class="o">=</span> <span class="n">updates</span><span class="p">,</span>
+                <span class="n">allow_input_downcast</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="n">validate_model</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="n">inputs</span> <span class="o">=</span> <span class="p">[</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">],</span>
+            <span class="n">outputs</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">y</span><span class="p">),</span>
+            <span class="n">allow_input_downcast</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="n">test_model</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="n">inputs</span> <span class="o">=</span> <span class="p">[</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">],</span>
+            <span class="n">outputs</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">y</span><span class="p">),</span>
+            <span class="n">allow_input_downcast</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="n">run_model</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="n">inputs</span> <span class="o">=</span> <span class="p">[</span><span class="n">X</span><span class="p">],</span>
+                            <span class="n">outputs</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">outputs</span><span class="p">,</span>
+                            <span class="n">allow_input_downcast</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">ModelHandle</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">train_model</span><span class="p">,</span> <span class="n">validate_model</span><span class="p">,</span> <span class="n">test_model</span><span class="p">,</span>
+                           <span class="n">run_model</span><span class="p">)</span>
+</pre></div></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.SAFIRE module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.data.SAFIRE">
+<span id="safire-data-safire-module"></span><h1>safire.data.SAFIRE module<a class="headerlink" href="#module-safire.data.SAFIRE" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.data.SAFIRE.DataDirLayout">
+<em class="property">class </em><tt class="descclassname">safire.data.SAFIRE.</tt><tt class="descname">DataDirLayout</tt><big>(</big><em>name</em><big>)</big><a class="reference internal" href="_modules/safire/data/SAFIRE.html#DataDirLayout"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.SAFIRE.DataDirLayout" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>A static class that holds constants that define the layout of a
+dataset root dir. For specific layouts, override the <tt class="docutils literal"><span class="pre">name</span></tt> attribute.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.data.SAFIRE.MultimodalDatasetLoader">
+<em class="property">class </em><tt class="descclassname">safire.data.SAFIRE.</tt><tt class="descname">MultimodalDatasetLoader</tt><big>(</big><em>root</em>, <em>name</em>, <em>sentences=False</em>, <em>text_loader=&lt;class 'safire.data.vtextcorpus.VTextCorpus'&gt;</em>, <em>img_loader=&lt;class 'safire.data.imagenetcorpus.ImagenetCorpus'&gt;</em><big>)</big><a class="reference internal" href="_modules/safire/data/SAFIRE.html#MultimodalDatasetLoader"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.SAFIRE.MultimodalDatasetLoader" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>A class that works as an interface for loading a SAFIRE dataset.</p>
+<p>The loading itself may take a shortcut through a <tt class="docutils literal"><span class="pre">load</span></tt> class method:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">safire_multimodal_dataset</span> <span class="o">=</span> <span class="n">SAFIRE</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s">&#39;/path/to/safire/root&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mlp</span> <span class="o">=</span> <span class="n">MultilayerPerceptron</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">safire_multimodal_dataset</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Or the SAFIRE class may be instantiated:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">safire</span> <span class="o">=</span> <span class="n">SAFIRE</span><span class="p">(</span><span class="s">&#39;/path/to/safire/root&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">safire_multimodal_dataset</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Relies on gensim-style corpora already being generated. If they are not
+present, will first need to generate them. Because that is a time-consuming
+procedure, the SAFIRE class will not generate them automatically. Instead,
+the following workflow is available:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">safire</span> <span class="o">=</span> <span class="n">SAFIRE</span><span class="p">(</span><span class="s">&#39;/path/to/safire/root&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">safire</span><span class="o">.</span><span class="n">has_corpora</span><span class="p">()</span>
+<span class="go">False</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dataset</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+<span class="go">ValueError: Corpora unavailable in SAFIRE dataset at /path/to/safire/root</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">safire</span><span class="o">.</span><span class="n">generate_corpora</span><span class="p">(</span><span class="n">safire_root</span><span class="p">)</span>
+<span class="go">[...takes a long time..]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">safire</span><span class="o">.</span><span class="n">has_corpora</span><span class="p">()</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dataset</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+</pre></div>
+</div>
+<dl class="method">
+<dt id="safire.data.SAFIRE.MultimodalDatasetLoader.build_corpora">
+<tt class="descname">build_corpora</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/SAFIRE.html#MultimodalDatasetLoader.build_corpora"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.SAFIRE.MultimodalDatasetLoader.build_corpora" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates all corpora necessary for the creation of the
+MultimodalDataset over the SAFIRE data.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.SAFIRE.MultimodalDatasetLoader.has_corpora">
+<tt class="descname">has_corpora</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/SAFIRE.html#MultimodalDatasetLoader.has_corpora"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.SAFIRE.MultimodalDatasetLoader.has_corpora" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks whether corpora for loading the SAFIRE multimodal dataset
+have been generated and are in the right place.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.SAFIRE.MultimodalDatasetLoader.load">
+<tt class="descname">load</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/SAFIRE.html#MultimodalDatasetLoader.load"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.SAFIRE.MultimodalDatasetLoader.load" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates the SAFIRE MultimodalDataset. If corpora are not generated,
+raises a ValueError.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Raises:</th><td class="field-body">ValueError</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.data.SAFIRE.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

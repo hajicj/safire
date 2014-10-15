@@ -1,0 +1,225 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.interfaces.model_handle module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.learning.interfaces.model_handle">
+<span id="safire-learning-interfaces-model-handle-module"></span><h1>safire.learning.interfaces.model_handle module<a class="headerlink" href="#module-safire.learning.interfaces.model_handle" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.learning.interfaces.model_handle.AlternatingGibbsHandle">
+<em class="property">class </em><tt class="descclassname">safire.learning.interfaces.model_handle.</tt><tt class="descname">AlternatingGibbsHandle</tt><a class="reference internal" href="_modules/safire/learning/interfaces/model_handle.html#AlternatingGibbsHandle"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.interfaces.model_handle.AlternatingGibbsHandle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#safire.learning.interfaces.model_handle.ModelHandle" title="safire.learning.interfaces.model_handle.ModelHandle"><tt class="xref py py-class docutils literal"><span class="pre">safire.learning.interfaces.model_handle.ModelHandle</span></tt></a></p>
+<p>Runs an alternating Gibbs chain from a sampleable handle. The last step
+is a mean, all others are samples.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.learning.interfaces.model_handle.BackwardModelHandle">
+<em class="property">class </em><tt class="descclassname">safire.learning.interfaces.model_handle.</tt><tt class="descname">BackwardModelHandle</tt><big>(</big><em>model_instance</em>, <em>train</em>, <em>validate</em>, <em>test</em>, <em>run</em>, <em>heavy_debug=False</em><big>)</big><a class="reference internal" href="_modules/safire/learning/interfaces/model_handle.html#BackwardModelHandle"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.interfaces.model_handle.BackwardModelHandle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#safire.learning.interfaces.model_handle.ModelHandle" title="safire.learning.interfaces.model_handle.ModelHandle"><tt class="xref py py-class docutils literal"><span class="pre">safire.learning.interfaces.model_handle.ModelHandle</span></tt></a></p>
+<p>Performs a backward pass on the model, instead of forward.
+Requires a sampleable model.</p>
+<p>The <tt class="docutils literal"><span class="pre">run</span></tt> member of this handle will expect a <em>hidden</em> activation
+and will compute the <em>visible</em> activation for the given model.</p>
+<dl class="classmethod">
+<dt id="safire.learning.interfaces.model_handle.BackwardModelHandle.clone">
+<em class="property">classmethod </em><tt class="descname">clone</tt><big>(</big><em>handle</em><big>)</big><a class="reference internal" href="_modules/safire/learning/interfaces/model_handle.html#BackwardModelHandle.clone"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.interfaces.model_handle.BackwardModelHandle.clone" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clones a BackwardModelHandle from an existing ModelHandle.
+We needed the dataset anyway to call model <tt class="docutils literal"><span class="pre">setup</span></tt> that created
+the first handle.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>handle</strong> (<em>ModelHandle</em>) &#8211; The model handle from which to take the model instance,
+train, validate and test functions. The <tt class="docutils literal"><span class="pre">run</span></tt> function is
+taken as well, but tucked away under a <tt class="docutils literal"><span class="pre">handle.get_hidden()</span></tt>
+member, since the &#8220;product&#8221; of this handle are not the hidden
+values.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.interfaces.model_handle.BackwardModelHandle.init_backward_run">
+<tt class="descname">init_backward_run</tt><big>(</big><em>sample_visible=False</em><big>)</big><a class="reference internal" href="_modules/safire/learning/interfaces/model_handle.html#BackwardModelHandle.init_backward_run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.interfaces.model_handle.BackwardModelHandle.init_backward_run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates the Theano function  to compute the backward mean.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.interfaces.model_handle.BackwardModelHandle.run">
+<tt class="descname">run</tt><big>(</big><em>hidden</em>, <em>sample=False</em><big>)</big><a class="reference internal" href="_modules/safire/learning/interfaces/model_handle.html#BackwardModelHandle.run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.interfaces.model_handle.BackwardModelHandle.run" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.learning.interfaces.model_handle.ModelHandle">
+<em class="property">class </em><tt class="descclassname">safire.learning.interfaces.model_handle.</tt><tt class="descname">ModelHandle</tt><big>(</big><em>model_instance</em>, <em>train</em>, <em>validate</em>, <em>test</em>, <em>run</em><big>)</big><a class="reference internal" href="_modules/safire/learning/interfaces/model_handle.html#ModelHandle"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.interfaces.model_handle.ModelHandle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>Provides the train/validate/test handle for a learner class.
+This is, so far, just a wrapper for the model plus output of
+the ModelClass.setup() function.</p>
+<p>A handle is the &#8220;runnable&#8221; interface to a model.</p>
+<p>Also, it provides save/load functionality for model persistence.</p>
+<dl class="classmethod">
+<dt id="safire.learning.interfaces.model_handle.ModelHandle.load">
+<em class="property">classmethod </em><tt class="descname">load</tt><big>(</big><em>filename</em><big>)</big><a class="reference internal" href="_modules/safire/learning/interfaces/model_handle.html#ModelHandle.load"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.interfaces.model_handle.ModelHandle.load" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads handle from previously saved handle.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.interfaces.model_handle.ModelHandle.save">
+<tt class="descname">save</tt><big>(</big><em>filename</em>, <em>protocol=-1</em><big>)</big><a class="reference internal" href="_modules/safire/learning/interfaces/model_handle.html#ModelHandle.save"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.interfaces.model_handle.ModelHandle.save" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves the handle. Uses the <tt class="docutils literal"><span class="pre">_init_arg_snapshot()</span></tt> method of the
+model to save the model, attempts to save the theano functions
+directly.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.learning.interfaces.model_handle.MultimodalClampedSamplerModelHandle">
+<em class="property">class </em><tt class="descclassname">safire.learning.interfaces.model_handle.</tt><tt class="descname">MultimodalClampedSamplerModelHandle</tt><big>(</big><em>model_instance</em>, <em>train</em>, <em>validate</em>, <em>test</em>, <em>run</em>, <em>dim_text</em>, <em>dim_img</em>, <em>k=10</em><big>)</big><a class="reference internal" href="_modules/safire/learning/interfaces/model_handle.html#MultimodalClampedSamplerModelHandle"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.interfaces.model_handle.MultimodalClampedSamplerModelHandle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#safire.learning.interfaces.model_handle.ModelHandle" title="safire.learning.interfaces.model_handle.ModelHandle"><tt class="xref py py-class docutils literal"><span class="pre">safire.learning.interfaces.model_handle.ModelHandle</span></tt></a></p>
+<p>This handle provides special <tt class="docutils literal"><span class="pre">run()</span></tt> functionality. Instead of using
+the <tt class="docutils literal"><span class="pre">run</span></tt> function given by a model&#8217;s <tt class="docutils literal"><span class="pre">setup</span></tt>, it will use
+a MultimodalClampedSampler to sample image one part of input values
+based on clamping the values of the other part.</p>
+<p>To set up a clamped sampling handle:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">mdloader</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">(</span><span class="n">root_orig</span><span class="p">,</span> <span class="n">name_orig</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">multimodal_dataset</span> <span class="o">=</span> <span class="n">mdloader</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">text_infix</span><span class="p">,</span> <span class="n">img_infix</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">handle</span> <span class="o">=</span> <span class="n">RestrictedBoltzmannMachine</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">multimodal_dataset</span><span class="p">,</span> <span class="n">n_out</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
+<span class="go">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">clamped_handle</span> <span class="o">=</span> <span class="n">MultimodalClampedSamplerModelHandle</span><span class="o">.</span><span class="n">clone</span><span class="p">(</span><span class="n">handle</span><span class="p">,</span> <span class="n">multimodal_dataset</span><span class="p">)</span>
+<span class="go">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span> <span class="o">=</span> <span class="n">SafireTransformer</span><span class="p">(</span><span class="n">clamped_handle</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To run the handle: the text data can come from a different dataset,
+but bear in mind they need to share the same feature space.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">run_mdloader</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">(</span><span class="n">root_run</span><span class="p">,</span> <span class="n">name_run</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">text_dataset</span> <span class="o">=</span> <span class="n">run_mdloader</span><span class="o">.</span><span class="n">load_text</span><span class="p">(</span><span class="n">text_infix</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">text</span> <span class="o">=</span> <span class="n">text_dataset</span><span class="o">.</span><span class="n">test_X_batch</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">img</span> <span class="o">=</span> <span class="n">clamped_handle</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="classmethod">
+<dt id="safire.learning.interfaces.model_handle.MultimodalClampedSamplerModelHandle.clone">
+<em class="property">classmethod </em><tt class="descname">clone</tt><big>(</big><em>handle</em>, <em>dim_text</em>, <em>dim_img</em>, <em>**clamped_handle_kwargs</em><big>)</big><a class="reference internal" href="_modules/safire/learning/interfaces/model_handle.html#MultimodalClampedSamplerModelHandle.clone"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.interfaces.model_handle.MultimodalClampedSamplerModelHandle.clone" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clones a clamped sampling handle from the existing ModelHandle.
+We needed the dataset anyway to call model <tt class="docutils literal"><span class="pre">setup</span></tt> that created
+the first handle.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>handle</strong> (<em>ModelHandle</em>) &#8211; The model handle from which to take the model instance,
+train, validate and test functions. The <tt class="docutils literal"><span class="pre">run</span></tt> function is
+taken as well, but tucked away under a <tt class="docutils literal"><span class="pre">handle.get_hidden()</span></tt>
+member, since the &#8220;product&#8221; of this handle are not the hidden
+values.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.interfaces.model_handle.MultimodalClampedSamplerModelHandle.run">
+<tt class="descname">run</tt><big>(</big><em>text_features</em><big>)</big><a class="reference internal" href="_modules/safire/learning/interfaces/model_handle.html#MultimodalClampedSamplerModelHandle.run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.interfaces.model_handle.MultimodalClampedSamplerModelHandle.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Runs the sampler on text features input. Returns image
+representation.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.learning.interfaces.model_handle.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

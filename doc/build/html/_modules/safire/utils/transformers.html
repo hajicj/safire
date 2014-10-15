@@ -1,0 +1,319 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.utils.transformers &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="safire.utils" href="../utils.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li><a href="../utils.html" accesskey="U">safire.utils</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.utils.transformers</h1><div class="highlight"><pre>
+<span class="c"># !/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">``transformers.py`` is a library that contains various non-NNET SAFIRE</span>
+<span class="sd">transformer components, mainly used for miscellaneous preprocessing (scaling,</span>
+<span class="sd">normalization, sigmoid nonlinearity, etc.).</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">operator</span>
+<span class="kn">import</span> <span class="nn">gensim</span>
+<span class="kn">from</span> <span class="nn">gensim.interfaces</span> <span class="kn">import</span> <span class="n">TransformedCorpus</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">from</span> <span class="nn">safire.utils</span> <span class="kn">import</span> <span class="n">transcorp</span>
+
+
+<div class="viewcode-block" id="NormalizationTransform"><a class="viewcode-back" href="../../../safire.utils.transformers.html#safire.utils.transformers.NormalizationTransform">[docs]</a><span class="k">class</span> <span class="nc">NormalizationTransform</span><span class="p">(</span><span class="n">gensim</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">TransformationABC</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Given a corpus, will simply normalize all BOW inputs to sum to 1.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">C</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Sets the normalization constant.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">C</span> <span class="o">=</span> <span class="n">C</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bow</span><span class="p">):</span>
+
+        <span class="n">is_corpus</span><span class="p">,</span> <span class="n">bow</span> <span class="o">=</span> <span class="n">gensim</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">is_corpus</span><span class="p">(</span><span class="n">bow</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">is_corpus</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply</span><span class="p">(</span><span class="n">bow</span><span class="p">)</span>
+
+        <span class="n">keys</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">bow</span><span class="p">))</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">bow</span><span class="p">)))</span>
+
+        <span class="n">total</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">values</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">total</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Item with zero total: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">bow</span><span class="p">))</span>
+            <span class="k">return</span> <span class="n">bow</span>
+
+        <span class="n">scaling_coefficient</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">C</span> <span class="o">/</span> <span class="n">total</span>
+        <span class="n">normalized_values</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">*</span> <span class="n">scaling_coefficient</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span><span class="p">]</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">keys</span><span class="p">,</span> <span class="n">normalized_values</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">output</span>
+</div>
+<div class="viewcode-block" id="CappedNormalizationTransform"><a class="viewcode-back" href="../../../safire.utils.transformers.html#safire.utils.transformers.CappedNormalizationTransform">[docs]</a><span class="k">class</span> <span class="nc">CappedNormalizationTransform</span><span class="p">(</span><span class="n">NormalizationTransform</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Given a corpus, normalizes each item to a sum such that the largest</span>
+<span class="sd">    feature value in the corpus is just under 1.0.&quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">corpus</span><span class="p">,</span> <span class="n">max_target</span><span class="o">=</span><span class="mf">0.9999</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the scaling.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_target</span> <span class="o">=</span> <span class="n">max_target</span>
+
+        <span class="c"># Algorithm</span>
+        <span class="c"># What is the correct normalization target?</span>
+        <span class="c"># - for each item in corpus, find the constant it could scale to to</span>
+        <span class="c">#   reach the max_target</span>
+        <span class="c"># - choose the lowest such constant</span>
+        <span class="n">coefficients</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">proposed_constants</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">bow</span> <span class="ow">in</span> <span class="n">corpus</span><span class="p">:</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">bow</span><span class="p">)</span>
+            <span class="n">max_value</span> <span class="o">=</span> <span class="mf">0.00001</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">max_value</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+            <span class="n">max_coef</span> <span class="o">=</span> <span class="n">max_target</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">max_value</span><span class="p">)</span>
+            <span class="n">proposed_constant</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">*</span> <span class="n">max_coef</span>
+
+            <span class="n">coefficients</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">max_coef</span><span class="p">)</span>
+            <span class="n">proposed_constants</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">proposed_constant</span><span class="p">)</span>
+
+        <span class="n">min_safe_constant</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">proposed_constants</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">C</span> <span class="o">=</span> <span class="n">min_safe_constant</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;CappedNormalization: C = </span><span class="si">%.5f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">C</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="UnitScalingTransform"><a class="viewcode-back" href="../../../safire.utils.transformers.html#safire.utils.transformers.UnitScalingTransform">[docs]</a><span class="k">class</span> <span class="nc">UnitScalingTransform</span><span class="p">(</span><span class="n">gensim</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">TransformationABC</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Scales the vector so that its maximum element is 1.&quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bow</span><span class="p">):</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">bow</span><span class="p">))</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">bow</span><span class="p">))</span>
+        <span class="n">maximum</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+        <span class="n">scaled_values</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">/</span> <span class="n">maximum</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span><span class="p">]</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">keys</span><span class="p">,</span> <span class="n">scaled_values</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">output</span>
+
+</div>
+<div class="viewcode-block" id="GlobalUnitScalingTransform"><a class="viewcode-back" href="../../../safire.utils.transformers.html#safire.utils.transformers.GlobalUnitScalingTransform">[docs]</a><span class="k">class</span> <span class="nc">GlobalUnitScalingTransform</span><span class="p">(</span><span class="n">gensim</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">TransformationABC</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Scales vectors in the corpus so that the maximum element in the corpus</span>
+<span class="sd">    is 1. This is to retain proportions between items in an unnormalized</span>
+<span class="sd">    setting.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">corpus</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param cutoff: If given, will truncate dataset to this value, prior to</span>
+<span class="sd">            scaling.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">maximum</span> <span class="o">=</span> <span class="mf">0.00001</span>
+        <span class="k">for</span> <span class="n">bow</span> <span class="ow">in</span> <span class="n">corpus</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">maximum</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">maximum</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+                                                     <span class="n">bow</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="n">cutoff</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">cutoff</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">maximum</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">maximum</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">cutoff</span><span class="p">)</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Found maximum </span><span class="si">%f</span><span class="s"> with cutoff </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">maximum</span><span class="p">,</span> <span class="n">cutoff</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="n">chunksize</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">is_corpus</span><span class="p">,</span> <span class="n">bow</span> <span class="o">=</span> <span class="n">gensim</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">is_corpus</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">is_corpus</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+
+        <span class="c"># if isinstance(item, list):</span>
+        <span class="c">#     l_output = [ [ (w, max(f, self.maximum) / self.maximum)</span>
+        <span class="c">#                    for w, f in i ]</span>
+        <span class="c">#                  for i in item ]</span>
+        <span class="c">#     return l_output</span>
+
+        <span class="n">output</span> <span class="o">=</span> <span class="p">[</span> <span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">maximum</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">maximum</span><span class="p">)</span> <span class="k">for</span> <span class="n">w</span><span class="p">,</span><span class="n">f</span> <span class="ow">in</span> <span class="n">item</span> <span class="p">]</span>
+        <span class="k">return</span> <span class="n">output</span>
+
+    <span class="k">def</span> <span class="nf">_apply</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">corpus</span><span class="p">,</span> <span class="n">chunksize</span><span class="o">=</span><span class="mi">1000</span><span class="p">):</span>
+
+        <span class="k">return</span> <span class="n">TransformedCorpus</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">corpus</span><span class="p">,</span> <span class="n">chunksize</span><span class="o">=</span><span class="bp">None</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="SigmoidTransform"><a class="viewcode-back" href="../../../safire.utils.transformers.html#safire.utils.transformers.SigmoidTransform">[docs]</a><span class="k">class</span> <span class="nc">SigmoidTransform</span><span class="p">(</span><span class="n">gensim</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">TransformationABC</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Transforms vectors through a squishing function::</span>
+
+<span class="sd">    f(x) = M / (1 + e^(-Kx)) - C</span>
+
+<span class="sd">    The defaults are M = 2.0, K = 0.5 and C = 1.0.</span>
+<span class="sd">    MAKE SURE THAT f(0) = 0 !!!!</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">K</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">C</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">M</span> <span class="o">=</span> <span class="n">M</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">K</span> <span class="o">=</span> <span class="n">K</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">C</span> <span class="o">=</span> <span class="n">C</span>
+
+    <span class="k">def</span> <span class="nf">_fn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">M</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">numpy</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mf">1.0</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">K</span> <span class="o">*</span> <span class="n">x</span><span class="p">))</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">C</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bow</span><span class="p">,</span> <span class="n">chunksize</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">is_corpus</span><span class="p">,</span> <span class="n">bow</span> <span class="o">=</span> <span class="n">gensim</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">is_corpus</span><span class="p">(</span><span class="n">bow</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">is_corpus</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply</span><span class="p">(</span><span class="n">bow</span><span class="p">,</span> <span class="n">chunksize</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fn</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">bow</span><span class="p">]</span>
+
+</div>
+<div class="viewcode-block" id="GeneralFunctionTransform"><a class="viewcode-back" href="../../../safire.utils.transformers.html#safire.utils.transformers.GeneralFunctionTransform">[docs]</a><span class="k">class</span> <span class="nc">GeneralFunctionTransform</span><span class="p">(</span><span class="n">gensim</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">TransformationABC</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Transforms each value by the function given at initialization.&quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="n">multiplicative_coef</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">additive_coef</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+                 <span class="n">outer_multiplicative_coef</span><span class="o">=</span><span class="mf">0.99975</span><span class="p">,</span> <span class="n">outer_additive_coef</span><span class="o">=</span><span class="mf">0.0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Will implement the function</span>
+
+<span class="sd">        outer_mul_coef * ( fn(mul_coef * X + add_coef) ) + outer_add_coef</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_fn</span> <span class="o">=</span> <span class="n">fn</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mul</span> <span class="o">=</span> <span class="n">multiplicative_coef</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">add</span> <span class="o">=</span> <span class="n">additive_coef</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">o_mul</span> <span class="o">=</span> <span class="n">outer_multiplicative_coef</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">o_add</span> <span class="o">=</span> <span class="n">outer_additive_coef</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bow</span><span class="p">,</span> <span class="n">chunksize</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">is_corpus</span><span class="p">,</span> <span class="n">bow</span> <span class="o">=</span> <span class="n">gensim</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">is_corpus</span><span class="p">(</span><span class="n">bow</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">is_corpus</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply</span><span class="p">(</span><span class="n">bow</span><span class="p">,</span> <span class="n">chunksize</span><span class="p">)</span>
+
+        <span class="n">oK</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">o_mul</span>
+        <span class="n">oC</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">o_add</span>
+        <span class="n">K</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mul</span>
+        <span class="n">C</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">add</span>
+        <span class="k">return</span> <span class="p">[(</span><span class="n">i</span><span class="p">,</span> <span class="n">oK</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fn</span><span class="p">(</span><span class="n">K</span> <span class="o">*</span> <span class="n">x</span> <span class="o">+</span> <span class="n">C</span><span class="p">)</span> <span class="o">+</span> <span class="n">oC</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">bow</span><span class="p">]</span>
+
+
+
+
+</div>
+<div class="viewcode-block" id="LeCunnVarianceScalingTransform"><a class="viewcode-back" href="../../../safire.utils.transformers.html#safire.utils.transformers.LeCunnVarianceScalingTransform">[docs]</a><span class="k">class</span> <span class="nc">LeCunnVarianceScalingTransform</span><span class="p">(</span><span class="n">gensim</span><span class="o">.</span><span class="n">interfaces</span><span class="o">.</span><span class="n">TransformationABC</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Transforms features so that they all have the same &quot;variance&quot; defined</span>
+<span class="sd">    by LeCunn, 1998: Efficient BackProp, 4.3, Eq. 13.&quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">corpus</span><span class="p">,</span> <span class="n">sample</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">chunksize</span><span class="o">=</span><span class="mi">1000</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initialized with a corpus. Estimates the scaling coefficients for</span>
+<span class="sd">        each feature.</span>
+
+<span class="sd">        :type corpus: safire.data.sharded_dataset.ShardedDataset</span>
+
+<span class="sd">        :param sample: Only use this many first items from the corpus.</span>
+<span class="sd">            [NOT IMPLEMENTED]</span>
+
+<span class="sd">        :param chunksize: Accumulate squared sums by this many.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">transcorp</span><span class="o">.</span><span class="n">dimension</span><span class="p">(</span><span class="n">corpus</span><span class="p">)</span>
+
+        <span class="n">squared_sums</span> <span class="o">=</span> <span class="p">[</span> <span class="mf">0.0</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span> <span class="p">]</span>
+
+        <span class="c"># This is the only part where we actually have to read the data.</span>
+        <span class="n">total_items</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="k">for</span> <span class="n">i_group</span> <span class="ow">in</span> <span class="n">gensim</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">grouper</span><span class="p">(</span><span class="n">corpus</span><span class="p">,</span> <span class="n">chunksize</span><span class="o">=</span><span class="n">chunksize</span><span class="p">):</span>
+            <span class="n">current_batch</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">array</span><span class="p">([</span> <span class="n">gensim</span><span class="o">.</span><span class="n">matutils</span><span class="o">.</span><span class="n">sparse2full</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+                              <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">i_group</span> <span class="p">])</span>
+            <span class="n">total_items</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">current_batch</span><span class="p">)</span>
+            <span class="n">squared_sums</span> <span class="o">+=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">current_batch</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">covariances</span> <span class="o">=</span> <span class="n">squared_sums</span> <span class="o">/</span> <span class="n">total_items</span>
+        <span class="c">#self.target_cov = numpy.average(self.covariances)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">target_cov</span> <span class="o">=</span> <span class="mf">1.0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">coefficients</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">covariances</span><span class="p">)</span> \
+                            <span class="o">*</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">target_cov</span><span class="p">)</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Average covariance: </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_cov</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;First few coefficients: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="s">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">coefficients</span><span class="p">[:</span><span class="mi">10</span><span class="p">])))</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bow</span><span class="p">,</span> <span class="n">chunksize</span><span class="o">=</span><span class="mi">1000</span><span class="p">):</span>
+
+        <span class="n">is_corpus</span><span class="p">,</span> <span class="n">bow</span> <span class="o">=</span> <span class="n">gensim</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">is_corpus</span><span class="p">(</span><span class="n">bow</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">is_corpus</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply</span><span class="p">(</span><span class="n">bow</span><span class="p">,</span> <span class="n">chunksize</span><span class="o">=</span><span class="n">chunksize</span><span class="p">)</span>
+
+        <span class="n">out</span> <span class="o">=</span> <span class="p">[</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">coefficients</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">bow</span> <span class="p">]</span>
+        <span class="c">#if numpy.random.random() &lt; 0.001:</span>
+        <span class="c">#    print &#39;UCov. Transformation:\n%s\n%s&#39; % (bow[:10], out[:10])</span>
+        <span class="k">return</span> <span class="n">out</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li><a href="../utils.html" >safire.utils</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

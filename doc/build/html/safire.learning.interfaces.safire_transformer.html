@@ -1,0 +1,144 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.interfaces.safire_transformer module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.learning.interfaces.safire_transformer">
+<span id="safire-learning-interfaces-safire-transformer-module"></span><h1>safire.learning.interfaces.safire_transformer module<a class="headerlink" href="#module-safire.learning.interfaces.safire_transformer" title="Permalink to this headline">¶</a></h1>
+<p>Implements the TransformationABC interface, so that SAFIRE
+neural network models can be plugged into a gensim-style
+pipeline.</p>
+<dl class="class">
+<dt id="safire.learning.interfaces.safire_transformer.SafireTransformer">
+<em class="property">class </em><tt class="descclassname">safire.learning.interfaces.safire_transformer.</tt><tt class="descname">SafireTransformer</tt><big>(</big><em>model_handle</em>, <em>dataset=None</em>, <em>learner=None</em>, <em>eps=1e-09</em>, <em>chunksize=1000</em>, <em>attempt_resume=False</em>, <em>profile_training=False</em><big>)</big><a class="reference internal" href="_modules/safire/learning/interfaces/safire_transformer.html#SafireTransformer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.interfaces.safire_transformer.SafireTransformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">gensim.interfaces.TransformationABC</span></tt></p>
+<p>Wraps a SAFIRE model into a gensim-style transformation object.</p>
+<p>Initialized with a Model Handle, Dataset and Learner:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">dataset</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model_handle</span> <span class="o">=</span> <span class="n">MultilayerPerceptron</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">learner</span> <span class="o">=</span> <span class="n">BaseSGDLearner</span><span class="p">(</span><span class="n">n_epochs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">b_size</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span> <span class="o">=</span> <span class="n">SafireTransformer</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">learner</span><span class="p">,</span> <span class="n">dataset</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><em>This initialization will run the training,</em> in line with other gensim
+transformers (models) that train on initialization.</p>
+<p>If you want to load a handle with an already trained model, initialize
+the transformer without a Learner and Dataset:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">model_handle</span> <span class="o">=</span> <span class="n">MultilayerPerceptron</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">model_handle</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s">&#39;multilayerperceptron.mhandle&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">loaded_model_handle</span> <span class="o">=</span> <span class="n">ModelHandle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s">&#39;multilayerperceptron.mhandle&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transformer</span> <span class="o">=</span> <span class="n">SafireTransformer</span><span class="p">(</span><span class="n">loaded_model_handle</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This is much faster and the preferred way of doing this, especially for
+runtime initialization.</p>
+<p>The items passed to the transformer through <tt class="docutils literal"><span class="pre">__getitem__</span></tt> will be
+passed as inputs to the neural network inside the model handle, as
+inputs to the <tt class="docutils literal"><span class="pre">run</span></tt> theano compiled function. The outputs of <tt class="docutils literal"><span class="pre">run</span></tt>
+will be collected and returned again as a corpus.</p>
+<dl class="classmethod">
+<dt id="safire.learning.interfaces.safire_transformer.SafireTransformer.load">
+<em class="property">classmethod </em><tt class="descname">load</tt><big>(</big><em>fname</em><big>)</big><a class="reference internal" href="_modules/safire/learning/interfaces/safire_transformer.html#SafireTransformer.load"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.interfaces.safire_transformer.SafireTransformer.load" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads a SafireTransformer pickle dump created with the <tt class="docutils literal"><span class="pre">save()</span></tt>
+mehtod of a SafireTransformer instance.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.interfaces.safire_transformer.SafireTransformer.save">
+<tt class="descname">save</tt><big>(</big><em>fname</em>, <em>protocol=-1</em><big>)</big><a class="reference internal" href="_modules/safire/learning/interfaces/safire_transformer.html#SafireTransformer.save"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.interfaces.safire_transformer.SafireTransformer.save" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves the transformer. Saving is achieved by getting the handle
+pickleable object and adding the other instance attributes, then
+pickling this dict.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.learning.interfaces.safire_transformer.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

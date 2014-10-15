@@ -1,0 +1,344 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.image_browser &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.data.image_browser</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Maps image IDs from an ImagenetCorpus to image files for exploring</span>
+<span class="sd">Safire model performance.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">Image</span>
+<span class="kn">import</span> <span class="nn">ImageFont</span>
+<span class="kn">import</span> <span class="nn">ImageDraw</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">safire</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+
+<div class="viewcode-block" id="ImageBrowser"><a class="viewcode-back" href="../../../safire.data.image_browser.html#safire.data.image_browser.ImageBrowser">[docs]</a><span class="k">class</span> <span class="nc">ImageBrowser</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Provides functionality for looking directly at the images used to build the</span>
+<span class="sd">    ImagenetCorpus.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="n">ids2files_map</span><span class="p">,</span> <span class="n">icorp</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :type root: str</span>
+<span class="sd">        :param root: Path to the directory relative to which files in the</span>
+<span class="sd">            ids2files_map are given. Used in retrieving images. Best practice:</span>
+<span class="sd">            use an absolute path.</span>
+
+<span class="sd">        :type ids2files_map: file</span>
+<span class="sd">        :param ids2files_map: A file-like object from which the ID-to-file</span>
+<span class="sd">            mapping will be read. Expected format is two tab-separated columns,</span>
+<span class="sd">            with the IDs in the first column and files in the second column.</span>
+
+<span class="sd">        :type icorp: safire.data.imagenet_corpus.ImagenetCorpus</span>
+<span class="sd">        :param icorp: A corpus that maps image numbers to image IDs. Useful</span>
+<span class="sd">            if you wish to index the ImageBrowser directly by similarity query</span>
+<span class="sd">            results, provided that the image numbering in ``icorp`` and in the</span>
+<span class="sd">            index is consistent.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">root</span> <span class="o">=</span> <span class="n">root</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ids2files</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">files2ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_ids2files</span><span class="p">(</span><span class="n">ids2files_map</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">icorp</span> <span class="o">=</span> <span class="n">icorp</span>
+
+<div class="viewcode-block" id="ImageBrowser.parse_ids2files"><a class="viewcode-back" href="../../../safire.data.image_browser.html#safire.data.image_browser.ImageBrowser.parse_ids2files">[docs]</a>    <span class="k">def</span> <span class="nf">parse_ids2files</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ids2files_map</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parses the map of IDs to files.</span>
+
+<span class="sd">        :type ids2files_map: file</span>
+<span class="sd">        :param ids2files_map: A file-like object from which the ID-to-file</span>
+<span class="sd">            mapping will be read. Expected format is two tab-separated columns,</span>
+<span class="sd">            with the IDs in the first column and files in the second column.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">ids2files</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">files2ids</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">ids2files_map</span><span class="p">:</span>
+            <span class="n">ID</span><span class="p">,</span> <span class="nb">file</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+            <span class="n">ids2files</span><span class="p">[</span><span class="n">ID</span><span class="p">]</span> <span class="o">=</span> <span class="nb">file</span>
+            <span class="n">files2ids</span><span class="p">[</span><span class="nb">file</span><span class="p">]</span> <span class="o">=</span> <span class="n">ID</span>
+
+        <span class="k">return</span> <span class="n">ids2files</span><span class="p">,</span> <span class="n">files2ids</span>
+
+</div>
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">id_or_filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Gets the image file name, incl. path to root, if an ID is given.</span>
+<span class="sd">        If a filename is given (relative to the root), returns the corresponding</span>
+<span class="sd">        ID. Can also parse a filename given together with the root.</span>
+
+<span class="sd">        If the ``icorp`` parameter was provided at initialization, can also</span>
+<span class="sd">        convert integer keys to image files.</span>
+
+<span class="sd">        Can parse an iterable of IDs/filenames; returns the corrseponding list</span>
+<span class="sd">        (may be a mix of IDs and filenames, but that is not recommended).</span>
+
+<span class="sd">        :raises: KeyError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">id_or_filename</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">id_or_filename</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="p">[</span><span class="n">item</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">id_or_filename</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">id_or_filename</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">icorp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                    <span class="n">iid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">icorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">id_or_filename</span><span class="p">]</span>
+                    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ids2files</span><span class="p">[</span><span class="n">iid</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">id_or_filename</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ids2files</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ids2files</span><span class="p">[</span><span class="n">id_or_filename</span><span class="p">])</span>
+            <span class="k">elif</span> <span class="n">id_or_filename</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">files2ids</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">files2ids</span><span class="p">[</span><span class="n">id_or_filename</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">id_or_filename</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">):</span>
+                <span class="n">short_filename</span> <span class="o">=</span> <span class="n">id_or_filename</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">):]</span>
+                <span class="k">if</span> <span class="n">short_filename</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">files2ids</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">files2ids</span><span class="p">[</span><span class="n">short_filename</span><span class="p">]</span>
+
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s">&#39;Image with ID or filename </span><span class="si">%s</span><span class="s"> not found.&#39;</span> <span class="o">%</span> <span class="n">id_or_filename</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ImageBrowser.show"><a class="viewcode-back" href="../../../safire.data.image_browser.html#safire.data.image_browser.ImageBrowser.show">[docs]</a>    <span class="k">def</span> <span class="nf">show</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">iid</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Given an image ID, opens the image.</span>
+
+<span class="sd">        :param iid: An image ID from the source list.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="bp">self</span><span class="p">[</span><span class="n">iid</span><span class="p">])</span>
+        <span class="n">im</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="ImageBrowser.show_multiple"><a class="viewcode-back" href="../../../safire.data.image_browser.html#safire.data.image_browser.ImageBrowser.show_multiple">[docs]</a>    <span class="k">def</span> <span class="nf">show_multiple</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">iids</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">600</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Given a list of image IDs, creates a merged image from all</span>
+<span class="sd">        of them.</span>
+
+<span class="sd">        :param iid: An image ID from the source list.</span>
+
+<span class="sd">        :param width: The total width of the output image.</span>
+
+<span class="sd">        :param height: The total height of the output image.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">build_tiled_image</span><span class="p">(</span><span class="n">iids</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">height</span><span class="p">)</span>
+        <span class="n">image</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="ImageBrowser.build_tiled_image"><a class="viewcode-back" href="../../../safire.data.image_browser.html#safire.data.image_browser.ImageBrowser.build_tiled_image">[docs]</a>    <span class="k">def</span> <span class="nf">build_tiled_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">iids</span><span class="p">,</span>
+                          <span class="n">similiarities</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">with_order</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                          <span class="n">width</span><span class="o">=</span><span class="mf">1000.0</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mf">600.0</span><span class="p">,</span> <span class="n">margin</span><span class="o">=</span><span class="mf">10.0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Given a list of image IDs, creates a merged image from all</span>
+<span class="sd">        of them.</span>
+
+<span class="sd">        :param iids: A list of image ID from the source list.</span>
+
+<span class="sd">        :param similarities: A list that gives for each image a similarity</span>
+<span class="sd">            to a query &quot;image&quot;.</span>
+
+<span class="sd">        :param with_order: A flag. If set, will draw in the upper-left corner</span>
+<span class="sd">            the order of each image.</span>
+
+<span class="sd">        :param width: The total width of the output image.</span>
+
+<span class="sd">        :param height: The total height of the output image.</span>
+
+<span class="sd">        :param margin: The margin of each sub-image.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">n_images</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">iids</span><span class="p">)</span>
+        <span class="n">n_cols</span><span class="p">,</span> <span class="n">is_sqrt_equal</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">isqrt</span><span class="p">(</span><span class="n">n_images</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_sqrt_equal</span><span class="p">:</span>
+            <span class="n">n_cols</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="n">n_rows</span> <span class="o">=</span> <span class="n">n_images</span> <span class="o">/</span> <span class="n">n_cols</span>
+        <span class="k">if</span> <span class="n">n_rows</span> <span class="o">*</span> <span class="n">n_cols</span> <span class="o">&lt;</span> <span class="n">n_images</span><span class="p">:</span>
+            <span class="n">n_rows</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="c"># Window = region of one sub-image</span>
+        <span class="n">w_width</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">width</span> <span class="o">/</span> <span class="n">n_cols</span><span class="p">)</span>
+        <span class="n">w_height</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">height</span> <span class="o">/</span> <span class="n">n_rows</span><span class="p">)</span>
+
+        <span class="c"># Img = the sub-image itself</span>
+        <span class="n">img_width</span> <span class="o">=</span> <span class="n">w_width</span> <span class="o">-</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">margin</span>
+        <span class="n">img_height</span> <span class="o">=</span> <span class="n">w_height</span> <span class="o">-</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">margin</span>
+
+        <span class="c"># print &#39;n_cols:&#39;, n_cols</span>
+        <span class="c"># print &#39;n_rows:&#39;,n_rows</span>
+        <span class="c"># print &#39;w_width:&#39;, w_width</span>
+        <span class="c"># print &#39;w_height:&#39;, w_height</span>
+        <span class="c"># print &#39;i_width:&#39;, img_width</span>
+        <span class="c"># print &#39;i_height:&#39;, img_height</span>
+        <span class="n">thumbnail_size</span> <span class="o">=</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">img_width</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">img_height</span><span class="p">))</span>
+
+        <span class="n">images</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_images</span><span class="p">(</span><span class="n">iids</span><span class="p">,</span> <span class="n">similiarities</span><span class="p">,</span> <span class="n">with_order</span><span class="p">)</span>
+
+        <span class="c"># New image</span>
+        <span class="n">output_size</span> <span class="o">=</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">width</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">height</span><span class="p">))</span>
+        <span class="n">output_image</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="s">&#39;RGB&#39;</span><span class="p">,</span> <span class="n">output_size</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;white&#39;</span><span class="p">)</span>
+
+        <span class="n">img_index</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">start_x</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">height</span> <span class="o">-</span> <span class="n">w_height</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">w_height</span><span class="p">)):</span>
+            <span class="k">for</span> <span class="n">start_y</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">width</span> <span class="o">-</span> <span class="n">w_width</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">w_width</span><span class="p">)):</span>
+                <span class="c"># print &#39;Starting X:&#39;, start_x</span>
+                <span class="c"># print &#39;Starting Y:&#39;, start_y</span>
+                <span class="n">start_position</span> <span class="o">=</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">start_y</span> <span class="o">+</span> <span class="n">margin</span><span class="p">),</span>
+                                    <span class="nb">int</span><span class="p">(</span><span class="n">start_x</span> <span class="o">+</span> <span class="n">margin</span><span class="p">))</span>
+                <span class="c"># print &#39;Start position:&#39;, start_position</span>
+
+                <span class="k">if</span> <span class="n">img_index</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">images</span><span class="p">):</span>
+                    <span class="k">break</span>
+
+                <span class="n">image</span> <span class="o">=</span> <span class="n">images</span><span class="p">[</span><span class="n">img_index</span><span class="p">]</span>
+
+                <span class="c"># print &#39;Image size:&#39;, image.size</span>
+
+                <span class="n">image</span><span class="o">.</span><span class="n">thumbnail</span><span class="p">(</span><span class="n">thumbnail_size</span><span class="p">,</span> <span class="n">Image</span><span class="o">.</span><span class="n">ANTIALIAS</span><span class="p">)</span>
+
+                <span class="n">box</span> <span class="o">=</span> <span class="p">(</span><span class="n">start_position</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">start_position</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+                       <span class="n">start_position</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                       <span class="n">start_position</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+                <span class="c"># print &#39;Image thumbnail size:&#39;, image.size</span>
+
+                <span class="n">output_image</span><span class="o">.</span><span class="n">paste</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">box</span><span class="p">)</span>
+
+                <span class="n">img_index</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">return</span> <span class="n">output_image</span>
+</div>
+<div class="viewcode-block" id="ImageBrowser.load_image"><a class="viewcode-back" href="../../../safire.data.image_browser.html#safire.data.image_browser.ImageBrowser.load_image">[docs]</a>    <span class="k">def</span> <span class="nf">load_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">iid</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Loads the image with the given image ID.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="bp">self</span><span class="p">[</span><span class="n">iid</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="ImageBrowser.load_images"><a class="viewcode-back" href="../../../safire.data.image_browser.html#safire.data.image_browser.ImageBrowser.load_images">[docs]</a>    <span class="k">def</span> <span class="nf">load_images</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">iids</span><span class="p">,</span> <span class="n">similarities</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">with_order</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :param iids: A list of image ID from the source list.</span>
+
+<span class="sd">        :param similarities: A list that gives for each image a similarity</span>
+<span class="sd">            to a query &quot;image&quot;.</span>
+
+<span class="sd">        :param with_order: A flag. If set, will draw in the upper-left corner</span>
+<span class="sd">            the order of each image. [NOT IMPLEMENTED]</span>
+
+<span class="sd">        :returns: A list of images.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">images</span> <span class="o">=</span> <span class="p">[</span><span class="n">Image</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="bp">self</span><span class="p">[</span><span class="n">iid</span><span class="p">])</span> <span class="k">for</span> <span class="n">iid</span> <span class="ow">in</span> <span class="n">iids</span><span class="p">]</span>
+
+        <span class="c"># Add similarities</span>
+        <span class="k">if</span> <span class="n">similarities</span><span class="p">:</span>
+
+            <span class="n">caption_height</span> <span class="o">=</span> <span class="mi">40</span>
+            <span class="n">caption_font</span> <span class="o">=</span> <span class="n">ImageFont</span><span class="o">.</span><span class="n">truetype</span><span class="p">(</span><span class="s">&#39;DejaVuSans.ttf&#39;</span><span class="p">,</span> <span class="mi">25</span><span class="p">)</span>
+            <span class="n">caption_color</span> <span class="o">=</span> <span class="p">(</span><span class="mi">190</span><span class="p">,</span> <span class="mi">190</span><span class="p">,</span> <span class="mi">190</span><span class="p">)</span>
+            <span class="n">caption_offset</span> <span class="o">=</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">5</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">similarities</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">images</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Inconsistent number of image IDs and similarities (</span><span class="si">%d</span><span class="s"> vs. </span><span class="si">%d</span><span class="s">)!&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="nb">len</span><span class="p">(</span><span class="n">similarities</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">images</span><span class="p">)))</span>
+
+            <span class="n">captioned_images</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">img</span><span class="p">,</span> <span class="n">similarity</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="n">similarities</span><span class="p">):</span>
+                <span class="n">new_img</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="s">&#39;RGB&#39;</span><span class="p">,</span>
+                                    <span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">img</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="n">caption_height</span><span class="p">),</span>
+                                    <span class="p">(</span><span class="mi">30</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="mi">30</span><span class="p">))</span>
+                <span class="n">new_img</span><span class="o">.</span><span class="n">paste</span><span class="p">(</span><span class="n">img</span><span class="p">,(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">))</span>
+                <span class="n">sim_text</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">similarity</span><span class="p">)[:</span><span class="mi">9</span><span class="p">]</span>
+                <span class="n">sim_text_position</span> <span class="o">=</span> <span class="p">(</span><span class="n">caption_offset</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                                     <span class="n">img</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">caption_offset</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                <span class="n">draw</span> <span class="o">=</span> <span class="n">ImageDraw</span><span class="o">.</span><span class="n">Draw</span><span class="p">(</span><span class="n">new_img</span><span class="p">)</span>
+                <span class="n">draw</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">sim_text_position</span><span class="p">,</span> <span class="n">sim_text</span><span class="p">,</span> <span class="n">caption_color</span><span class="p">,</span>
+                          <span class="n">font</span><span class="o">=</span><span class="n">caption_font</span><span class="p">)</span>
+
+                <span class="c"># print &#39;Sim. text:&#39;, sim_text</span>
+                <span class="c"># print &#39;Sim. text position:&#39;, sim_text_position</span>
+                <span class="c"># print &#39;New image size:&#39;, new_img.size</span>
+
+<span class="c">#                new_img.show()</span>
+
+                <span class="n">captioned_images</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_img</span><span class="p">)</span>
+
+            <span class="n">images</span> <span class="o">=</span> <span class="n">captioned_images</span>
+
+
+        <span class="k">return</span> <span class="n">images</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

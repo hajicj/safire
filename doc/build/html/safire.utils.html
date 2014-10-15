@@ -1,0 +1,451 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.utils package &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="safire-utils-package">
+<h1>safire.utils package<a class="headerlink" href="#safire-utils-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="safire.utils.matutils.html">safire.utils.matutils module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="safire.utils.transcorp.html">safire.utils.transcorp module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="safire.utils.transformers.html">safire.utils.transformers module</a></li>
+</ul>
+</div>
+</div>
+<div class="section" id="module-safire.utils">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-safire.utils" title="Permalink to this headline">¶</a></h2>
+<p>This file contains different utility functions that are not connected
+in anyway to the networks presented in the tutorials, but rather help in
+processing the outputs into a more understandable way.</p>
+<p>For example <tt class="docutils literal"><span class="pre">tile_raster_images</span></tt> helps in generating a easy to grasp
+image from a set of samples or weights.</p>
+<dl class="class">
+<dt id="safire.utils.Noop">
+<em class="property">class </em><tt class="descclassname">safire.utils.</tt><tt class="descname">Noop</tt><a class="reference internal" href="_modules/safire/utils.html#Noop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.Noop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>Doesn&#8217;t do anything on getitem and call.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.ReLU">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">ReLU</tt><big>(</big><em>X</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#ReLU"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.ReLU" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.abstanh">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">abstanh</tt><big>(</big><em>X</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#abstanh"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.abstanh" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.add_header_image">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">add_header_image</tt><big>(</big><em>image</em>, <em>header_image</em>, <em>header_size=(300</em>, <em>200)</em>, <em>margin=20</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#add_header_image"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.add_header_image" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given an image and a header image, pastes the header image in the
+middle of the input image above the former top of the input image:</p>
+<p>+&#8212;&#8212;&#8212;&#8211;+                            +&#8212;-+
+|           |      +&#8212;-+                |    |
+|           |   +  |    |    ==&gt;         +&#8212;-+
++&#8212;&#8212;&#8212;&#8211;+      +&#8212;-+             +&#8212;&#8212;&#8212;&#8211;+</p>
+<blockquote>
+<div><div class="line-block">
+<div class="line"><a href="#id1"><span class="problematic" id="id2">|</span></a></div>
+<div class="line"><a href="#id3"><span class="problematic" id="id4">|</span></a></div>
+</div>
+<table border="1" class="docutils">
+<colgroup>
+</colgroup>
+<tbody valign="top">
+</tbody>
+</table>
+</div></blockquote>
+<p>Resizes the header image to the given thumbnail size.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.utils.build_cappedReLU">
+<em class="property">class </em><tt class="descclassname">safire.utils.</tt><tt class="descname">build_cappedReLU</tt><big>(</big><em>cap</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#build_cappedReLU"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.build_cappedReLU" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.cappedReLU">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">cappedReLU</tt><big>(</big><em>X</em>, <em>cap=2.0</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#cappedReLU"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.cappedReLU" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.check_kwargs">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">check_kwargs</tt><big>(</big><em>kwargs</em>, <em>names</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#check_kwargs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.check_kwargs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks that all &#8216;names&#8217; are in the &#8216;dictionary&#8217;.
+Throws a TypeError if they aren&#8217;t.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>dictionary</strong> (<a class="reference external" href="http://docs.python.org/library/stdtypes.html#dict" title="(in Python v2.7)"><em>dict</em></a>) &#8211; kwargs dictionary object.</li>
+<li><strong>names</strong> (<em>iterable</em>) &#8211; argument names that should be in the dictionary.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raises:</th><td class="field-body"><p class="first last">TypeError</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.check_malformed_unicode">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">check_malformed_unicode</tt><big>(</big><em>string</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#check_malformed_unicode"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.check_malformed_unicode" title="Permalink to this definition">¶</a></dt>
+<dd><p>Raises a UnicodeError if the given string cannot be decoded as unicode.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.compute_column_thumbnail_size">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">compute_column_thumbnail_size</tt><big>(</big><em>images</em>, <em>total_size</em>, <em>margin=10</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#compute_column_thumbnail_size"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.compute_column_thumbnail_size" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the thumbnail size for images so that they all fit into the
+given size. Assumes the images will be arranged underneath each other
+with the given margin around each image (between images, there will be
+two margins).</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.compute_row_thumbnail_size">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">compute_row_thumbnail_size</tt><big>(</big><em>images</em>, <em>total_size</em>, <em>margin=10</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#compute_row_thumbnail_size"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.compute_row_thumbnail_size" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the thumbnail size for images so that they all fit into the
+given size. Assumes the images will be arranged next to each other
+with the given margin around each image (between images, there will be
+two margins).</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.detect_nan">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">detect_nan</tt><big>(</big><em>i</em>, <em>node</em>, <em>fn</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#detect_nan"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.detect_nan" title="Permalink to this definition">¶</a></dt>
+<dd><p>Debugging theano.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.heatmap_matrix">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">heatmap_matrix</tt><big>(</big><em>matrix</em>, <em>title=''</em>, <em>with_average=False</em>, <em>colormap='coolwarm'</em>, <em>vmin=0.0</em>, <em>vmax=1.0</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#heatmap_matrix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.heatmap_matrix" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.image_comparison_report">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">image_comparison_report</tt><big>(</big><em>images_1</em>, <em>images_2</em>, <em>size=(600</em>, <em>800)</em>, <em>margin=20</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#image_comparison_report"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.image_comparison_report" title="Permalink to this definition">¶</a></dt>
+<dd><p>Draws the two sets of images as columns side-by-side.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.images_to_column">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">images_to_column</tt><big>(</big><em>images</em>, <em>margin=10</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#images_to_column"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.images_to_column" title="Permalink to this definition">¶</a></dt>
+<dd><p>Tiles images underneath each other.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.images_to_row">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">images_to_row</tt><big>(</big><em>images</em>, <em>margin=10</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#images_to_row"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.images_to_row" title="Permalink to this definition">¶</a></dt>
+<dd><p>Tiles images next to each other.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.images_to_thumbnails">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">images_to_thumbnails</tt><big>(</big><em>images</em>, <em>size</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#images_to_thumbnails"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.images_to_thumbnails" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a list of image thumbnails of the given size.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.isqrt">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">isqrt</tt><big>(</big><em>n</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#isqrt"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.isqrt" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the highest integer whose square is less than n.
+Returns this integer and True/False depending on whether this integer
+is actually the square root of n.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.iter_sample_fast">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">iter_sample_fast</tt><big>(</big><em>iterable</em>, <em>samplesize</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#iter_sample_fast"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.iter_sample_fast" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.mask_ReLU">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">mask_ReLU</tt><big>(</big><em>X</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#mask_ReLU"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.mask_ReLU" title="Permalink to this definition">¶</a></dt>
+<dd><p>Rectified Linear Unit activation function.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.merciless_print">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">merciless_print</tt><big>(</big><em>i</em>, <em>node</em>, <em>fn</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#merciless_print"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.merciless_print" title="Permalink to this definition">¶</a></dt>
+<dd><p>Debugging theano. Prints inputs and outputs at every point.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.n_max">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">n_max</tt><big>(</big><em>arr</em>, <em>n</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#n_max"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.n_max" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find n maximum elements and their indices in a numpy array.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.parse_csv_map">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">parse_csv_map</tt><big>(</big><em>t2i_handle</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#parse_csv_map"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.parse_csv_map" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given a two-column csv file, returns the forward and backward dicts.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.point_vector">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">point_vector</tt><big>(</big><em>length</em>, <em>point</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#point_vector"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.point_vector" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates a numpy ndarray of dimension 1, with the given <tt class="docutils literal"><span class="pre">length</span></tt>, all 0s
+except for position indicated by <tt class="docutils literal"><span class="pre">point</span></tt>, where a 1.0 will be.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.profile_run">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">profile_run</tt><big>(</big><em>function</em>, <em>*args</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#profile_run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.profile_run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Profile an arbitrary function. Returns the results as a StringIO stream
+object.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.random_shared_var">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">random_shared_var</tt><big>(</big><em>name</em>, <em>shape</em>, <em>lbound</em>, <em>rbound</em>, <em>rng=&lt;mtrand.RandomState object at 0x00000000091ED0F0&gt;</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#random_shared_var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.random_shared_var" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates a Theano shared variaable with the specified
+shape, with values drawn uniformly from the interval
+<tt class="docutils literal"><span class="pre">[lbound,</span> <span class="pre">rbound]</span></tt>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>name</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The name of the shared variable. Has to be supplied.
+(This is an internal safety measure: if you are creating
+shared variables, you&#8217;d better know what they are!)</li>
+<li><strong>shape</strong> &#8211; The desired shape of the shared variable.</li>
+<li><strong>lbound</strong> (<em>theano.config.floatX</em>) &#8211; The lower bound of the values with which
+to initialize the shared variable.</li>
+<li><strong>rbound</strong> (<em>theano.config.floatX</em>) &#8211; The upper bound of the values with which
+to initialize the shared variable.</li>
+<li><strong>rng</strong> (<em>numpy.random.RandomState</em>) &#8211; Optionaly supply a random number generator.
+If <tt class="docutils literal"><span class="pre">None</span></tt> (default), creates a new one with
+a random seed.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body"><p class="first">theano.tensor.sharedvar.TensorSharedVariable</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">A shared variable initialized with random values
+drawn uniformly from the interval <tt class="docutils literal"><span class="pre">[lbound,</span> <span class="pre">rbound]</span></tt>
+of type theano.config.floatX</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.random_steps">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">random_steps</tt><big>(</big><em>iterable</em>, <em>k</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#random_steps"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.random_steps" title="Permalink to this definition">¶</a></dt>
+<dd><p>Chooses K items uniformly from the iterable.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.scale_to_unit_interval">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">scale_to_unit_interval</tt><big>(</big><em>ndar</em>, <em>eps=1e-08</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#scale_to_unit_interval"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.scale_to_unit_interval" title="Permalink to this definition">¶</a></dt>
+<dd><p>Scales all values in the ndarray ndar to be between 0 and 1</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.shared_shape">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">shared_shape</tt><big>(</big><em>shared_var</em>, <em>axis</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#shared_shape"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.shared_shape" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the shape of the shared variable along the given axis.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>shared_var</strong> (<em>theano.tensor.sharedvar.TensorSharedVariable</em>) &#8211; The shared variable of which we want the shape.</li>
+<li><strong>axis</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; Along which axis to compute the shape. 0 means rows,
+1 means columns.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">The shape of <tt class="docutils literal"><span class="pre">shared_var</span></tt> along the given axis <tt class="docutils literal"><span class="pre">axis</span></tt>.</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">int</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.shuffle_together">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">shuffle_together</tt><big>(</big><em>*lists</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#shuffle_together"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.shuffle_together" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.squish_array">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">squish_array</tt><big>(</big><em>array</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#squish_array"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.squish_array" title="Permalink to this definition">¶</a></dt>
+<dd><p>Recomputes array values so that no difference is bigger than 1. Assumes
+the array is sorted.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.tile_raster_images">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">tile_raster_images</tt><big>(</big><em>X</em>, <em>img_shape</em>, <em>tile_shape</em>, <em>tile_spacing=(0</em>, <em>0)</em>, <em>scale_rows_to_unit_interval=True</em>, <em>output_pixel_vals=True</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#tile_raster_images"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.tile_raster_images" title="Permalink to this definition">¶</a></dt>
+<dd><p>Transform an array with one flattened image per row, into an array in
+which images are reshaped and layed out like tiles on a floor.</p>
+<p>This function is useful for visualizing datasets whose rows are images,
+and also columns of matrices for transforming those rows
+(such as the first layer of a neural net).</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+</tbody>
+</table>
+<p>be 2-D ndarrays or None;
+:param X: a 2-D array in which every row is a flattened image.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>img_shape</strong> (<em>tuple; (height, width)</em>) &#8211; the original shape of each image</li>
+<li><strong>tile_shape</strong> (<em>tuple; (rows, cols)</em>) &#8211; the number of images to tile (rows, cols)</li>
+<li><strong>output_pixel_vals</strong> &#8211; if output should be pixel values (i.e. int8</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>values) or floats</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>scale_rows_to_unit_interval</strong> &#8211; if the values need to be scaled before</td>
+</tr>
+</tbody>
+</table>
+<p>being plotted to [0,1] or not</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">array suitable for viewing as an image.</td>
+</tr>
+</tbody>
+</table>
+<p>(See:<cite>PIL.Image.fromarray</cite>.)
+:rtype: a 2-d array with same dtype as X.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.uniform_steps">
+<tt class="descclassname">safire.utils.</tt><tt class="descname">uniform_steps</tt><big>(</big><em>iterable</em>, <em>k</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#uniform_steps"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.uniform_steps" title="Permalink to this definition">¶</a></dt>
+<dd><p>Chooses K items from the iterable so that they are a constant step size
+from each other. The last member is chosen</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">safire.utils package</a><ul>
+<li><a class="reference internal" href="#submodules">Submodules</a></li>
+<li><a class="reference internal" href="#module-safire.utils">Module contents</a></li>
+</ul>
+</li>
+</ul>
+
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.utils.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

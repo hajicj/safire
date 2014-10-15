@@ -1,0 +1,120 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.filters.positionaltagfilter module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.data.filters.positionaltagfilter">
+<span id="safire-data-filters-positionaltagfilter-module"></span><h1>safire.data.filters.positionaltagfilter module<a class="headerlink" href="#module-safire.data.filters.positionaltagfilter" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.data.filters.positionaltagfilter.PositionalTagTokenFilter">
+<em class="property">class </em><tt class="descclassname">safire.data.filters.positionaltagfilter.</tt><tt class="descname">PositionalTagTokenFilter</tt><big>(</big><em>values, t_position, inclusive=True, colnames=['form', 'lemma', 'tag'], tag_colname='tag'</em><big>)</big><a class="reference internal" href="_modules/safire/data/filters/positionaltagfilter.html#PositionalTagTokenFilter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.filters.positionaltagfilter.PositionalTagTokenFilter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="safire.data.filters.basefilter.html#safire.data.filters.basefilter.BaseFilter" title="safire.data.filters.basefilter.BaseFilter"><tt class="xref py py-class docutils literal"><span class="pre">safire.data.filters.basefilter.BaseFilter</span></tt></a></p>
+<p>Implements a positional tag-based filter, either as an exclusion
+filter or an inclusion filter (inclusion, by default: only listed values
+are retained). Works by matching a tag string&#8217;s position against a set of
+permitted/forbidden values.</p>
+<p>Working with the UFAL positional tag set and tagged text in vertical
+format as output by MorphoDiTa, we can set up a filter for autosemantic
+words like this:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">f</span> <span class="o">=</span> <span class="n">PositionalTagTokenFilter</span><span class="p">([</span><span class="s">&#39;N&#39;</span><span class="p">,</span><span class="s">&#39;A&#39;</span><span class="p">,</span><span class="s">&#39;D&#39;</span><span class="p">,</span><span class="s">&#39;V&#39;</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>(Defaults enable cooperation with defaults of VTextCorpus seamlesssly.)</p>
+<dl class="method">
+<dt id="safire.data.filters.positionaltagfilter.PositionalTagTokenFilter.passes">
+<tt class="descname">passes</tt><big>(</big><em>fields</em><big>)</big><a class="reference internal" href="_modules/safire/data/filters/positionaltagfilter.html#PositionalTagTokenFilter.passes"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.filters.positionaltagfilter.PositionalTagTokenFilter.passes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Implements the filtering. Returns True on item passing through the
+filter, False on item being filtered out.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.data.filters.positionaltagfilter.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,450 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.multilayer_perceptron &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.learning.models.multilayer_perceptron</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">cPickle</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">theano.tensor</span> <span class="kn">as</span> <span class="nn">TT</span>
+
+<span class="kn">from</span> <span class="nn">safire.utils</span> <span class="kn">import</span> <span class="n">check_kwargs</span>
+
+<span class="kn">from</span> <span class="nn">base_supervised_model</span> <span class="kn">import</span> <span class="n">BaseSupervisedModel</span>
+<span class="kn">from</span> <span class="nn">hidden_layer</span> <span class="kn">import</span> <span class="n">HiddenLayer</span>
+<span class="kn">from</span> <span class="nn">logistic_regression</span> <span class="kn">import</span> <span class="n">LogisticRegression</span>
+
+
+<div class="viewcode-block" id="MultilayerPerceptron"><a class="viewcode-back" href="../../../../safire.learning.models.multilayer_perceptron.html#safire.learning.models.multilayer_perceptron.MultilayerPerceptron">[docs]</a><span class="k">class</span> <span class="nc">MultilayerPerceptron</span><span class="p">(</span><span class="n">BaseSupervisedModel</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Basic multi-layer perceptron class.</span>
+
+<span class="sd">    A multilayer perceptron is a feedforward artificial neural network</span>
+<span class="sd">    model that has one layer or more of hidden units and nonlinear</span>
+<span class="sd">    activations. Intermediate layers usually have as activation function</span>
+<span class="sd">    tanh or the sigmoid function (defined here by a ``HiddenLayer`` class)</span>
+<span class="sd">    while the top layer is a softmax layer (defined here by the class</span>
+<span class="sd">    ``LogisticRegression``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">,</span> <span class="n">n_layers</span><span class="p">,</span> <span class="n">n_hidden_list</span><span class="p">,</span> 
+                 <span class="n">hidden_activation</span><span class="o">=</span><span class="n">TT</span><span class="o">.</span><span class="n">tanh</span><span class="p">,</span> 
+                 <span class="n">rng</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">(),</span> 
+                 <span class="n">L1_w</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">L2_w</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+                 <span class="n">hidden_layer_params</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="c">#log_regression_params=None</span>
+        <span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initialize the parameters for the multilayer perceptron.</span>
+
+<span class="sd">        :type rng: numpy.random.RandomState</span>
+<span class="sd">        :param rng: a random number generator used to initialize weights</span>
+
+<span class="sd">        :type inputs: thenao.tensor.TensorType</span>
+<span class="sd">        :param inputs: symbol variable that describes the input of</span>
+<span class="sd">        the architecture (one minibatch)</span>
+
+<span class="sd">        :type n_in: int</span>
+<span class="sd">        :param n_in: number of input units, the dimension of the space</span>
+<span class="sd">        in which the datapoints lie</span>
+
+<span class="sd">        :type n_out: int</span>
+<span class="sd">        :param n_out: number of output units - again, think number</span>
+<span class="sd">        of classes</span>
+
+<span class="sd">        :type n_layers: int</span>
+<span class="sd">        :param n_layers: The number of hidden layers of the model. The</span>
+<span class="sd">        logistic regression layer for the supervised stack is added on</span>
+<span class="sd">        top of this, so there is ``n_layers + 1`` supervised layers in</span>
+<span class="sd">        the end.</span>
+<span class="sd">        </span>
+<span class="sd">        :type n_hidden_list: list(int)</span>
+<span class="sd">        :param n_hidden_list: A list of the hidden layer sizes. The first</span>
+<span class="sd">        hidden layer has the input size ``n_in`` and output size</span>
+<span class="sd">        ``n_hidden_list[0]``.  The logistic regression layer has then </span>
+<span class="sd">        input size ``n_hidden_list[-1]`` and output size ``n_out``.</span>
+<span class="sd">        </span>
+<span class="sd">        :type hidden_activation: theano.op.Elemwise</span>
+<span class="sd">        :param hidden_activation: The activation function to use in each</span>
+<span class="sd">        hidden layer. This parameter is provided as a shortcut to the common</span>
+<span class="sd">        task of changing the activation of all hidden layers; if you want more</span>
+<span class="sd">        detailed control over the hidden layers, see the </span>
+<span class="sd">        ``hidden_layer_params`` attribute below.</span>
+
+<span class="sd">        :type L1_w: float</span>
+<span class="sd">        :param L1_w: weight of L1 regularization in computing the cost.</span>
+
+<span class="sd">        :type L2_w: float</span>
+<span class="sd">        :param L2_w: weight of L2 regularization in computing the cost.</span>
+<span class="sd">        </span>
+<span class="sd">        :type hidden_layer_params: list(dict)</span>
+<span class="sd">        :param hidden_layer_params: If you wish, you can provide a dictionary</span>
+<span class="sd">        of initialization args for individual hidden layers. This parameter is</span>
+<span class="sd">        a list of such dictionaries; the dictionaries will be passed to the</span>
+<span class="sd">        hidden layers on construction as kwargs in the form</span>
+<span class="sd">        ``HiddenLayer(..., **hidden_layer_params[layer_index])``. Default is</span>
+<span class="sd">        ``None``, which doesn&#39;t pass anything (so the hidden layers get all</span>
+<span class="sd">        initialized with default ``HiddenLayer`` arguments). An exception is</span>
+<span class="sd">        the ``hidden_activation`` parameter: if no ``hidden_layer_params`` are</span>
+<span class="sd">        supplied, then the hidden layers are initialized with</span>
+<span class="sd">        ``hidden_activation`` as the activation function.</span>
+
+<span class="sd">        .. warning::</span>
+
+<span class="sd">          Log regression layer for a non-classifier multilayer perceptron has</span>
+<span class="sd">          been experimentally deprecated!!!</span>
+
+<span class="sd">        :type log_regression_params: dict</span>
+<span class="sd">        :param log_regression_params: A dictionary that will be passed as</span>
+<span class="sd">        a kwarg to the ``LogisticRegression`` layer constructor. Should only</span>
+<span class="sd">        include parameters not otherwise supplied by the perceptron. (The</span>
+<span class="sd">        perceptron supplies the inputs and shape of the layer.) Default is</span>
+<span class="sd">        ``None``, which lets the layer initialize with default parameters.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c"># Sanity checks</span>
+        <span class="k">assert</span><span class="p">(</span><span class="n">n_layers</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">n_hidden_list</span><span class="p">))</span>
+        <span class="k">assert</span> <span class="n">n_out</span> <span class="o">==</span> <span class="n">n_hidden_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="s">&quot;Last layer size must correspond to response vector size.&quot;</span>
+
+        <span class="c"># Generate empty parameter dictionaries, take hidden_activation </span>
+        <span class="c"># into account</span>
+        <span class="k">if</span> <span class="n">hidden_layer_params</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">hidden_activation</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">hidden_layer_params</span> <span class="o">=</span> <span class="p">[</span> <span class="p">{}</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">n_layers</span><span class="p">)]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">hidden_layer_params</span> <span class="o">=</span> <span class="p">[</span> <span class="p">{</span><span class="s">&#39;activation&#39;</span> <span class="p">:</span> <span class="n">hidden_activation</span><span class="p">}</span>
+                                           <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">n_layers</span><span class="p">)</span> <span class="p">]</span>
+        <span class="c">#if log_regression_params is None:</span>
+        <span class="c">#    log_regression_params = {}</span>
+            
+        <span class="k">assert</span><span class="p">(</span><span class="n">n_layers</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">hidden_layer_params</span><span class="p">))</span>
+
+        <span class="c">############################</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">MultilayerPerceptron</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">hidden_layers</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c"># Initialize intermediate variables for stack constructions</span>
+        <span class="n">input_sizes</span> <span class="o">=</span> <span class="p">[</span><span class="n">n_in</span><span class="p">]</span> <span class="o">+</span> <span class="n">n_hidden_list</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">output_sizes</span> <span class="o">=</span> <span class="n">n_hidden_list</span>
+        <span class="n">hidden_layer_shapes</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="n">input_sizes</span><span class="p">,</span> <span class="n">output_sizes</span><span class="p">)</span>
+        <span class="c">#log_layer_shape = (output_sizes[-1], n_out)</span>
+        
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Hidden layer shapes: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">hidden_layer_shapes</span><span class="p">))</span>
+        <span class="c">#logging.debug(&#39;Log layer shape: %s&#39; % str(log_layer_shape))</span>
+
+        <span class="n">prev_outputs</span> <span class="o">=</span> <span class="n">inputs</span>
+        <span class="k">for</span> <span class="n">l_index</span><span class="p">,</span> <span class="n">l_shape</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">hidden_layer_shapes</span><span class="p">):</span>
+            <span class="n">hparams</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">hidden_layer_params</span><span class="p">[</span><span class="n">l_index</span><span class="p">])</span>
+
+            <span class="c"># Processing necessary input arguments...</span>
+            <span class="k">if</span> <span class="s">&#39;n_in&#39;</span> <span class="ow">in</span> <span class="n">hparams</span> <span class="ow">and</span> <span class="n">hparams</span><span class="p">[</span><span class="s">&#39;n_in&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">l_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Trying to initialize multilayer perceptron with mismatched&#39;</span>
+                             <span class="s">&#39;input size from params (</span><span class="si">%i</span><span class="s">) and from hidden layer shapes&#39;</span>
+                             <span class="s">&#39;(</span><span class="si">%i</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">hparams</span><span class="p">[</span><span class="s">&#39;n_in&#39;</span><span class="p">],</span> <span class="n">l_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+            <span class="n">hparams</span><span class="p">[</span><span class="s">&#39;n_in&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">l_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+            <span class="k">if</span> <span class="s">&#39;n_out&#39;</span> <span class="ow">in</span> <span class="n">hparams</span> <span class="ow">and</span> <span class="n">hparams</span><span class="p">[</span><span class="s">&#39;n_out&#39;</span><span class="p">]</span> <span class="o">!=</span> <span class="n">l_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Trying to initialize multilayer perceptron with mismatched&#39;</span>
+                             <span class="s">&#39;output size from params (</span><span class="si">%i</span><span class="s">) and from hidden layer shapes&#39;</span>
+                             <span class="s">&#39;(</span><span class="si">%i</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">hparams</span><span class="p">[</span><span class="s">&#39;n_out&#39;</span><span class="p">],</span> <span class="n">l_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+            <span class="n">hparams</span><span class="p">[</span><span class="s">&#39;n_out&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">l_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+            <span class="c"># Inputs are always linked to previous outputs, so they get deleted.</span>
+            <span class="k">if</span> <span class="s">&#39;inputs&#39;</span> <span class="ow">in</span> <span class="n">hparams</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Deleting inputs from hparams for layer </span><span class="si">%i</span><span class="s">; are you&#39;</span>
+                             <span class="s">&#39;really loading the model? (Where did you get the hparams?)&#39;</span> <span class="o">%</span> <span class="n">l_index</span><span class="p">)</span>
+                <span class="k">del</span> <span class="n">hparams</span><span class="p">[</span><span class="s">&#39;inputs&#39;</span><span class="p">]</span>
+
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Initializing hidden layer with size </span><span class="si">%s</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span>
+                <span class="p">(</span><span class="n">hparams</span><span class="p">[</span><span class="s">&#39;n_in&#39;</span><span class="p">],</span> <span class="n">hparams</span><span class="p">[</span><span class="s">&#39;n_out&#39;</span><span class="p">])))</span>
+
+            <span class="n">hidden_layer</span> <span class="o">=</span> <span class="n">HiddenLayer</span><span class="p">(</span><span class="n">inputs</span> <span class="o">=</span> <span class="n">prev_outputs</span><span class="p">,</span>
+                                       <span class="o">**</span><span class="n">hparams</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">hidden_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">hidden_layer</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">hidden_layer</span><span class="o">.</span><span class="n">params</span><span class="p">)</span>
+            <span class="n">prev_outputs</span> <span class="o">=</span> <span class="n">hidden_layer</span><span class="o">.</span><span class="n">outputs</span>
+
+        <span class="c"># # The logistic regression layer gets as input the hidden units</span>
+        <span class="c"># # of the hidden layer</span>
+        <span class="c"># log_layer_inputs = inputs</span>
+        <span class="c"># if n_layers &gt; 0:</span>
+        <span class="c">#     logging.debug(&#39;Setting log layer inputs to hidden layer outputs.&#39;)</span>
+        <span class="c">#     log_layer_inputs = self.hidden_layers[-1].outputs</span>
+        <span class="c">#</span>
+        <span class="c"># # Processing logistic regression layer parameters...</span>
+        <span class="c"># lparams = copy.copy(log_regression_params)</span>
+        <span class="c"># if (&#39;n_in&#39; in lparams</span>
+        <span class="c">#         and lparams[&#39;n_in&#39;] != log_layer_shape[0]):</span>
+        <span class="c">#     raise ValueError(&#39;Log regression layer input dimension from params (%i)&#39;</span>
+        <span class="c">#                  &#39;and arguments (%s) doesn\&#39;t match.&#39; % (</span>
+        <span class="c">#         lparams[&#39;n_in&#39;], log_layer_shape[0]))</span>
+        <span class="c"># lparams[&#39;n_in&#39;] = log_layer_shape[0]</span>
+        <span class="c">#</span>
+        <span class="c"># if (&#39;n_out&#39; in lparams</span>
+        <span class="c">#         and lparams[&#39;n_out&#39;] != log_layer_shape[1]):</span>
+        <span class="c">#     raise ValueError(&#39;Log regression layer output dimension from params (%i)&#39;</span>
+        <span class="c">#                  &#39;and arguments (%s) doesn\&#39;t match.&#39; % (</span>
+        <span class="c">#         lparams[&#39;n_out&#39;], log_layer_shape[1]))</span>
+        <span class="c"># lparams[&#39;n_out&#39;] = log_layer_shape[1]</span>
+        <span class="c">#</span>
+        <span class="c"># if &#39;inputs&#39; in lparams:</span>
+        <span class="c">#     logging.info(&#39;Deleting inputs from lparams for layer %i; are you&#39;</span>
+        <span class="c">#                  &#39;really loading the model? (Where did you get the lparams?)&#39; % l_index)</span>
+        <span class="c">#     del lparams[&#39;inputs&#39;]</span>
+        <span class="c">#</span>
+        <span class="c"># logging.debug(&#39;Initializing log regression layer with size %s.&#39; % str(</span>
+        <span class="c">#     (lparams[&#39;n_in&#39;], lparams[&#39;n_out&#39;])))</span>
+        <span class="c">#</span>
+        <span class="c"># self.log_regression_layer = LogisticRegression(</span>
+        <span class="c">#     inputs=log_layer_inputs,</span>
+        <span class="c">#     **lparams)</span>
+        <span class="c"># self.params.extend(self.log_regression_layer.params)</span>
+        
+        <span class="c"># General model properties that need to be set.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_layers</span> <span class="o">=</span> <span class="n">n_layers</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layers</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hidden_layers</span> <span class="c">#+ [self.log_regression_layer]</span>
+            <span class="c"># Well, why shouldn&#39;t we pre-train the logistic regression layer?</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_shapes</span> <span class="o">=</span> <span class="n">hidden_layer_shapes</span> <span class="c">#+ [log_layer_shape]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">outputs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">outputs</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">L1_w</span> <span class="o">=</span> <span class="n">L1_w</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">L2_w</span> <span class="o">=</span> <span class="n">L2_w</span>
+
+        <span class="c"># We&#39;re storing the init args for save/load:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_hidden_list</span> <span class="o">=</span> <span class="n">n_hidden_list</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hidden_activation</span> <span class="o">=</span> <span class="n">hidden_activation</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hidden_layer_params</span> <span class="o">=</span> <span class="n">hidden_layer_params</span>
+        <span class="c">#self.log_regression_params = log_regression_params</span>
+
+    <span class="k">def</span> <span class="nf">_init_args_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Saves the model in the form of an init kwarg dict, since not all</span>
+<span class="sd">        attributes of the instance can be pickled. Upon loading, the saved</span>
+<span class="sd">        model kwarg dict will be used as ``**kwargs`` (the ``load`` method</span>
+<span class="sd">        is a classmethod) for an initialization of the model.&quot;&quot;&quot;</span>
+
+        <span class="c"># TODO: test</span>
+
+        <span class="n">hparams</span> <span class="o">=</span> <span class="p">[</span><span class="n">hlayer</span><span class="o">.</span><span class="n">_init_args_snapshot</span><span class="p">()</span> <span class="k">for</span> <span class="n">hlayer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">hidden_layers</span><span class="p">]</span>
+        <span class="c">#lparams = self.log_regression_layer._init_args_snapshot()</span>
+
+        <span class="n">init_arg_dict</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;n_in&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span><span class="p">,</span>
+            <span class="s">&#39;n_out&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span><span class="p">,</span>
+            <span class="s">&#39;inputs&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">inputs</span><span class="p">,</span>
+            <span class="s">&#39;n_layers&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_layers</span><span class="p">,</span>
+            <span class="s">&#39;n_hidden_list&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_hidden_list</span><span class="p">,</span>
+            <span class="s">&#39;hidden_activation&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">hidden_activation</span><span class="p">,</span>
+            <span class="s">&#39;L1_w&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">L1_w</span><span class="p">,</span>
+            <span class="s">&#39;L2_w&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">L2_w</span><span class="p">,</span>
+            <span class="s">&#39;hidden_layer_params&#39;</span> <span class="p">:</span> <span class="n">hparams</span><span class="p">,</span>
+            <span class="c">#&#39;log_regression_params&#39; : lparams</span>
+            <span class="c"># Random number generators are ignored?</span>
+        <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">init_arg_dict</span>
+
+<div class="viewcode-block" id="MultilayerPerceptron.L1"><a class="viewcode-back" href="../../../../safire.learning.models.multilayer_perceptron.html#safire.learning.models.multilayer_perceptron.MultilayerPerceptron.L1">[docs]</a>    <span class="k">def</span> <span class="nf">L1</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;L1 norm ; one regularization option is to enforce L1 norm to be </span>
+<span class="sd">        small. </span>
+<span class="sd">        </span>
+<span class="sd">        :returns: Returns the number, not the function to compute it it.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">sum</span><span class="p">([</span><span class="nb">abs</span><span class="p">(</span><span class="n">param</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">])</span>
+        <span class="c">#return abs(self.hidden_layer.W).sum() + abs(self.log_regression_layer.W).sum()</span>
+</div>
+<div class="viewcode-block" id="MultilayerPerceptron.L2"><a class="viewcode-back" href="../../../../safire.learning.models.multilayer_perceptron.html#safire.learning.models.multilayer_perceptron.MultilayerPerceptron.L2">[docs]</a>    <span class="k">def</span> <span class="nf">L2</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Square of L2 norm ; one regularization option is to enforce L2 norm</span>
+<span class="sd">        to be small.</span>
+<span class="sd">        </span>
+<span class="sd">        :returns: Returns the number, not the function to compute it.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">sum</span><span class="p">([(</span><span class="n">param</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">])</span>
+        <span class="c">#return (self.hidden_layer.W ** 2).sum() + (self.log_regression_layer.W ** 2).sum()</span>
+</div>
+<div class="viewcode-block" id="MultilayerPerceptron.negative_log_likelihood"><a class="viewcode-back" href="../../../../safire.learning.models.multilayer_perceptron.html#safire.learning.models.multilayer_perceptron.MultilayerPerceptron.negative_log_likelihood">[docs]</a>    <span class="k">def</span> <span class="nf">negative_log_likelihood</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the negative log likelihood of a response vector.</span>
+<span class="sd">        Negative log likelihood of the MLP is given by the negative</span>
+<span class="sd">        log likelihood of the output of the model, computed in the</span>
+<span class="sd">        logistic regression layer.</span>
+<span class="sd">        </span>
+<span class="sd">        :type y: theano.tensor.TensorType</span>
+<span class="sd">        :param y: Corresponds to a vector that gives for each example the</span>
+<span class="sd">                  correct label.</span>
+
+<span class="sd">        :returns: The negative log likelihood of the given response under</span>
+<span class="sd">                  the model.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">activation</span> <span class="o">==</span> <span class="n">TT</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">softmax</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Negative log likelihood is not log.reg. negative log likelihood, because last layer activation is not softmax.&#39;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">_cost</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="MultilayerPerceptron.error"><a class="viewcode-back" href="../../../../safire.learning.models.multilayer_perceptron.html#safire.learning.models.multilayer_perceptron.MultilayerPerceptron.error">[docs]</a>    <span class="k">def</span> <span class="nf">error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the proportion of misclassified examples. Again, this</span>
+<span class="sd">        is the same as the error of the logistic regression layer.</span>
+<span class="sd">        </span>
+<span class="sd">        :type y: theano.tensor.TensorType</span>
+<span class="sd">        :param y: Corresponds to a vector that gives for each example the</span>
+<span class="sd">                  correct label.</span>
+<span class="sd">                  </span>
+<span class="sd">        :returns: The proportion of incorrectly classified instances.</span>
+<span class="sd">        </span>
+<span class="sd">        :raises: TypeError</span>
+<span class="sd">&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_cost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the cost expression, binding the response variable for y.</span>
+<span class="sd">        Used during setup. The cost expression for this multi-layer perceptron</span>
+<span class="sd">        model is the negative log likelihood of the response vector plus</span>
+<span class="sd">        a regularization term.</span>
+<span class="sd">        </span>
+<span class="sd">        :type y: theano.tensor.TensorType</span>
+<span class="sd">        :param y: Corresponds to a vector that gives for each example the</span>
+<span class="sd">                  correct label.</span>
+<span class="sd">        </span>
+<span class="sd">        :returns: The negative log likelihood symbolic expression bound to y.</span>
+<span class="sd">           </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">_cost</span><span class="p">(</span><span class="n">y</span><span class="p">)</span> \
+               <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">L1_w</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">L1</span><span class="p">()</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">L2_w</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">L2</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_training_updates</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the update expression for updating the model parameters</span>
+<span class="sd">        during training.</span>
+<span class="sd">        </span>
+<span class="sd">        .. note::</span>
+<span class="sd">        </span>
+<span class="sd">          This method should only be called from the ``setup()`` class method.</span>
+
+<span class="sd">        :type learning_rate: theano.config.floatX</span>
+<span class="sd">        :param learning_rate: A coefficient by which the gradient is</span>
+<span class="sd">                              scaled on one update step.</span>
+<span class="sd">        </span>
+<span class="sd">        :type cost: theano.tensor.TensorType</span>
+<span class="sd">        :param cost: The cost expression.</span>
+
+<span class="sd">        :returns: A list of ``(param, update_expr)`` tuplets that can be</span>
+<span class="sd">                  passed directly to ``theano.function`` as the ``updates``</span>
+<span class="sd">                  field.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">check_kwargs</span><span class="p">(</span><span class="n">kwargs</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;learning_rate&#39;</span><span class="p">,</span> <span class="s">&#39;cost&#39;</span><span class="p">])</span>
+
+        <span class="n">learning_rate</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;learning_rate&#39;</span><span class="p">]</span>
+        <span class="n">bound_cost</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;cost&#39;</span><span class="p">]</span>
+
+        <span class="n">updates</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">:</span>
+            <span class="n">gradient</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">cost</span> <span class="o">=</span> <span class="n">bound_cost</span><span class="p">,</span> <span class="n">wrt</span> <span class="o">=</span> <span class="n">param</span><span class="p">)</span>
+            <span class="n">updates</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">param</span><span class="p">,</span> <span class="n">param</span> <span class="o">-</span> <span class="n">learning_rate</span> <span class="o">*</span> <span class="n">gradient</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">updates</span>
+
+    <span class="c">### Deprecation pending???</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_init_args</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns a list of the required kwargs the class needs to be</span>
+<span class="sd">        successfully initialized.</span>
+
+<span class="sd">        Only returns args that are OVER the minimum defined in the</span>
+<span class="sd">        BaseModel.__init__() function definition.</span>
+<span class="sd">        </span>
+<span class="sd">        .. warn::</span>
+<span class="sd">        </span>
+<span class="sd">          This method and its role is subject to change; it may also</span>
+<span class="sd">          be removed entirely.</span>
+<span class="sd">            </span>
+<span class="sd">        :returns: A list of kwarg name strings.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[</span><span class="s">&#39;n_hidden&#39;</span><span class="p">,</span> <span class="s">&#39;rng&#39;</span><span class="p">,</span> <span class="s">&#39;L1_w&#39;</span><span class="p">,</span> <span class="s">&#39;L2_w&#39;</span><span class="p">]</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

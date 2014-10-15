@@ -1,0 +1,362 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.supervised_dataset &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.data.supervised_dataset</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+
+<span class="kn">import</span> <span class="nn">theano</span>
+
+<span class="kn">import</span> <span class="nn">loader</span>
+<span class="kn">from</span> <span class="nn">.dataset</span> <span class="kn">import</span> <span class="n">Dataset</span>
+
+<div class="viewcode-block" id="SupervisedDataset"><a class="viewcode-back" href="../../../safire.data.supervised_dataset.html#safire.data.supervised_dataset.SupervisedDataset">[docs]</a><span class="k">class</span> <span class="nc">SupervisedDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Storage class for supervised datasets.</span>
+
+<span class="sd">    Expects the data to be split into a train/devel/test set, with</span>
+<span class="sd">    a response vector for each of the datasets.</span>
+
+<span class="sd">    Supports exporting batches.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Constructs a :class:`SupervisedDataset` from the given data.</span>
+
+<span class="sd">        :type data: tuple</span>
+<span class="sd">        :param data: A triplet of train-devel-test sets. Each of the sets must</span>
+<span class="sd">                     be a tuple of ``(input, response)`` where ``input`` are</span>
+<span class="sd">                     the data points and ``response`` are the gold-standard</span>
+<span class="sd">                     labels. Expects each of the ``input``s to be of the same</span>
+<span class="sd">                     dimension as supplied in ``n_in``.</span>
+
+<span class="sd">        :type n_in: int</span>
+<span class="sd">        :param n_in: Dimension of input space (the space where the data points</span>
+<span class="sd">                     live).</span>
+
+<span class="sd">        :type n_out: int</span>
+<span class="sd">        :param n_out: How many different labels there are in the data. (Think</span>
+<span class="sd">                      number of neurons in classification output layer.)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s">&#39;Dataset initialized with incorrect train-devel-test ternary structure.&#39;</span>
+        <span class="c"># TODO: assertions about dimensionality?</span>
+        <span class="c"># TODO: check for type, so that we&#39;re not sharing already shared variables</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">=</span> <span class="n">n_in</span> <span class="c"># Input row dimension/shape</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span> <span class="o">=</span> <span class="n">n_out</span> <span class="c"># Output dimension - number of classes, NOT</span>
+                               <span class="c"># dimension of output space</span>
+                               <span class="c"># (think: how many output neurons?)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">train_X</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">train_y</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">devel_X</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">devel_y</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test_X</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test_y</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">sharedvar</span><span class="o">.</span><span class="n">TensorSharedVariable</span><span class="p">)):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">train_X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">train_y</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]),</span> <span class="s">&#39;Dataset-train: unequal length of train features and response.&#39;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">train_X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">train_y</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">as_shared</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">sharedvar</span><span class="o">.</span><span class="n">TensorSharedVariable</span><span class="p">)):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">devel_X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">devel_y</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]),</span> <span class="s">&#39;Dataset-train: unequal length of train features and response.&#39;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">devel_X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">devel_y</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">as_shared</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">sharedvar</span><span class="o">.</span><span class="n">TensorSharedVariable</span><span class="p">)):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">test_X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_y</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">1</span><span class="p">]),</span> <span class="s">&#39;Dataset-train: unequal length of train features and response.&#39;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">test_X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_y</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">as_shared</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+
+
+<div class="viewcode-block" id="SupervisedDataset.n_train_batches"><a class="viewcode-back" href="../../../safire.data.supervised_dataset.html#safire.data.supervised_dataset.SupervisedDataset.n_train_batches">[docs]</a>    <span class="k">def</span> <span class="nf">n_train_batches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Determines how many batches of given size the training data will be</span>
+<span class="sd">        split into.</span>
+
+<span class="sd">        :type batch_size: int</span>
+<span class="sd">        :param batch_size: The intended size of one batch of the data.</span>
+
+<span class="sd">        :returns: The number of batches the training data will be split</span>
+<span class="sd">                  into for given batch_size.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">train_X</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="n">batch_size</span>
+</div>
+<div class="viewcode-block" id="SupervisedDataset.n_devel_batches"><a class="viewcode-back" href="../../../safire.data.supervised_dataset.html#safire.data.supervised_dataset.SupervisedDataset.n_devel_batches">[docs]</a>    <span class="k">def</span> <span class="nf">n_devel_batches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Determines how many batches of given size the development data will</span>
+<span class="sd">        be split into.</span>
+
+<span class="sd">        :type batch_size: int</span>
+<span class="sd">        :param batch_size: The intended size of one batch of the data.</span>
+
+<span class="sd">        :returns: The number of batches the devel data will be split</span>
+<span class="sd">                  into for given batch_size.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">devel_X</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="n">batch_size</span>
+
+</div>
+<div class="viewcode-block" id="SupervisedDataset.n_test_batches"><a class="viewcode-back" href="../../../safire.data.supervised_dataset.html#safire.data.supervised_dataset.SupervisedDataset.n_test_batches">[docs]</a>    <span class="k">def</span> <span class="nf">n_test_batches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Determines how many batches of given size the test data will</span>
+<span class="sd">        be split into.</span>
+
+<span class="sd">        :type batch_size: int</span>
+<span class="sd">        :param batch_size: The intended size of one batch of the data.</span>
+
+<span class="sd">        :returns: The number of batches the test data will be split</span>
+<span class="sd">                  into for given batch_size.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_X</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="n">batch_size</span>
+
+    <span class="c"># Batch retrieval</span>
+</div>
+<div class="viewcode-block" id="SupervisedDataset.train_X_batch"><a class="viewcode-back" href="../../../safire.data.supervised_dataset.html#safire.data.supervised_dataset.SupervisedDataset.train_X_batch">[docs]</a>    <span class="k">def</span> <span class="nf">train_X_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Slices a batch of ``train_X`` for given batch index and batch size.</span>
+
+<span class="sd">        :type b_index: int</span>
+<span class="sd">        :param b_index: The order of the batch in the dataset (0 for first,</span>
+<span class="sd">                        1 for second, etc.)</span>
+
+<span class="sd">        :type b_size: int</span>
+<span class="sd">        :param b_size: The size of one batch.</span>
+
+<span class="sd">        :returns: A slice of the shared variable ``train_X`` starting at</span>
+<span class="sd">                  ``b_index * b_size`` and ending at ``(b_index + 1) *</span>
+<span class="sd">                  b_size``.</span>
+
+<span class="sd">        :raises: ValueError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_batch</span><span class="p">(</span><span class="s">&#39;train&#39;</span><span class="p">,</span> <span class="s">&#39;X&#39;</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="SupervisedDataset.train_y_batch"><a class="viewcode-back" href="../../../safire.data.supervised_dataset.html#safire.data.supervised_dataset.SupervisedDataset.train_y_batch">[docs]</a>    <span class="k">def</span> <span class="nf">train_y_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Slices a batch of ``train_y`` for given batch index and batch size.</span>
+
+<span class="sd">        :type b_index: int</span>
+<span class="sd">        :param b_index: The order of the batch in the dataset (0 for first,</span>
+<span class="sd">                        1 for second, etc.)</span>
+
+<span class="sd">        :type b_size: int</span>
+<span class="sd">        :param b_size: The size of one batch.</span>
+
+<span class="sd">        :returns: A slice of the shared variable ``train_y`` starting at</span>
+<span class="sd">                  ``b_index * b_size`` and ending at ``(b_index + 1) *</span>
+<span class="sd">                  b_size``.</span>
+
+<span class="sd">        :raises: ValueError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_batch</span><span class="p">(</span><span class="s">&#39;train&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="SupervisedDataset.devel_X_batch"><a class="viewcode-back" href="../../../safire.data.supervised_dataset.html#safire.data.supervised_dataset.SupervisedDataset.devel_X_batch">[docs]</a>    <span class="k">def</span> <span class="nf">devel_X_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Slices a batch of ``devel_X`` for given batch index and batch size.</span>
+
+<span class="sd">        :type b_index: int</span>
+<span class="sd">        :param b_index: The order of the batch in the dataset (0 for first,</span>
+<span class="sd">                        1 for second, etc.)</span>
+
+<span class="sd">        :type b_size: int</span>
+<span class="sd">        :param b_size: The size of one batch.</span>
+
+<span class="sd">        :returns: A slice of the shared variable ``devel_X`` starting at</span>
+<span class="sd">                  ``b_index * b_size`` and ending at ``(b_index + 1) *</span>
+<span class="sd">                  b_size``.</span>
+
+<span class="sd">        :raises: ValueError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_batch</span><span class="p">(</span><span class="s">&#39;devel&#39;</span><span class="p">,</span> <span class="s">&#39;X&#39;</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="SupervisedDataset.devel_y_batch"><a class="viewcode-back" href="../../../safire.data.supervised_dataset.html#safire.data.supervised_dataset.SupervisedDataset.devel_y_batch">[docs]</a>    <span class="k">def</span> <span class="nf">devel_y_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Slices a batch of ``devel_y`` for given batch index and batch size.</span>
+
+<span class="sd">        :type b_index: int</span>
+<span class="sd">        :param b_index: The order of the batch in the dataset (0 for first,</span>
+<span class="sd">                        1 for second, etc.)</span>
+
+<span class="sd">        :type b_size: int</span>
+<span class="sd">        :param b_size: The size of one batch.</span>
+
+<span class="sd">        :returns: A slice of the shared variable ``devel_y`` starting at</span>
+<span class="sd">                  ``b_index * b_size`` and ending at ``(b_index + 1) *</span>
+<span class="sd">                  b_size``.</span>
+
+<span class="sd">        :raises: ValueError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_batch</span><span class="p">(</span><span class="s">&#39;devel&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="SupervisedDataset.test_X_batch"><a class="viewcode-back" href="../../../safire.data.supervised_dataset.html#safire.data.supervised_dataset.SupervisedDataset.test_X_batch">[docs]</a>    <span class="k">def</span> <span class="nf">test_X_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Slices a batch of ``test_X`` for given batch index and batch size.</span>
+
+<span class="sd">        :type b_index: int</span>
+<span class="sd">        :param b_index: The order of the batch in the dataset (0 for first,</span>
+<span class="sd">                        1 for second, etc.)</span>
+
+<span class="sd">        :type b_size: int</span>
+<span class="sd">        :param b_size: The size of one batch.</span>
+
+<span class="sd">        :returns: A slice of the shared variable ``test_X`` starting at</span>
+<span class="sd">                  ``b_index * b_size`` and ending at ``(b_index + 1) *</span>
+<span class="sd">                  b_size``.</span>
+
+<span class="sd">        :raises: ValueError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_batch</span><span class="p">(</span><span class="s">&#39;test&#39;</span><span class="p">,</span> <span class="s">&#39;X&#39;</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="SupervisedDataset.test_y_batch"><a class="viewcode-back" href="../../../safire.data.supervised_dataset.html#safire.data.supervised_dataset.SupervisedDataset.test_y_batch">[docs]</a>    <span class="k">def</span> <span class="nf">test_y_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Slices a batch of ``test_y`` for given batch index and batch size.</span>
+
+<span class="sd">        :type b_index: int</span>
+<span class="sd">        :param b_index: The order of the batch in the dataset (0 for first,</span>
+<span class="sd">                        1 for second, etc.)</span>
+
+<span class="sd">        :type b_size: int</span>
+<span class="sd">        :param b_size: The size of one batch.</span>
+
+<span class="sd">        :returns: A slice of the shared variable ``test_y`` starting at</span>
+<span class="sd">                  ``b_index * b_size`` and ending at ``(b_index + 1) *</span>
+<span class="sd">                  b_size``.</span>
+
+<span class="sd">        :raises: ValueError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_batch</span><span class="p">(</span><span class="s">&#39;test&#39;</span><span class="p">,</span> <span class="s">&#39;y&#39;</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_get_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">subset</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieves a segment of the data, specified by the arguments.</span>
+
+<span class="sd">        :type subset: str</span>
+<span class="sd">        :param subset: One of ``&#39;train&#39;``, ``&#39;devel&#39;`` or ``&#39;test&#39;``.</span>
+<span class="sd">                       Specifies which subset of the dataset should be used.</span>
+
+<span class="sd">        :type kind: str</span>
+<span class="sd">        :param kind: One of ``&#39;X&#39;`` or ``&#39;y&#39;``. Specifies whether we want</span>
+<span class="sd">                     the inputs or the response.</span>
+
+<span class="sd">        :type b_index: int</span>
+
+<span class="sd">        :type b_index: int</span>
+<span class="sd">        :param b_index: The order of the batch in the dataset (0 for first,</span>
+<span class="sd">                        1 for second, etc.)</span>
+
+<span class="sd">        :type b_size: int</span>
+<span class="sd">        :param b_size: The size of one batch.</span>
+
+<span class="sd">        :returns: A slice of the shared variable specified by the ``subset``</span>
+<span class="sd">                  and ``kind`` arguments. The slice begins at ``b_index *</span>
+<span class="sd">                  b_size`` and ends at ``(b_index + 1) * b_size``.</span>
+
+<span class="sd">        :raises: ValueError</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">lbound</span> <span class="o">=</span> <span class="n">b_index</span> <span class="o">*</span> <span class="n">b_size</span>
+        <span class="n">rbound</span> <span class="o">=</span> <span class="p">(</span><span class="n">b_index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">b_size</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">subset</span> <span class="o">==</span> <span class="s">&#39;train&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;X&#39;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">train_X</span><span class="p">[</span><span class="n">lbound</span><span class="p">:</span><span class="n">rbound</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="p">(</span><span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;y&#39;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">train_y</span><span class="p">[</span><span class="n">lbound</span><span class="p">:</span><span class="n">rbound</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch kind specified: </span><span class="si">%s</span><span class="s"> (use </span><span class="se">\&#39;</span><span class="s">X</span><span class="se">\&#39;</span><span class="s"> or </span><span class="se">\&#39;</span><span class="s">y</span><span class="se">\&#39;</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">kind</span> <span class="p">)</span>
+        <span class="k">elif</span> <span class="p">(</span><span class="n">subset</span> <span class="o">==</span> <span class="s">&#39;devel&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;X&#39;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">devel_X</span><span class="p">[</span><span class="n">lbound</span><span class="p">:</span><span class="n">rbound</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="p">(</span><span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;y&#39;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">devel_y</span><span class="p">[</span><span class="n">lbound</span><span class="p">:</span><span class="n">rbound</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch kind specified: </span><span class="si">%s</span><span class="s"> (use </span><span class="se">\&#39;</span><span class="s">X</span><span class="se">\&#39;</span><span class="s"> or </span><span class="se">\&#39;</span><span class="s">y</span><span class="se">\&#39;</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">kind</span> <span class="p">)</span>
+        <span class="k">elif</span> <span class="p">(</span><span class="n">subset</span> <span class="o">==</span> <span class="s">&#39;test&#39;</span><span class="p">):</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;X&#39;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_X</span><span class="p">[</span><span class="n">lbound</span><span class="p">:</span><span class="n">rbound</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="p">(</span><span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;y&#39;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_y</span><span class="p">[</span><span class="n">lbound</span><span class="p">:</span><span class="n">rbound</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch kind specified: </span><span class="si">%s</span><span class="s"> (use </span><span class="se">\&#39;</span><span class="s">X</span><span class="se">\&#39;</span><span class="s"> or </span><span class="se">\&#39;</span><span class="s">y</span><span class="se">\&#39;</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">kind</span> <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong subset specified: </span><span class="si">%s</span><span class="s"> (use </span><span class="se">\&#39;</span><span class="s">train</span><span class="se">\&#39;</span><span class="s">, </span><span class="se">\&#39;</span><span class="s">devel</span><span class="se">\&#39;</span><span class="s"> or </span><span class="se">\&#39;</span><span class="s">test</span><span class="se">\&#39;</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">subset</span> <span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

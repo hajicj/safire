@@ -1,0 +1,234 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.learners &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.learning.learners</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">from</span> <span class="nn">.base_sgd_learner</span> <span class="kn">import</span> <span class="n">BaseSGDLearner</span>
+
+
+<span class="c"># Basic update function - move along the gradient.</span>
+
+<div class="viewcode-block" id="standard_sgd_updater"><a class="viewcode-back" href="../../../safire.learning.learners.html#safire.learning.learners.standard_sgd_updater">[docs]</a><span class="k">def</span> <span class="nf">standard_sgd_updater</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">gradients</span><span class="p">,</span> <span class="n">learning_rate</span><span class="p">):</span>
+
+    <span class="n">updates</span> <span class="o">=</span> <span class="p">[</span> <span class="p">(</span><span class="n">param</span><span class="p">,</span> <span class="n">param</span> <span class="o">-</span> <span class="n">learning_rate</span> <span class="o">*</span> <span class="n">gradient</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">param</span><span class="p">,</span> <span class="n">gradient</span> <span class="ow">in</span> <span class="nb">zip</span> <span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">gradients</span><span class="p">)</span> <span class="p">]</span>
+    <span class="k">return</span> <span class="n">updates</span>
+</div>
+<div class="viewcode-block" id="StandardSGDUpdater"><a class="viewcode-back" href="../../../safire.learning.learners.html#safire.learning.learners.StandardSGDUpdater">[docs]</a><span class="k">class</span> <span class="nc">StandardSGDUpdater</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.13</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">learning_rate</span> <span class="o">=</span> <span class="n">learning_rate</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">gradients</span><span class="p">):</span>
+        <span class="n">updates</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">param</span><span class="p">,</span> <span class="n">gradient</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">gradients</span><span class="p">):</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Updater processing param: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">param</span><span class="p">))</span>
+            <span class="n">newparam</span> <span class="o">=</span> <span class="n">param</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">learning_rate</span> <span class="o">*</span> <span class="n">gradient</span>
+            <span class="n">updates</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">param</span><span class="p">,</span> <span class="n">newparam</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">updates</span>
+</div>
+<div class="viewcode-block" id="MomentumUpdater"><a class="viewcode-back" href="../../../safire.learning.learners.html#safire.learning.learners.MomentumUpdater">[docs]</a><span class="k">class</span> <span class="nc">MomentumUpdater</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.13</span><span class="p">,</span> <span class="n">momentum</span><span class="o">=</span><span class="mf">0.9</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">learning_rate</span> <span class="o">=</span> <span class="n">learning_rate</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">momentum</span> <span class="o">=</span> <span class="n">momentum</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">gradients</span><span class="p">):</span>
+        <span class="n">updates</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">param</span><span class="p">,</span> <span class="n">gradient</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">gradients</span><span class="p">):</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Updater processing param: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">param</span><span class="p">))</span>
+            <span class="n">newparam</span> <span class="o">=</span> <span class="n">param</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">learning_rate</span> <span class="o">*</span> <span class="n">gradient</span>
+            <span class="n">updates</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">param</span><span class="p">,</span> <span class="n">newparam</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">updates</span>
+
+</div>
+<div class="viewcode-block" id="ResilientBackpropUpdater"><a class="viewcode-back" href="../../../safire.learning.learners.html#safire.learning.learners.ResilientBackpropUpdater">[docs]</a><span class="k">class</span> <span class="nc">ResilientBackpropUpdater</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">init_update</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">positive_step</span><span class="o">=</span><span class="mf">1.2</span><span class="p">,</span>
+                 <span class="n">negative_step</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">max_step</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">min_step</span><span class="o">=</span><span class="mf">0.0001</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the rprop updater with all the intermediate</span>
+<span class="sd">        data as Theano shared variables.&quot;&quot;&quot;</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Initializing rprop updater.&#39;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">init_update</span> <span class="o">=</span> <span class="n">init_update</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">positive_step</span> <span class="o">=</span> <span class="n">positive_step</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">negative_step</span> <span class="o">=</span> <span class="n">negative_step</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_step</span> <span class="o">=</span> <span class="n">max_step</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">min_step</span> <span class="o">=</span> <span class="n">min_step</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">deltas</span> <span class="o">=</span> <span class="p">[]</span> <span class="c"># Will rely on consistent parameter ordering</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_changes</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_grads</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c"># Used to &quot;tie down&quot; symbolic gradient updates to shared variables.</span>
+        <span class="c"># Never gets updated.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_last_grad_shared_bases</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c"># Initialize the update arguments</span>
+        <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">params</span><span class="p">:</span>
+            <span class="n">delta</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">param</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+                                      <span class="n">dtype</span><span class="o">=</span><span class="n">param</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">init_update</span>
+            <span class="n">shared_delta</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">shared</span><span class="p">(</span><span class="n">delta</span><span class="p">,</span>
+                                         <span class="n">name</span><span class="o">=</span><span class="n">param</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&#39;_rprop_delta&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">deltas</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">shared_delta</span><span class="p">)</span>
+
+            <span class="n">last_change</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">param</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+                                      <span class="n">dtype</span><span class="o">=</span><span class="n">param</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+            <span class="n">shared_last_change</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">shared</span><span class="p">(</span><span class="n">last_change</span><span class="p">,</span>
+                                        <span class="n">name</span><span class="o">=</span><span class="n">param</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&#39;_rprop_lastchange&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_changes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">shared_last_change</span><span class="p">)</span>
+
+            <span class="n">last_gradient</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">param</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+                                      <span class="n">dtype</span><span class="o">=</span><span class="n">param</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">init_update</span>
+            <span class="n">shared_lastgrad</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">shared</span><span class="p">(</span><span class="n">last_gradient</span><span class="p">,</span>
+                                         <span class="n">name</span><span class="o">=</span><span class="n">param</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&#39;_rprop_lastgrad&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_grads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">shared_lastgrad</span><span class="p">)</span>
+
+            <span class="n">lastgrad_base</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">param</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+                                      <span class="n">dtype</span><span class="o">=</span><span class="n">param</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">init_update</span>
+            <span class="n">shared_lastgrad_base</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">shared</span><span class="p">(</span><span class="n">lastgrad_base</span><span class="p">,</span>
+                                         <span class="n">name</span><span class="o">=</span><span class="n">param</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&#39;_rprop_lastgrad_base&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_last_grad_shared_bases</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">shared_lastgrad_base</span><span class="p">)</span>
+
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">gradients</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Implements the update formula for a RPROP step.&quot;&quot;&quot;</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing rprop updates.&#39;</span><span class="p">)</span>
+
+        <span class="n">updates</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">param</span><span class="p">,</span> <span class="n">gradient</span><span class="p">,</span> <span class="n">lastgrad</span><span class="p">,</span> <span class="n">lastgrad_base</span><span class="p">,</span> <span class="n">delta</span><span class="p">,</span> <span class="n">lastchange</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span>
+                                                      <span class="n">params</span><span class="p">,</span>
+                                                      <span class="n">gradients</span><span class="p">,</span>
+                                                      <span class="bp">self</span><span class="o">.</span><span class="n">last_grads</span><span class="p">,</span>
+                                                      <span class="bp">self</span><span class="o">.</span><span class="n">_last_grad_shared_bases</span><span class="p">,</span>
+                                                      <span class="bp">self</span><span class="o">.</span><span class="n">deltas</span><span class="p">,</span>
+                                                      <span class="bp">self</span><span class="o">.</span><span class="n">last_changes</span><span class="p">):</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Creating rprop updates for param </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">param</span><span class="p">)</span>
+            <span class="c"># DUMMY IMPLEMENTATION</span>
+            <span class="c">#print &#39;Gradient: &#39;, dir(gradient)</span>
+            <span class="c">#print &#39;Gradient size:&#39;, theano.pprint(gradient.size)</span>
+            <span class="n">change</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">sgn</span><span class="p">(</span><span class="n">gradient</span> <span class="o">*</span> <span class="n">lastgrad</span><span class="p">)</span>
+            <span class="c">#print &#39;Signum: &#39;, theano.pprint(change)</span>
+            <span class="k">if</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">gt</span><span class="p">(</span><span class="n">change</span><span class="p">,</span> <span class="mi">0</span><span class="p">):</span> <span class="c"># Needs to be rewritten as theano-IF</span>
+                <span class="n">new_delta</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="n">delta</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">positive_step</span><span class="p">,</span>
+                                              <span class="bp">self</span><span class="o">.</span><span class="n">max_step</span><span class="p">)</span>
+                <span class="n">weight_change</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">sgn</span><span class="p">(</span><span class="n">gradient</span><span class="p">)</span> <span class="o">*</span> <span class="n">new_delta</span>
+                <span class="n">lastgrad</span> <span class="o">=</span> <span class="n">gradient</span> <span class="o">*</span> <span class="n">lastgrad_base</span>
+
+            <span class="k">elif</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">lt</span><span class="p">(</span><span class="n">change</span><span class="p">,</span> <span class="mi">0</span><span class="p">):</span>
+                <span class="n">new_delta</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">delta</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">negative_step</span><span class="p">,</span>
+                                              <span class="bp">self</span><span class="o">.</span><span class="n">min_step</span><span class="p">)</span>
+                <span class="n">weight_change</span> <span class="o">=</span> <span class="o">-</span><span class="n">lastchange</span>
+                <span class="n">lastgrad</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">gradient</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">gradient</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">new_delta</span> <span class="o">=</span> <span class="n">delta</span>
+                <span class="n">weight_change</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">sgn</span><span class="p">(</span><span class="n">gradient</span><span class="p">)</span> <span class="o">*</span> <span class="n">delta</span>
+                <span class="n">lastgrad</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">param</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">param</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+
+            <span class="n">updates</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">param</span><span class="p">,</span> <span class="n">param</span> <span class="o">-</span> <span class="n">weight_change</span><span class="p">))</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Creating delta update for </span><span class="si">%s</span><span class="s"> of type </span><span class="si">%s</span><span class="s">:&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">delta</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">delta</span><span class="p">))))</span>
+            <span class="n">updates</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">delta</span><span class="p">,</span> <span class="n">new_delta</span><span class="p">))</span>
+
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Creating lastgrad update for </span><span class="si">%s</span><span class="s"> of type </span><span class="si">%s</span><span class="s">:&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">lastgrad</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">lastgrad</span><span class="p">))))</span>
+            <span class="n">updates</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">lastgrad</span><span class="p">,</span> <span class="n">gradient</span><span class="p">))</span>
+
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Creating weights change update for </span><span class="si">%s</span><span class="s"> of type </span><span class="si">%s</span><span class="s">:&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">lastchange</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">lastchange</span><span class="p">))))</span>
+            <span class="n">updates</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">lastchange</span><span class="p">,</span> <span class="n">weight_change</span><span class="p">))</span>
+
+            <span class="c">#lastchange = weight_change ?? why was this here?</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;RpropUpdater: updates complete.&#39;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">updates</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

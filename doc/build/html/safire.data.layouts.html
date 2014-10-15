@@ -1,0 +1,377 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.layouts module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.data.layouts">
+<span id="safire-data-layouts-module"></span><h1>safire.data.layouts module<a class="headerlink" href="#module-safire.data.layouts" title="Permalink to this headline">¶</a></h1>
+<p>Layouts are used by Loaders to discover data files.</p>
+<p>The layout class describes where each file is in some dataset directory. <strong>The
+items that have to be in the Layout are given inside the Loader,</strong> Layouts
+cannot be swapped for each other without breaking the Loader. The Layout is
+essentially just a description of the data directory that a particular Loader
+expects.</p>
+<dl class="class">
+<dt id="safire.data.layouts.DataDirLayout">
+<em class="property">class </em><tt class="descclassname">safire.data.layouts.</tt><tt class="descname">DataDirLayout</tt><big>(</big><em>name</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>A static class that holds constants that define the layout of a
+multimodal dataset root dir. (Layouts are used by Loaders to discover data
+files.)</p>
+<p>The expected layout is:</p>
+<div class="highlight-python"><div class="highlight"><pre>root/
++----- text/
+|    +------ text1.vt.txt.gz
+|    +------ text2.vt.txt.gz
+|    +------ text3.vt.txt.gz
+|    +------ text4.vt.txt.gz
+|            etc.
++----- img/
+|    +------ image1.jpg
+|    +------ image2.jpg
+|    +------ image3.jpg
+|    +------ image4.jpg
++----- corpora/
++----- datasets/
++----- models/
++----- indexes/
++----- name.vtlist
++----- im.ftrs.csv
++----- vtext-image-map.csv
+</pre></div>
+</div>
+<p>The expected <tt class="docutils literal"><span class="pre">name.vtlist</span></tt> entries are a list of vtext filenames relative
+to the root:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">text</span><span class="o">/</span><span class="n">text1</span><span class="o">.</span><span class="n">vt</span><span class="o">.</span><span class="n">txt</span><span class="o">.</span><span class="n">gz</span>
+<span class="n">text</span><span class="o">/</span><span class="n">text2</span><span class="o">.</span><span class="n">vt</span><span class="o">.</span><span class="n">txt</span><span class="o">.</span><span class="n">gz</span>
+<span class="n">text</span><span class="o">/</span><span class="n">text3</span><span class="o">.</span><span class="n">vt</span><span class="o">.</span><span class="n">txt</span><span class="o">.</span><span class="n">gz</span>
+<span class="n">text</span><span class="o">/</span><span class="n">text4</span><span class="o">.</span><span class="n">vt</span><span class="o">.</span><span class="n">txt</span><span class="o">.</span><span class="n">gz</span>
+</pre></div>
+</div>
+<p>This file is expected to be given to <tt class="xref py py-class docutils literal"><span class="pre">VTextCorpus</span></tt> as an input file.</p>
+<p>The expected <tt class="docutils literal"><span class="pre">im.ftrs.csv</span></tt> file format is:</p>
+<div class="highlight-python"><div class="highlight"><pre>image1.jpg  0;0;0.2232;0.345;0;0;1.93833;0.84;0 .... ;0.012
+image2.jpg  0;1.607;0.637;0;0;1.2;0.2001;0.14;0 .... ;0.214
+image3.jpg  0.018;0;0;0.1345;0;0;0.39;1.084;0.2 .... ;1.09
+image4.jpg  0;1.607;0.637;0;0;1.2;0.2001;0.14;0 .... ;0
+</pre></div>
+</div>
+<p>with tab-separated image ID and feature value columns and 4096
+semicolon-separated entries in the second column. This file is expected to
+be given to <tt class="xref py py-class docutils literal"><span class="pre">ImagenetCorpus</span></tt> as an input file.</p>
+<p>And the expected format of <tt class="docutils literal"><span class="pre">vtext-image-map.csv</span></tt> is:</p>
+<div class="highlight-python"><div class="highlight"><pre>text/text1.vt.txt.gz    image1
+text/text1.vt.txt.gz    image3
+text/text2.vt.txt.gz    image2
+text/text3.vt.txt.gz    image3
+text/text3.vt.txt.gz    image4
+text/text3.vt.txt.gz    image1
+</pre></div>
+</div>
+<p>This file is given to the output <tt class="xref py py-class docutils literal"><span class="pre">MultimodalDataset</span></tt> as the
+text-image mapping (parameter <tt class="docutils literal"><span class="pre">textdoc2imdoc2</span></tt>. Note that the relationship
+between texts and images is M:N - a text can have any number of associated
+images, and an image can be used by any number of texts.</p>
+<p>The <tt class="docutils literal"><span class="pre">corpora/</span></tt> directory contains the saved corpora of various shapes and
+sizes. The corpus name format is:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">name</span><span class="o">.</span><span class="n">infix</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">suffix</span>
+</pre></div>
+</div>
+<p>where:</p>
+<ul class="simple">
+<li><tt class="docutils literal"><span class="pre">name</span></tt> is the same as <tt class="docutils literal"><span class="pre">name.vtlist</span></tt>,</li>
+<li><tt class="docutils literal"><span class="pre">infix</span></tt> is some string that describes the corpus,</li>
+<li><tt class="docutils literal"><span class="pre">type</span></tt> reflects whether the corpus has text or image data,</li>
+<li><tt class="docutils literal"><span class="pre">suffix</span></tt> is a string describing the corpus file type. The current
+suffixes are <tt class="docutils literal"><span class="pre">mmcorp</span></tt> for MmCorpus-serialized data, <tt class="docutils literal"><span class="pre">mmcorp.index</span></tt> for
+the MmCorpus index that went along with the <tt class="docutils literal"><span class="pre">name.infix.type</span></tt>
+combination, <tt class="docutils literal"><span class="pre">vtcorp</span></tt> for the <tt class="xref py py-class docutils literal"><span class="pre">VTextCorpus</span></tt> object used to read
+the given text corpus and <tt class="docutils literal"><span class="pre">icorp</span></tt> for the <tt class="xref py py-class docutils literal"><span class="pre">ImagenetCorpus</span></tt> used
+to read the given image corpus.</li>
+</ul>
+<p>The <tt class="docutils literal"><span class="pre">models/</span></tt> directory contains saved models, with the suffix <tt class="docutils literal"><span class="pre">.sfm</span></tt>,
+and saved model handles, with the suffix <tt class="docutils literal"><span class="pre">.mhandle</span></tt>.</p>
+<p>The <tt class="docutils literal"><span class="pre">indexes/</span></tt> directory contains saved similarity indexes, built from
+various image corpora.</p>
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_dataset_file">
+<tt class="descname">get_dataset_file</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_dataset_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_dataset_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the path to index file with given infix from layout root.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_dataset_name">
+<tt class="descname">get_dataset_name</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_dataset_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_dataset_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the index name for the given infix.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_handle_file">
+<tt class="descname">get_handle_file</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_handle_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_handle_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the path to model handle file with given infix from layout
+root.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_handle_name">
+<tt class="descname">get_handle_name</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_handle_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_handle_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the model handle name for the given infix.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_image_corpus_file">
+<tt class="descname">get_image_corpus_file</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_image_corpus_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_image_corpus_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the text corpus file relative to data dir root.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_image_corpus_name">
+<tt class="descname">get_image_corpus_name</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_image_corpus_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_image_corpus_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the text corpus name for the given infix.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_index_file">
+<tt class="descname">get_index_file</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_index_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_index_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the path to index file with given infix from layout root.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_index_name">
+<tt class="descname">get_index_name</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_index_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_index_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the index name for the given infix.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_learner_file">
+<tt class="descname">get_learner_file</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_learner_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_learner_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the path to index file with given infix from layout root.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_learner_name">
+<tt class="descname">get_learner_name</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_learner_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_learner_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the index name for the given infix.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_model_file">
+<tt class="descname">get_model_file</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_model_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_model_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the path to model file with given infix from layout
+root.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_model_name">
+<tt class="descname">get_model_name</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_model_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_model_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the model name for the given infix.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_text_corpus_file">
+<tt class="descname">get_text_corpus_file</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_text_corpus_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_text_corpus_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the text corpus file relative to data dir root.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_text_corpus_name">
+<tt class="descname">get_text_corpus_name</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_text_corpus_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_text_corpus_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the text corpus name for the given infix.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_text_index_file">
+<tt class="descname">get_text_index_file</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_text_index_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_text_index_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the path to index file with given infix from layout root.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_text_index_name">
+<tt class="descname">get_text_index_name</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_text_index_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_text_index_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the index name for the given infix.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_transformer_file">
+<tt class="descname">get_transformer_file</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_transformer_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_transformer_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the path to transformer file with given infix from layout
+root.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.get_transformer_name">
+<tt class="descname">get_transformer_name</tt><big>(</big><em>infix</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.get_transformer_name"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.get_transformer_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the transformer name for the given infix.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.required_corpus_names">
+<tt class="descname">required_corpus_names</tt><big>(</big><em>infix=None</em>, <em>update_separator=False</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.required_corpus_names"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.required_corpus_names" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates the required corpora for a given corpus infix. These are:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">[</span> <span class="s">&#39;.&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">infix</span><span class="p">,</span> <span class="n">suffix</span><span class="p">)</span>
+   <span class="k">for</span> <span class="n">suffix</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">required_suffixes</span> <span class="p">]</span>
+</pre></div>
+</div>
+<p>Coming out as <tt class="docutils literal"><span class="pre">safire.infix.mmcorp</span></tt>, <tt class="docutils literal"><span class="pre">safire.infix.mmcorp.index</span></tt>,
+etc.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> &#8211; The corpus infix. This is either given manually, or
+generated from corpus/transformation parameters automatically in
+the corresponding class.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">list(str)</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A list of the required corpus names for the given infix.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.required_img_corpus_names">
+<tt class="descname">required_img_corpus_names</tt><big>(</big><em>infix=None</em>, <em>update_separator=False</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.required_img_corpus_names"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.required_img_corpus_names" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates the required image corpora for a given corpus infix.
+These are:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">[</span> <span class="s">&#39;.&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">infix</span><span class="p">,</span> <span class="n">suffix</span><span class="p">)</span>
+   <span class="k">for</span> <span class="n">suffix</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">required_img_suffixes</span> <span class="p">]</span>
+</pre></div>
+</div>
+<p>Coming out as <tt class="docutils literal"><span class="pre">safire.infix.img.mmcorp</span></tt>,
+<tt class="docutils literal"><span class="pre">safire.infix.img.mmcorp.index</span></tt>, etc.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> &#8211; The corpus infix. This is either given manually, or
+generated from corpus/transformation parameters automatically in
+the corresponding class.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">list(str)</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A list of the required corpus names for the given infix.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.layouts.DataDirLayout.required_text_corpus_names">
+<tt class="descname">required_text_corpus_names</tt><big>(</big><em>infix=None</em>, <em>update_separator=False</em><big>)</big><a class="reference internal" href="_modules/safire/data/layouts.html#DataDirLayout.required_text_corpus_names"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.layouts.DataDirLayout.required_text_corpus_names" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates the required text corpus names for a given corpus infix.
+These are:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="p">[</span> <span class="s">&#39;.&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">infix</span><span class="p">,</span> <span class="n">suffix</span><span class="p">)</span>
+   <span class="k">for</span> <span class="n">suffix</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">required_text_suffixes</span> <span class="p">]</span>
+</pre></div>
+</div>
+<p>Coming out as <tt class="docutils literal"><span class="pre">safire.infix.vt.mmcorp</span></tt>,
+<tt class="docutils literal"><span class="pre">safire.infix.vt.mmcorp.index</span></tt>, etc.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>infix</strong> &#8211; The corpus infix. This is either given manually, or
+generated from corpus/transformation parameters automatically in
+the corresponding class.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">list(str)</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A list of the required corpus names for the given infix.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.data.layouts.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

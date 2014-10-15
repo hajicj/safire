@@ -1,0 +1,307 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.sharded_multimodal_dataset &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.data.sharded_multimodal_dataset</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Provides MultimodalDataset functionality with underlying ShardedDatasets for</span>
+<span class="sd">both text and images.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">gensim</span>
+<span class="kn">from</span> <span class="nn">gensim.corpora</span> <span class="kn">import</span> <span class="n">MmCorpus</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">from</span> <span class="nn">multimodal_dataset</span> <span class="kn">import</span> <span class="n">MultimodalDataset</span>
+<span class="kn">import</span> <span class="nn">safire.utils</span>
+<span class="kn">from</span> <span class="nn">corpus_dataset</span> <span class="kn">import</span> <span class="n">UnsupervisedCorpusDataset</span>
+<span class="kn">from</span> <span class="nn">safire.utils.transcorp</span> <span class="kn">import</span> <span class="n">dimension</span>
+<span class="kn">from</span> <span class="nn">sharded_dataset</span> <span class="kn">import</span> <span class="n">ShardedDataset</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+
+<div class="viewcode-block" id="ShardedMultimodalDataset"><a class="viewcode-back" href="../../../safire.data.sharded_multimodal_dataset.html#safire.data.sharded_multimodal_dataset.ShardedMultimodalDataset">[docs]</a><span class="k">class</span> <span class="nc">ShardedMultimodalDataset</span><span class="p">(</span><span class="n">MultimodalDataset</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Implements the MultimodalDataset functionality on top of ShardedDataset-like</span>
+<span class="sd">    objects for both text and image modality.</span>
+
+<span class="sd">    Doesn&#39;t re-implement anything but initialization from MultimodalDataset.</span>
+
+<span class="sd">    Should be always called using a loader.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text_output_prefix</span><span class="p">,</span> <span class="n">text_vt_filename</span><span class="p">,</span>
+                 <span class="n">img_output_prefix</span><span class="p">,</span> <span class="n">img_ic_filename</span><span class="p">,</span>
+                 <span class="n">dim_text</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">dim_img</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">textdoc2imdoc</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">test_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">devel_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">shared</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">text_serializer</span><span class="o">=</span><span class="n">MmCorpus</span><span class="p">,</span> <span class="n">img_serializer</span><span class="o">=</span><span class="n">MmCorpus</span><span class="p">,</span>
+                 <span class="n">text_mm_filename</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">img_mm_filename</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">shardsize</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span>
+                 <span class="n">overwrite</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+
+        <span class="c"># Corpus filenames act the same here. Note that output_prefixes are</span>
+        <span class="c"># simply filenames for the saved ShardedDataset objects.</span>
+
+        <span class="c"># The init header is exactly the same as for MultimodalDataset - only</span>
+        <span class="c"># instead of mm filenames, the output prefixes are used.</span>
+
+        <span class="c"># Serializers are given to enable reading serialized corpora when the</span>
+        <span class="c"># output prefixes are not initialized yet.</span>
+        <span class="c"># Additionally, the mm_filenames can be given to facilitate reading</span>
+        <span class="c"># data when initializing the datasets.</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">text</span> <span class="o">=</span> <span class="n">UnsupervisedShardedVTextCorpusDataset</span><span class="p">(</span><span class="n">text_output_prefix</span><span class="p">,</span>
+                        <span class="n">text_vt_filename</span><span class="p">,</span> <span class="n">dim_text</span><span class="p">,</span> <span class="n">test_p</span><span class="p">,</span> <span class="n">devel_p</span><span class="p">,</span>
+                        <span class="n">text_serializer</span><span class="p">,</span> <span class="n">text_mm_filename</span><span class="p">,</span> <span class="n">shardsize</span><span class="p">,</span> <span class="n">overwrite</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">dim</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">img</span> <span class="o">=</span> <span class="n">UnsupervisedShardedImagenetCorpusDataset</span><span class="p">(</span><span class="n">img_output_prefix</span><span class="p">,</span>
+                        <span class="n">img_ic_filename</span><span class="p">,</span> <span class="n">dim_img</span><span class="p">,</span> <span class="n">test_p</span><span class="p">,</span> <span class="n">devel_p</span><span class="p">,</span> <span class="n">img_serializer</span><span class="p">,</span>
+                        <span class="n">img_mm_filename</span><span class="p">,</span> <span class="n">shardsize</span><span class="p">,</span> <span class="n">overwrite</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim_img</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">dim</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_mode</span><span class="p">(</span><span class="n">mode</span><span class="p">)</span>
+
+        <span class="n">text2im</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_textdoc2imdoc_map</span><span class="p">(</span><span class="n">textdoc2imdoc</span><span class="p">)</span>
+        <span class="n">text2im_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_text2im_list</span><span class="p">(</span><span class="n">text2im</span><span class="p">)</span>
+        <span class="n">opt_t2i_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_optimalize_ordering_by_shardidx</span><span class="p">(</span><span class="n">text2im_list</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_text2im_list</span> <span class="o">=</span> <span class="n">opt_t2i_list</span>
+
+        <span class="c"># Set devel and test offsets</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">*</span> <span class="n">test_p</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span>
+                                                 <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">*</span> <span class="n">devel_p</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text2im_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_text2im_list</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">text2im_map</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">text2im_map</span><span class="p">[</span><span class="n">t</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">text2im_map</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">shared</span> <span class="o">=</span> <span class="n">shared</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">cache</span> <span class="o">=</span> <span class="p">{}</span> <span class="c"># Caches some requested batches. Assumes the dataset</span>
+                        <span class="c"># will be iterated over, so when the cache is full,</span>
+                        <span class="c"># simply doesn&#39;t throw away anything.</span>
+                        <span class="c"># Cache keys are tuples (b_index, b_size).</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cache_size</span> <span class="o">=</span> <span class="mi">0</span>
+</div>
+<div class="viewcode-block" id="UnsupervisedShardedCorpusDataset"><a class="viewcode-back" href="../../../safire.data.sharded_multimodal_dataset.html#safire.data.sharded_multimodal_dataset.UnsupervisedShardedCorpusDataset">[docs]</a><span class="k">class</span> <span class="nc">UnsupervisedShardedCorpusDataset</span><span class="p">(</span><span class="n">UnsupervisedCorpusDataset</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;A version of UnsupervisedCorpusDataset built around a ShardedDataset</span>
+<span class="sd">    instead of an IndexedCorpus.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># Has to override:</span>
+    <span class="c"># __init__</span>
+    <span class="c"># __getitem__</span>
+    <span class="c"># _build_batch</span>
+    <span class="c"># _load_dataset</span>
+    <span class="c"># get_sparse (will need to extra access the corpus/use full2sparse)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_prefix</span><span class="p">,</span> <span class="n">dim</span><span class="p">,</span> <span class="n">test_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">devel_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+                 <span class="n">serializer</span><span class="o">=</span><span class="n">MmCorpus</span><span class="p">,</span> <span class="n">mm_corpus_filename</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">shardsize</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span>
+                 <span class="n">overwrite</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">indexed_corpus</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="c"># There are two roles of the indexed corpus: one, to provide docs for</span>
+        <span class="c"># shard initialization, and two, to provide sparse items.</span>
+        <span class="c"># If not supplied: the initialization will either succeed, if the</span>
+        <span class="c"># dataset is being loaded anyway and not initialized from corpus,</span>
+        <span class="c"># or fail. On sparse item retrieval, will use backup full2sparse</span>
+        <span class="c"># from dataset items (and warn about it).</span>
+        <span class="k">if</span> <span class="n">mm_corpus_filename</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">indexed_corpus</span> <span class="o">=</span> <span class="n">serializer</span><span class="p">(</span><span class="n">mm_corpus_filename</span><span class="p">)</span>
+
+        <span class="c"># Data are used for dense item retrieval.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">ShardedDataset</span><span class="p">(</span><span class="n">output_prefix</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">indexed_corpus</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="n">dim</span><span class="p">,</span>
+                                   <span class="n">test_p</span><span class="o">=</span><span class="n">test_p</span><span class="p">,</span> <span class="n">devel_p</span><span class="o">=</span><span class="n">devel_p</span><span class="p">,</span>
+                                   <span class="n">shardsize</span><span class="o">=</span><span class="n">shardsize</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="n">overwrite</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">=</span> <span class="n">dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span> <span class="o">=</span> <span class="bp">None</span> <span class="c"># Unsupervised...</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">test_p</span> <span class="o">=</span> <span class="n">test_p</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">-</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_p</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">devel_p</span> <span class="o">=</span> <span class="n">devel_p</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">-</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">devel_p</span><span class="p">)</span>
+
+        <span class="c"># None of the loading B.S. that was in UnsupervisedCorpusDataset.</span>
+
+    <span class="k">def</span> <span class="nf">_build_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Given the first index of a batch and batch size, builds the batch</span>
+<span class="sd">        from the corpus. This is easy, because our data directly implements</span>
+<span class="sd">        slicing.&quot;&quot;&quot;</span>
+
+        <span class="c"># TODO: implement slicing in ShardedDataset __getitem__ !!!</span>
+        <span class="c">#return self.data[lbound:lbound+batch_size]</span>
+
+        <span class="c"># Currently slower than it could be, filling the array one by one</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">docno</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">xrange</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">lbound</span><span class="o">+</span><span class="n">batch_size</span><span class="p">)):</span>
+            <span class="n">doc</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">docno</span><span class="p">]</span>
+            <span class="n">result</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">doc</span>
+
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="nf">_load_dataset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns simply a reference to the current ShardedDataset.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span>
+
+<div class="viewcode-block" id="UnsupervisedShardedCorpusDataset.get_sparse"><a class="viewcode-back" href="../../../safire.data.sharded_multimodal_dataset.html#safire.data.sharded_multimodal_dataset.UnsupervisedShardedCorpusDataset.get_sparse">[docs]</a>    <span class="k">def</span> <span class="nf">get_sparse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">indexed_corpus</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">indexed_corpus</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Retrieving sparse items without a corpus initialized&#39;</span>
+                         <span class="s">&#39; may be inefficient.&#39;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">gensim</span><span class="o">.</span><span class="n">matutils</span><span class="o">.</span><span class="n">full2sparse</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span>
+</div>
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieves the idx-th item from the dataset in dense form.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+
+</div>
+<div class="viewcode-block" id="UnsupervisedShardedVTextCorpusDataset"><a class="viewcode-back" href="../../../safire.data.sharded_multimodal_dataset.html#safire.data.sharded_multimodal_dataset.UnsupervisedShardedVTextCorpusDataset">[docs]</a><span class="k">class</span> <span class="nc">UnsupervisedShardedVTextCorpusDataset</span><span class="p">(</span><span class="n">UnsupervisedShardedCorpusDataset</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Adds VTextCorpus capabilities to UnsupervisedShardedCorpusDataset:</span>
+<span class="sd">    in addition to loading a ShardedDatasest and optionally a serialized</span>
+<span class="sd">    MmCorpus, it will load a VTextCorpus (or a transformation) used to</span>
+<span class="sd">    build the MmCorpus-serialized data (and by extension the ShardedDataset).</span>
+<span class="sd">    The VTextCorpus is then made available as the ``vtcorp`` member</span>
+<span class="sd">    of the object.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_prefix</span><span class="p">,</span> <span class="n">vt_corpus_filename</span><span class="p">,</span>
+                 <span class="n">dim</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">test_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">devel_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">serializer</span><span class="o">=</span><span class="n">MmCorpus</span><span class="p">,</span>
+                 <span class="n">mm_corpus_filename</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">shardsize</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">loaded_corpus</span> <span class="o">=</span> <span class="n">gensim</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">SaveLoad</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">vt_corpus_filename</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;TextCorpusDataset loaded corpus </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">loaded_corpus</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">transcorp</span><span class="o">.</span><span class="n">bottom_corpus</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">loaded_corpus</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;TextCorpusDataset loaded vtcorp </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">dim</span><span class="p">:</span>
+            <span class="n">dim</span> <span class="o">=</span> <span class="n">dimension</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">loaded_corpus</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Setting text dataset dimension to </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">dim</span><span class="p">)</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">UnsupervisedShardedVTextCorpusDataset</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">output_prefix</span><span class="p">,</span>
+                                                                    <span class="n">dim</span><span class="p">,</span> <span class="n">test_p</span><span class="p">,</span> <span class="n">devel_p</span><span class="p">,</span> <span class="n">serializer</span><span class="p">,</span> <span class="n">mm_corpus_filename</span><span class="p">,</span> <span class="n">shardsize</span><span class="p">,</span>
+                                                                    <span class="n">overwrite</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="UnsupervisedShardedImagenetCorpusDataset"><a class="viewcode-back" href="../../../safire.data.sharded_multimodal_dataset.html#safire.data.sharded_multimodal_dataset.UnsupervisedShardedImagenetCorpusDataset">[docs]</a><span class="k">class</span> <span class="nc">UnsupervisedShardedImagenetCorpusDataset</span><span class="p">(</span><span class="n">UnsupervisedShardedCorpusDataset</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Adds VTextCorpus capabilities to UnsupervisedShardedCorpusDataset:</span>
+<span class="sd">    in addition to loading a ShardedDatasest and optionally a serialized</span>
+<span class="sd">    MmCorpus, it will load a VTextCorpus used to</span>
+<span class="sd">    build the MmCorpus-serialized data (and by extension the ShardedDataset).</span>
+<span class="sd">    The VTextCorpus is then made available as the ``vtcorp`` member</span>
+<span class="sd">    of the object.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c">#@profile</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_prefix</span><span class="p">,</span> <span class="n">ic_corpus_filename</span><span class="p">,</span>
+                 <span class="n">dim</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">test_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">devel_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">serializer</span><span class="o">=</span><span class="n">MmCorpus</span><span class="p">,</span>
+                 <span class="n">mm_corpus_filename</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">shardsize</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">loaded_corpus</span> <span class="o">=</span> <span class="n">gensim</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">SaveLoad</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">ic_corpus_filename</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;ImageCorpusDataset loaded corpus </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">loaded_corpus</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">icorp</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">transcorp</span><span class="o">.</span><span class="n">bottom_corpus</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">loaded_corpus</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;ImageCorpusDataset loaded icorp </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">icorp</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">dim</span><span class="p">:</span>
+            <span class="n">dim</span> <span class="o">=</span> <span class="n">dimension</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">loaded_corpus</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Setting image dataset dimension to </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">dim</span><span class="p">)</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">UnsupervisedShardedImagenetCorpusDataset</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">output_prefix</span><span class="p">,</span>
+                <span class="n">dim</span><span class="p">,</span> <span class="n">test_p</span><span class="p">,</span> <span class="n">devel_p</span><span class="p">,</span> <span class="n">serializer</span><span class="p">,</span> <span class="n">mm_corpus_filename</span><span class="p">,</span> <span class="n">shardsize</span><span class="p">,</span>
+                <span class="n">overwrite</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

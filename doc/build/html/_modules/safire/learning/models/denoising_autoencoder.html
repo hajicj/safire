@@ -1,0 +1,245 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.denoising_autoencoder &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.learning.models.denoising_autoencoder</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">.. module:: </span>
+<span class="sd">    :platform: Unix</span>
+<span class="sd">    :synopsis: ???</span>
+
+<span class="sd">.. moduleauthor: Jan Hajic &lt;hajicj@gmail.com&gt;</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">cPickle</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">safire.utils</span>
+
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">theano.tensor</span> <span class="kn">as</span> <span class="nn">TT</span>
+<span class="kn">from</span> <span class="nn">theano.tensor.shared_randomstreams</span> <span class="kn">import</span> <span class="n">RandomStreams</span>
+
+<span class="kn">from</span> <span class="nn">safire.learning.models.autoencoder</span> <span class="kn">import</span> <span class="n">Autoencoder</span>
+
+<div class="viewcode-block" id="DenoisingAutoencoder"><a class="viewcode-back" href="../../../../safire.learning.models.denoising_autoencoder.html#safire.learning.models.denoising_autoencoder.DenoisingAutoencoder">[docs]</a><span class="k">class</span> <span class="nc">DenoisingAutoencoder</span><span class="p">(</span><span class="n">Autoencoder</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;This is a dummy docstring for class . You had better write a real one.</span>
+<span class="sd">    </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> 
+                 <span class="n">activation</span><span class="o">=</span><span class="n">TT</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">,</span>
+                 <span class="n">backward_activation</span><span class="o">=</span><span class="n">TT</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">,</span>
+                 <span class="n">reconstruction</span><span class="o">=</span><span class="s">&#39;cross-entropy&#39;</span><span class="p">,</span>
+                 <span class="n">W</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">W_prime</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">b_prime</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> 
+                 <span class="n">tied_weights</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">corruption_level</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>
+                 <span class="n">rng</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">(),</span> 
+                 <span class="n">theano_rng</span> <span class="o">=</span> <span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Initialize the parameters of the Denoising Autoencoder.</span>
+<span class="sd">        A Denoising Autoencoder is an unsupervised model that tries to minimize</span>
+<span class="sd">        reconstruction error on input with additional noise introduced to the</span>
+<span class="sd">        model.</span>
+
+<span class="sd">        The noise randomly switches off input neurons with a certain</span>
+<span class="sd">        probability. This is different from a *dropout training* procedure,</span>
+<span class="sd">        where the *hidden* neurons are randomly switched off.</span>
+
+<span class="sd">        :type inputs: theano.tensor.TensorType</span>
+<span class="sd">        :param inputs: Symbolic variable that descripbes the input</span>
+<span class="sd">                       of the architecture (e.g., one minibatch of</span>
+<span class="sd">                       input images, or output of a previous layer)</span>
+
+
+<span class="sd">        :type n_in: int</span>
+<span class="sd">        :param n_in: Number of input units, the dimension of the space</span>
+<span class="sd">                     in which the data points live</span>
+
+<span class="sd">        :type n_out: int</span>
+<span class="sd">        :param n_out: The number of hidden units.</span>
+<span class="sd">        </span>
+<span class="sd">        :type activation: theano.tensor.elemwise.Elemwise</span>
+<span class="sd">        :param activation: The nonlinearity applied at neuron</span>
+<span class="sd">                           output.</span>
+<span class="sd">                      </span>
+<span class="sd">        :type W: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param W: Theano variable pointing to a set of weights that should</span>
+<span class="sd">                  be shared between the autoencoder and another architecture;</span>
+<span class="sd">                  if autoencoder should be standalone, leave this as None.</span>
+<span class="sd">                  This set of weights refers to the transition from visible</span>
+<span class="sd">                  to hidden layer.</span>
+<span class="sd">        </span>
+<span class="sd">        :type W_prime: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param W_prime: Theano variable pointing to a set of weights that</span>
+<span class="sd">                        should be shared between the autoencoder and another</span>
+<span class="sd">                        architecture; if autoencoder should be standalone,</span>
+<span class="sd">                        leave this as None. This set of weights refers to</span>
+<span class="sd">                        the transition from the hidden to the visible layer.</span>
+<span class="sd">                        </span>
+<span class="sd">        :type b: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param b: Theano variable pointing to a set of bias values that</span>
+<span class="sd">                  should be shared between the autoencoder and another</span>
+<span class="sd">                  architecture; if autoencoder should be standalone,</span>
+<span class="sd">                  leave this as None. This set of bias values refers</span>
+<span class="sd">                  to the transition from visible to hidden layer. </span>
+<span class="sd">                  </span>
+<span class="sd">        :type b_prime: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param b_prime: Theano variable pointing to a set of bias values</span>
+<span class="sd">                        that should be shared between the autoencoder and</span>
+<span class="sd">                        another architecture; if autoencoder should be </span>
+<span class="sd">                        standalone, leave this as None. This set of bias</span>
+<span class="sd">                        values refers to the transition from visible to </span>
+<span class="sd">                        hidden layer. </span>
+<span class="sd">                        </span>
+<span class="sd">        :type tied_weights: bool</span>
+<span class="sd">        :param tied_weights: If True (default), forces W_prime = W.T, i.e.</span>
+<span class="sd">                             the visible-hidden transformation and the</span>
+<span class="sd">                             hidden-visible transformation use the same</span>
+<span class="sd">                             weights.</span>
+<span class="sd">                             </span>
+<span class="sd">        :type corruption_level: theano.config.floatX</span>
+<span class="sd">        :param corruption_level: Specify the level of input corruption:</span>
+<span class="sd">                                 the probability that an input neuron&#39;s</span>
+<span class="sd">                                 value will be fixed to 0 during computation</span>
+<span class="sd">                                 of hidden activations.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">DenoisingAutoencoder</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">,</span>
+                                                   <span class="n">activation</span><span class="p">,</span>
+                                                   <span class="n">backward_activation</span><span class="p">,</span>
+                                                   <span class="n">reconstruction</span><span class="p">,</span>
+                                                   <span class="n">W</span><span class="p">,</span> <span class="n">W_prime</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">b_prime</span><span class="p">,</span>
+                                                   <span class="n">tied_weights</span><span class="p">,</span> <span class="n">rng</span><span class="p">,</span>
+                                                   <span class="n">theano_rng</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">corruption_level</span> <span class="o">=</span> <span class="n">corruption_level</span>
+
+<div class="viewcode-block" id="DenoisingAutoencoder.mean_h_given_v"><a class="viewcode-back" href="../../../../safire.learning.models.denoising_autoencoder.html#safire.learning.models.denoising_autoencoder.DenoisingAutoencoder.mean_h_given_v">[docs]</a>    <span class="k">def</span> <span class="nf">mean_h_given_v</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the activation of the hidden units.</span>
+<span class="sd">        </span>
+<span class="sd">        :type inputs: theano.tensor.TensorType</span>
+<span class="sd">        :param inputs: Values of the visible units (i.e. rows of data).</span>
+<span class="sd">        </span>
+<span class="sd">        :returns: The activation on hidden units, as symbolic expression</span>
+<span class="sd">        bound to ``inputs``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">corrupted_inputs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__corrupt_input</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">corrupted_inputs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)</span>
+    </div>
+    <span class="k">def</span> <span class="nf">__corrupt_input</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Randomly sets some of the inputs to zero.</span>
+<span class="sd">        </span>
+<span class="sd">        :type inputs: theano.tensor.TensorType</span>
+<span class="sd">        :param inputs: Values of the visible units (i.e. rows of data).</span>
+<span class="sd">        </span>
+<span class="sd">        :rtype: theano.tensor.TensorType</span>
+<span class="sd">        :returns: The inputs with some values randomly set to 0.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">theano_rng</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="n">size</span> <span class="o">=</span> <span class="n">inputs</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">n</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> 
+                                        <span class="n">p</span> <span class="o">=</span> <span class="mi">1</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">corruption_level</span><span class="p">,</span>
+                                        <span class="n">dtype</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span> <span class="o">*</span> <span class="n">inputs</span>
+
+    <span class="k">def</span> <span class="nf">_init_args_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Saves the model in the form of an init kwarg dict, since not all</span>
+<span class="sd">        attributes of the instance can be pickled. Upon loading, the saved</span>
+<span class="sd">        model kwarg dict will be used as ``**kwargs`` (the ``load`` method</span>
+<span class="sd">        is a classmethod) for an initialization of the model.&quot;&quot;&quot;</span>
+
+        <span class="n">init_arg_dict</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;W&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">,</span>
+            <span class="s">&#39;W_prime&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">W_prime</span><span class="p">,</span>
+            <span class="s">&#39;b&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span>
+            <span class="s">&#39;b_prime&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_prime</span><span class="p">,</span>
+            <span class="s">&#39;corruption_level&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">corruption_level</span><span class="p">,</span>
+            <span class="s">&#39;n_in&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span><span class="p">,</span>
+            <span class="s">&#39;n_out&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span><span class="p">,</span>
+            <span class="s">&#39;activation&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span>
+            <span class="s">&#39;reconstruction&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">reconstruction</span><span class="p">,</span>
+            <span class="s">&#39;tied_weights&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">tied_weights</span><span class="p">,</span>
+            <span class="s">&#39;inputs&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">inputs</span>
+            <span class="c"># Random number generators are ignored?</span>
+        <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">init_arg_dict</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,293 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.pretrain_multimodal &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for scripts.pretrain_multimodal</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Trains an unsupervised layer on text data.</span>
+
+<span class="sd">Use to build individual layers of the text stack. Choose your labels carefully!</span>
+<span class="sd">There is no automated mechanism as of yet to keep track of what is what.</span>
+
+<span class="sd">You can build layers on top of already trained layers by simply selecting the</span>
+<span class="sd">labels for the previous layers. Unless ``--no_transform_corpus`` and</span>
+<span class="sd">``--no_transform_dataset`` flags are given, the source corpus and dataset</span>
+<span class="sd">will be at the end run through the trained model and saved with the</span>
+<span class="sd">``--transformation_label`` label.&quot;&quot;&quot;</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">safire.learning.models</span> <span class="kn">as</span> <span class="nn">models</span>
+<span class="kn">from</span> <span class="nn">safire.learning.models</span> <span class="kn">import</span> <span class="n">DenoisingAutoencoder</span>
+<span class="kn">from</span> <span class="nn">safire.data.loaders</span> <span class="kn">import</span> <span class="n">MultimodalDatasetLoader</span><span class="p">,</span> \
+    <span class="n">MultimodalShardedDatasetLoader</span><span class="p">,</span> <span class="n">LearnerLoader</span>
+<span class="kn">from</span> <span class="nn">safire.data.loaders</span> <span class="kn">import</span> <span class="n">ModelLoader</span>
+<span class="kn">from</span> <span class="nn">safire.learning.interfaces</span> <span class="kn">import</span> <span class="n">SafireTransformer</span>
+<span class="kn">from</span> <span class="nn">safire.learning.learners</span> <span class="kn">import</span> <span class="n">BaseSGDLearner</span>
+
+<span class="kn">from</span> <span class="nn">train_multimodal_model</span> <span class="kn">import</span> <span class="n">check_model_dataset_compatibility</span>
+
+<span class="k">def</span> <span class="nf">_build_argument_parser</span><span class="p">():</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="n">__doc__</span><span class="p">,</span> <span class="n">add_help</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-r&#39;</span><span class="p">,</span> <span class="s">&#39;--root&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The path to&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; the directory which is the root of a dataset.&#39;</span> <span class="o">+</span>
+                        <span class="s">&#39; (Will be passed to a Loader as a root.)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-n&#39;</span><span class="p">,</span> <span class="s">&#39;--name&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The dataset name passed to the&#39;</span> <span class="o">+</span>
+                        <span class="s">&#39; Loader. Has to correspond to the *.vtlist file name.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-t&#39;</span><span class="p">,</span> <span class="s">&#39;--text_label&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The text corpus label from&#39;</span>
+                                                  <span class="s">&#39;which to load data.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-i&#39;</span><span class="p">,</span> <span class="s">&#39;--img_label&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The image corpus label from&#39;</span>
+                                                  <span class="s">&#39;which to load data.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-j&#39;</span><span class="p">,</span> <span class="s">&#39;--joint_label&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The output label. This is to help distinguish &#39;</span> <span class="o">+</span>
+                        <span class="s">&#39;models made with different options. Controls saving names,&#39;</span>
+                        <span class="s">&#39;both for the model and for the transformed corpus.&#39;</span>
+                        <span class="s">&#39;!!!!! For the multimodal corpus, USE ONLY THE JOINT &#39;</span>
+                        <span class="s">&#39;LAYER LABEL as the joint label will be automatically &#39;</span>
+                        <span class="s">&#39;generated using the text and image labels and this one.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--n_out&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The number of model output (joint layer) neurons.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-m&#39;</span><span class="p">,</span> <span class="s">&#39;--model&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;DenoisingAutoencoder&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The name of the model class to use. Default is&#39;</span>
+                             <span class="s">&#39;DenoisingAutoencoder.&#39;</span><span class="p">)</span>
+
+    <span class="c"># Learner settings</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--batch_size&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;How many data points will be used to perform one&#39;</span>
+                             <span class="s">&#39;gradient update.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--learning_rate&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.13</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;How fast will the gradient update be.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--n_epochs&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;How many training epochs should be taken.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--validation_frequency&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Run validation once every X training batches.&#39;</span><span class="p">)</span>
+
+    <span class="c"># Monitoring settings</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--profile_training&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will profile the training procedure.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--plot_transformation&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will plot a sample of the learned &#39;</span>
+                             <span class="s">&#39;transformation after each epoch.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--plot_weights&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will plot the weights after each epoch.&#39;</span><span class="p">)</span>
+
+    <span class="c"># Model settings</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--reconstruction&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The reconstruction measure to use. Currently &#39;</span>
+                             <span class="s">&#39;supported is </span><span class="se">\&#39;</span><span class="s">cross-entropy</span><span class="se">\&#39;</span><span class="s"> and </span><span class="se">\&#39;</span><span class="s">mse</span><span class="se">\&#39;</span><span class="s">.&#39;</span>
+                             <span class="s">&#39; Only valid for autoencoder models.&#39;</span><span class="p">)</span>
+
+    <span class="c"># Saving.</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_save&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will not save anything.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_corpus_transform&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will not save the transformed input&#39;</span>
+                             <span class="s">&#39; corpus.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_dataset_transform&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will not save the transformed dataset.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_save_transformer&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will not save the transformer. (Useful&#39;</span>
+                             <span class="s">&#39;for debugging purposes.)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_save_learner&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will not save the learner. Saving the &#39;</span>
+                             <span class="s">&#39;learner is useful if you will want to resume &#39;</span>
+                             <span class="s">&#39;training later.&#39;</span><span class="p">)</span>
+
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-v&#39;</span><span class="p">,</span> <span class="s">&#39;--verbose&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; INFO logging messages.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--debug&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on debug &#39;</span><span class="o">+</span>
+                        <span class="s">&#39;prints.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--heavy_debug&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on a brutal amount of debugging from inside&#39;</span>
+                             <span class="s">&#39; the compiled theano functions.&#39;</span><span class="p">)</span>
+
+
+    <span class="k">return</span> <span class="n">parser</span>
+
+
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../scripts.pretrain_multimodal.html#scripts.pretrain_multimodal.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing loaders with root </span><span class="si">%s</span><span class="s">, name </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+    <span class="n">dloader</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">mloader</span> <span class="o">=</span> <span class="n">ModelLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading text dataset with label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">text_label</span><span class="p">)</span>
+    <span class="n">mdataset</span> <span class="o">=</span> <span class="n">dloader</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">text_infix</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">text_label</span><span class="p">,</span>
+                            <span class="n">img_infix</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">img_label</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Setting up model handle with output dimension </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">n_out</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">model_class</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">models</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">model</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid model specified: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">model</span><span class="p">)</span>
+
+    <span class="n">check_model_dataset_compatibility</span><span class="p">(</span><span class="n">mdataset</span><span class="p">,</span> <span class="n">model_class</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">model_class</span><span class="p">,</span> <span class="n">models</span><span class="o">.</span><span class="n">Autoencoder</span><span class="p">):</span>
+        <span class="n">model_handle</span> <span class="o">=</span> <span class="n">model_class</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">mdataset</span><span class="p">,</span> <span class="n">n_out</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">n_out</span><span class="p">,</span>
+                                         <span class="n">heavy_debug</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">heavy_debug</span><span class="p">,</span>
+                                         <span class="n">reconstruction</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">reconstruction</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">model_handle</span> <span class="o">=</span> <span class="n">model_class</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">mdataset</span><span class="p">,</span> <span class="n">n_out</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">n_out</span><span class="p">,</span>
+                                         <span class="n">heavy_debug</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">heavy_debug</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Setting up learner...&#39;</span><span class="p">)</span>
+    <span class="n">lloader</span> <span class="o">=</span> <span class="n">LearnerLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="c"># No resuming here (yet)...</span>
+    <span class="n">learner</span> <span class="o">=</span> <span class="n">BaseSGDLearner</span><span class="p">(</span><span class="n">n_epochs</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">n_epochs</span><span class="p">,</span>
+                             <span class="n">b_size</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span>
+                             <span class="n">validation_frequency</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">validation_frequency</span><span class="p">,</span>
+                             <span class="n">plot_transformation</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">plot_transformation</span><span class="p">,</span>
+                             <span class="n">plot_weights</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">plot_weights</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Setting up and training transformer...&#39;</span><span class="p">)</span>
+    <span class="n">transformer</span> <span class="o">=</span> <span class="n">SafireTransformer</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">mdataset</span><span class="p">,</span> <span class="n">learner</span><span class="p">,</span>
+                                    <span class="n">profile_training</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">profile_training</span><span class="p">)</span>
+
+    <span class="n">transformation_label</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">text_label</span> <span class="o">+</span> <span class="s">&#39;-&#39;</span> <span class="o">+</span> <span class="n">args</span><span class="o">.</span><span class="n">img_label</span> <span class="o">+</span> <span class="s">&#39;-&#39;</span> <span class="o">+</span> <span class="n">args</span><span class="o">.</span><span class="n">joint_label</span>
+
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Creating transformed corpus with label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">transformation_label</span><span class="p">)</span>
+    <span class="n">vtcorp</span> <span class="o">=</span> <span class="n">dloader</span><span class="o">.</span><span class="n">load_text_corpus</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">text_label</span><span class="p">)</span>
+    <span class="n">transformed_vtcorp</span> <span class="o">=</span> <span class="n">transformer</span><span class="p">[</span><span class="n">vtcorp</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">no_save</span><span class="p">:</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">no_corpus_transform</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">no_dataset_transform</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">no_save_transformer</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">no_save_learner</span> <span class="o">=</span> <span class="bp">True</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_save_learner</span><span class="p">:</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Saving learner with label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">transformation_label</span><span class="p">)</span>
+        <span class="n">lloader</span><span class="o">.</span><span class="n">save_learner</span><span class="p">(</span><span class="n">learner</span><span class="p">,</span> <span class="n">transformation_label</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_save_transformer</span><span class="p">:</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Saving transformer with label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">transformation_label</span><span class="p">)</span>
+        <span class="n">mloader</span><span class="o">.</span><span class="n">save_transformer</span><span class="p">(</span><span class="n">transformer</span><span class="p">,</span> <span class="n">transformation_label</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_corpus_transform</span><span class="p">:</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Saving transformed joint repr. as corpus with label </span><span class="si">%s</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="n">transformation_label</span><span class="p">)</span>
+        <span class="n">dloader</span><span class="o">.</span><span class="n">serialize_text_corpus</span><span class="p">(</span><span class="n">transformed_vtcorp</span><span class="p">,</span>
+                                      <span class="n">transformation_label</span><span class="p">)</span>
+        <span class="n">dloader</span><span class="o">.</span><span class="n">save_text_corpus</span><span class="p">(</span><span class="n">transformed_vtcorp</span><span class="p">,</span> <span class="n">transformation_label</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_dataset_transform</span><span class="p">:</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Saving transformed joint repr. as dataset with label </span><span class="si">%s</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="n">transformation_label</span><span class="p">)</span>
+        <span class="n">dloader</span><span class="o">.</span><span class="n">build_text</span><span class="p">(</span><span class="n">transformed_vtcorp</span><span class="p">,</span> <span class="n">transformation_label</span><span class="p">)</span>
+
+
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">_build_argument_parser</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+    <span class="n">main</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

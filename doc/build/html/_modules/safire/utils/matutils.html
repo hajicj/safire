@@ -1,0 +1,356 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.utils.matutils &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="safire.utils" href="../utils.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li><a href="../utils.html" accesskey="U">safire.utils</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.utils.matutils</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">``math.py`` is a library that provides mathematical utility functions.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">math</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+<div class="viewcode-block" id="precision"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.precision">[docs]</a><span class="k">def</span> <span class="nf">precision</span><span class="p">(</span><span class="n">prediction</span><span class="p">,</span> <span class="n">true</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes the precision of the prediction item predicting members of the</span>
+<span class="sd">    true item.</span>
+
+<span class="sd">    Precision for an empty prediction is defined as 1.&quot;&quot;&quot;</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span><span class="n">true</span><span class="p">)</span>
+    <span class="n">total</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">prediction</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">total</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mf">1.0</span>
+    <span class="n">hits</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">([</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">prediction</span> <span class="k">if</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">t</span><span class="p">])</span>
+    <span class="n">prec</span> <span class="o">=</span> <span class="n">hits</span> <span class="o">/</span> <span class="n">total</span>
+    <span class="k">return</span> <span class="n">prec</span>
+</div>
+<div class="viewcode-block" id="recall"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.recall">[docs]</a><span class="k">def</span> <span class="nf">recall</span><span class="p">(</span><span class="n">prediction</span><span class="p">,</span> <span class="n">true</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes the precision of the prediction item predicting members of the</span>
+<span class="sd">    true item.</span>
+
+<span class="sd">    Recall for an empty prediction is defined as 0.&quot;&quot;&quot;</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span><span class="n">true</span><span class="p">)</span>
+    <span class="n">total</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">true</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">total</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mf">1.0</span>
+    <span class="n">hits</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">([</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">prediction</span> <span class="k">if</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">t</span><span class="p">])</span>
+    <span class="n">rec</span> <span class="o">=</span> <span class="n">hits</span> <span class="o">/</span> <span class="n">total</span>
+    <span class="k">return</span> <span class="n">rec</span>
+</div>
+<div class="viewcode-block" id="f_score"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.f_score">[docs]</a><span class="k">def</span> <span class="nf">f_score</span><span class="p">(</span><span class="n">prediction</span><span class="p">,</span> <span class="n">true</span><span class="p">,</span> <span class="n">w_prec</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">w_rec</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes the weighed f-score of the prediction item predicting members</span>
+<span class="sd">    of the test item.</span>
+
+<span class="sd">    Currently only supports f1-score.&quot;&quot;&quot;</span>
+    <span class="n">rec</span> <span class="o">=</span> <span class="n">recall</span><span class="p">(</span><span class="n">prediction</span><span class="p">,</span> <span class="n">true</span><span class="p">)</span>
+    <span class="n">prec</span> <span class="o">=</span> <span class="n">precision</span><span class="p">(</span><span class="n">prediction</span><span class="p">,</span> <span class="n">true</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">rec</span> <span class="o">==</span> <span class="mf">0.0</span> <span class="ow">or</span> <span class="n">prec</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mf">0.0</span>
+    <span class="n">fsc</span> <span class="o">=</span> <span class="p">((</span><span class="n">w_prec</span> <span class="o">+</span> <span class="n">w_rec</span><span class="p">)</span> <span class="o">*</span> <span class="n">prec</span> <span class="o">*</span> <span class="n">rec</span><span class="p">)</span> <span class="o">/</span> <span class="p">((</span><span class="n">w_rec</span> <span class="o">*</span> <span class="n">rec</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">w_prec</span> <span class="o">*</span> <span class="n">prec</span><span class="p">))</span>
+    <span class="k">return</span>  <span class="n">fsc</span>
+
+</div>
+<div class="viewcode-block" id="kappa"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.kappa">[docs]</a><span class="k">def</span> <span class="nf">kappa</span><span class="p">(</span><span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">,</span> <span class="n">length</span><span class="o">=</span><span class="mf">12.0</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes Cohen&#39;s kappa for the given annotation members. The ``length``</span>
+<span class="sd">    parameter is used to see how many &quot;&quot;&quot;</span>
+    <span class="n">a1_tagged</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">a1</span><span class="p">)</span>
+    <span class="n">p1_tagged</span> <span class="o">=</span> <span class="n">a1_tagged</span> <span class="o">/</span> <span class="n">length</span>
+    <span class="n">a1_untagged</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">*</span> <span class="p">(</span><span class="n">length</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">a1</span><span class="p">))</span>
+    <span class="n">p1_untagged</span> <span class="o">=</span> <span class="n">a1_untagged</span> <span class="o">/</span> <span class="n">length</span>
+
+    <span class="n">a2_tagged</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">a2</span><span class="p">)</span>
+    <span class="n">p2_tagged</span> <span class="o">=</span> <span class="n">a2_tagged</span> <span class="o">/</span> <span class="n">length</span>
+    <span class="n">a2_untagged</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">*</span> <span class="p">(</span><span class="n">length</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">a2</span><span class="p">))</span>
+    <span class="n">p2_untagged</span> <span class="o">=</span> <span class="n">a2_untagged</span> <span class="o">/</span> <span class="n">length</span>
+
+    <span class="n">a1_fset</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span><span class="n">a1</span><span class="p">)</span>
+    <span class="n">hits</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">([</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">a2</span> <span class="k">if</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">a1_fset</span><span class="p">])</span>
+    <span class="n">both_missed</span> <span class="o">=</span> <span class="n">length</span> <span class="o">-</span> <span class="p">(</span><span class="n">a1_tagged</span> <span class="o">+</span> <span class="n">a2_tagged</span> <span class="o">-</span> <span class="n">hits</span><span class="p">)</span>
+
+    <span class="n">p_agree</span> <span class="o">=</span> <span class="p">(</span><span class="n">hits</span> <span class="o">+</span> <span class="n">both_missed</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">length</span><span class="p">)</span>
+    <span class="n">p_random</span> <span class="o">=</span> <span class="n">p1_tagged</span> <span class="o">*</span> <span class="n">p2_tagged</span> <span class="o">+</span> <span class="n">p1_untagged</span> <span class="o">*</span> <span class="n">p2_untagged</span>
+
+    <span class="k">if</span> <span class="n">p_random</span> <span class="o">==</span> <span class="mf">1.0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mf">0.0</span>
+
+    <span class="n">kappa</span> <span class="o">=</span> <span class="p">(</span><span class="n">p_agree</span> <span class="o">-</span> <span class="n">p_random</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">p_random</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">kappa</span>
+
+<span class="c">##############################################################################</span>
+
+<span class="c"># Evaluation functions</span>
+</div>
+<div class="viewcode-block" id="avg_pairwise_mutual_precision"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.avg_pairwise_mutual_precision">[docs]</a><span class="k">def</span> <span class="nf">avg_pairwise_mutual_precision</span><span class="p">(</span><span class="n">items</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes the average pairwise mutual precision of all the given items.&quot;&quot;&quot;</span>
+    <span class="n">pairwise_mutual_precisions</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">it_i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">items</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+        <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">it_j</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">items</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">:]):</span>
+            <span class="n">pmp</span> <span class="o">=</span> <span class="n">pairwise_mutual_precision</span><span class="p">(</span><span class="n">it_i</span><span class="p">,</span> <span class="n">it_j</span><span class="p">)</span>
+            <span class="n">pairwise_mutual_precisions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pmp</span><span class="p">)</span>
+    <span class="n">avg_pmp</span> <span class="o">=</span> <span class="n">avg</span><span class="p">(</span><span class="n">pairwise_mutual_precisions</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">avg_pmp</span>
+</div>
+<div class="viewcode-block" id="pairwise_mutual_precision"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.pairwise_mutual_precision">[docs]</a><span class="k">def</span> <span class="nf">pairwise_mutual_precision</span><span class="p">(</span><span class="n">i1</span><span class="p">,</span> <span class="n">i2</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes the mutual precision of two items. Mutual precision is defined</span>
+<span class="sd">    as the average of the proportion of members in ``i1`` that are members of</span>
+<span class="sd">    ``i2`` and vice versa.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">i1</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">i2</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mf">0.5</span>
+    <span class="n">fi1</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span><span class="n">i1</span><span class="p">)</span>
+    <span class="n">fi2</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span><span class="n">i2</span><span class="p">)</span>
+    <span class="n">p1</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">([</span><span class="n">m</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">i1</span> <span class="k">if</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">fi2</span><span class="p">]))</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">i1</span><span class="p">))</span>
+    <span class="n">p2</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">([</span><span class="n">m</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">i2</span> <span class="k">if</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">fi1</span><span class="p">]))</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">i2</span><span class="p">))</span>
+    <span class="n">p_avg</span> <span class="o">=</span> <span class="p">(</span><span class="n">p1</span> <span class="o">+</span> <span class="n">p2</span><span class="p">)</span> <span class="o">/</span> <span class="mf">2.0</span>
+    <span class="k">return</span> <span class="n">p_avg</span>
+</div>
+<div class="viewcode-block" id="avg"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.avg">[docs]</a><span class="k">def</span> <span class="nf">avg</span><span class="p">(</span><span class="n">iterable</span><span class="p">,</span> <span class="n">weights</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns the average from the iterable (assumes that the iterable can</span>
+<span class="sd">    be summed). If weights are given, the weighed average is computed.</span>
+
+<span class="sd">    Weights do not have to be normalized.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">weights</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">iterable</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">iterable</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">iterable</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Iterable and weights lengths do not match! (</span><span class="si">%d</span><span class="s"> vs. </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">iterable</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">weights</span><span class="p">)))</span>
+        <span class="n">wsum</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">*</span> <span class="nb">sum</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
+        <span class="n">normalized_weights</span> <span class="o">=</span> <span class="p">[</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">*</span> <span class="n">w</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">*</span> <span class="n">wsum</span><span class="p">)</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">weights</span> <span class="p">]</span>
+        <span class="n">weighed_iterable</span> <span class="o">=</span> <span class="p">[</span> <span class="n">i</span> <span class="o">*</span> <span class="n">w</span>
+                             <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">w</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">iterable</span><span class="p">,</span> <span class="n">normalized_weights</span><span class="p">)]</span>
+        <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">weighed_iterable</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="mse"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.mse">[docs]</a><span class="k">def</span> <span class="nf">mse</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">),</span> <span class="s">&#39;X and Y must be of the same length! (x: </span><span class="si">%d</span><span class="s">, y: </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+
+    <span class="n">squared_error</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">squared_error</span><span class="p">)</span> <span class="o">/</span> <span class="n">N</span>
+    <span class="k">return</span> <span class="n">result</span>
+</div>
+<div class="viewcode-block" id="rmse"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.rmse">[docs]</a><span class="k">def</span> <span class="nf">rmse</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">mse</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="rn_rmse"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.rn_rmse">[docs]</a><span class="k">def</span> <span class="nf">rn_rmse</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Range-normalized RMSE.&quot;&quot;&quot;</span>
+    <span class="n">maximum</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+    <span class="n">minimum</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="nb">min</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">maximum</span> <span class="o">==</span> <span class="n">minimum</span><span class="p">):</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Zero range!&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="mf">0.0</span>
+    <span class="n">rnrmse</span> <span class="o">=</span> <span class="n">rmse</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">maximum</span> <span class="o">-</span> <span class="n">minimum</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">rnrmse</span>
+</div>
+<div class="viewcode-block" id="crmse"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.crmse">[docs]</a><span class="k">def</span> <span class="nf">crmse</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Mean-normalized RMSE.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">rmse</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">avg</span><span class="p">(</span><span class="n">x</span><span class="o">+</span><span class="n">y</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="maxn_sparse_rmse"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.maxn_sparse_rmse">[docs]</a><span class="k">def</span> <span class="nf">maxn_sparse_rmse</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes proportion of attainable RMSE. Assumes X and Y are sparse enough</span>
+<span class="sd">    so that if X is sorted min-&gt;max and Y is sorted max-&gt;min, one of X[i], Y[i]</span>
+<span class="sd">    will always be 0. For x,y &gt;= 0, this definitely does maximize RMSE.&quot;&quot;&quot;</span>
+    <span class="n">sorted_x</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="n">rsorted_y</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">y</span><span class="p">)[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">max_rmse</span> <span class="o">=</span> <span class="n">rmse</span><span class="p">(</span><span class="n">sorted_x</span><span class="p">,</span> <span class="n">rsorted_y</span><span class="p">)</span>
+    <span class="n">actual_rmse</span> <span class="o">=</span> <span class="n">rmse</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">max_rmse</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">):</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;All zero feature pair!&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">numpy</span><span class="o">.</span><span class="n">nan</span>
+    <span class="n">maxnrmse</span> <span class="o">=</span> <span class="n">actual_rmse</span> <span class="o">/</span> <span class="n">max_rmse</span>
+    <span class="k">return</span> <span class="n">maxnrmse</span>
+</div>
+<div class="viewcode-block" id="mae"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.mae">[docs]</a><span class="k">def</span> <span class="nf">mae</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Mean absolute error.&quot;&quot;&quot;</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">),</span> <span class="s">&#39;X and Y must be of the same length! (x: </span><span class="si">%d</span><span class="s">, y: </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+    <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">absolute</span><span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">y</span><span class="p">))</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+
+<span class="c">##############################################################################</span>
+</div>
+<div class="viewcode-block" id="scale_to_unit_covariance"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.scale_to_unit_covariance">[docs]</a><span class="k">def</span> <span class="nf">scale_to_unit_covariance</span><span class="p">(</span><span class="n">array</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Transform the array so that all columns have the same covariance.&quot;&quot;&quot;</span>
+    <span class="n">covariances</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">array</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">avg_cov</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">covariances</span><span class="p">)</span>
+    <span class="c"># This is the covariance we will be scaling to.</span>
+    <span class="c"># We want to compute the coefficients for each column.</span>
+    <span class="n">coefficients</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">covariances</span><span class="p">)</span> <span class="o">*</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">avg_cov</span><span class="p">)</span>
+    <span class="k">print</span> <span class="n">coefficients</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">scaled_array</span> <span class="o">=</span> <span class="n">array</span> <span class="o">*</span> <span class="n">coefficients</span>
+    <span class="k">return</span> <span class="n">scaled_array</span>
+
+<span class="c">##############################################################################</span>
+
+<span class="c"># Functions for evaluating metrics on a matrix column grid.</span>
+
+</div>
+<div class="viewcode-block" id="generate_grid"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.generate_grid">[docs]</a><span class="k">def</span> <span class="nf">generate_grid</span><span class="p">(</span><span class="n">matrix</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="n">use_cols</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">cols</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns mean squared errors between pairs of matrix columns. Results</span>
+<span class="sd">    are returned as a grid dict with keys in use_cols.&quot;&quot;&quot;</span>
+    <span class="n">n_cols</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">matrix</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">use_cols</span><span class="p">:</span>
+        <span class="n">use_cols</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_cols</span><span class="p">)</span>
+
+    <span class="n">mses</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">n_i</span><span class="p">,</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">use_cols</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+        <span class="n">cmses</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">ivals</span> <span class="o">=</span> <span class="n">matrix</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">use_cols</span><span class="p">[</span><span class="n">n_i</span><span class="o">+</span><span class="mi">1</span><span class="p">:]:</span>
+            <span class="n">m</span> <span class="o">=</span> <span class="n">fn</span><span class="p">(</span><span class="n">ivals</span><span class="p">,</span> <span class="n">matrix</span><span class="p">[:,</span> <span class="n">j</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">numpy</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;NaN in grid computation at </span><span class="si">%d</span><span class="s">:</span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">cmses</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">m</span>
+        <span class="n">mses</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">cmses</span>
+
+    <span class="k">return</span> <span class="n">mses</span>
+</div>
+<div class="viewcode-block" id="avg_grid"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.avg_grid">[docs]</a><span class="k">def</span> <span class="nf">avg_grid</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">use_cols</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">cols</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes average MSE between given matrix columns.&quot;&quot;&quot;</span>
+
+    <span class="n">s</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">grid</span><span class="p">:</span>
+        <span class="n">v_i</span> <span class="o">=</span> <span class="n">grid</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">numpy</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">v_i</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;NaN in grid for feature </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">i</span><span class="p">)</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">v_i</span><span class="p">)</span>
+        <span class="n">N</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">v_i</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">numpy</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">s</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;NaN in grid sum at feature </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">i</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">numpy</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;NaN in grid size at feature </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">i</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">s</span> <span class="o">/</span> <span class="n">N</span>
+</div>
+<div class="viewcode-block" id="grid2sym_matrix"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.grid2sym_matrix">[docs]</a><span class="k">def</span> <span class="nf">grid2sym_matrix</span><span class="p">(</span><span class="n">grid</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Unrolls the grid into a 2d ndarray. Assumes that the grid is an upper</span>
+<span class="sd">    diagonal. Doesn&#39;t symmetrize (the rest is left at 0.0).&quot;&quot;&quot;</span>
+    <span class="n">n_rows</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">grid</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="n">n_cols</span> <span class="o">=</span> <span class="n">grid_max</span><span class="p">(</span><span class="n">grid</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="k">print</span> <span class="s">&#39;Grid rows:&#39;</span><span class="p">,</span> <span class="n">n_rows</span>
+    <span class="k">print</span> <span class="s">&#39;Grid max:&#39;</span><span class="p">,</span> <span class="n">n_cols</span>
+
+    <span class="n">m</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_rows</span><span class="p">,</span> <span class="n">n_cols</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">grid</span><span class="p">:</span>
+        <span class="n">g</span> <span class="o">=</span> <span class="n">grid</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">g</span><span class="p">:</span>
+            <span class="n">m</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">g</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+            <span class="n">m</span><span class="p">[</span><span class="n">j</span><span class="p">,</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">g</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">m</span>
+</div>
+<div class="viewcode-block" id="grid_max"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.grid_max">[docs]</a><span class="k">def</span> <span class="nf">grid_max</span><span class="p">(</span><span class="n">grid</span><span class="p">):</span>
+    <span class="n">m</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">grid</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span> <span class="nb">max</span><span class="p">([</span><span class="nb">max</span><span class="p">(</span><span class="n">grid</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">grid</span><span class="p">]))</span>
+    <span class="k">return</span> <span class="n">m</span>
+
+
+
+<span class="c">##############################################################################</span>
+</div>
+<div class="viewcode-block" id="zero_masking"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.zero_masking">[docs]</a><span class="k">def</span> <span class="nf">zero_masking</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">theano_rng</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">    :param X: theano.tensor.var.TensorVariable</span>
+<span class="sd">    :param p:</span>
+
+<span class="sd">    :type theano_rng: theano.</span>
+<span class="sd">    :param theano_rng:</span>
+
+<span class="sd">    :return:</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">theano_rng</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">p</span><span class="p">)</span> <span class="o">*</span> <span class="n">X</span>
+</div>
+<div class="viewcode-block" id="uniform_noise"><a class="viewcode-back" href="../../../safire.utils.matutils.html#safire.utils.matutils.uniform_noise">[docs]</a><span class="k">def</span> <span class="nf">uniform_noise</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">theano_rng</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Adds uniform noise to the given X.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">theano_rng</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">low</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">high</span><span class="o">=</span><span class="n">p</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li>
+          <li><a href="../utils.html" >safire.utils</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,485 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.run &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for scripts.run</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">``run.py`` is a script that runs a trained text-image system.</span>
+
+<span class="sd">The text and image pipelines are loaded layer by layer, then the joint layer</span>
+<span class="sd">is loaded. The text-to-image joint sampling handle and the backward-pass handles</span>
+<span class="sd">through the image pipeline are initialized.</span>
+
+<span class="sd">::</span>
+
+<span class="sd">run.py -t .NAV.pf0.2.pff.tfidf .RSM-2000 .RBM-1000 -i . .DA-1000 -j .RBM-1000</span>
+
+<span class="sd">::</span>
+
+<span class="sd">The labels for individual pipelines are assembled gradually from the left.</span>
+<span class="sd">The first layer of the text pipeline will have the infix</span>
+<span class="sd">``.NAV.pf0.2.pff.tfidf``, the second layer ``.NAV.pf0.2.pff.tfidf.RSM-2000``,</span>
+<span class="sd">the third ``.NAV.pf0.2.pff.tfidf.RSM-2000.RBM-1000``. For an empty infix, use</span>
+<span class="sd">``.``; the layers above the preprocessing layer should always have a non-empty</span>
+<span class="sd">label.</span>
+
+<span class="sd">The joint label is constructed by joining the text and image labels by a dash</span>
+<span class="sd">(``-``) and then joining, also by dash, the joint label. (The text labels come</span>
+<span class="sd">first.)</span>
+
+<span class="sd">To run the baseline system (text similarity -&gt; direct transfer to image -&gt;</span>
+<span class="sd">image similarity), use the ``--baseline`` flag. The top-level text label will</span>
+<span class="sd">be used as a text index label.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">operator</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">safire.data.loaders</span> <span class="kn">import</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">,</span> <span class="n">ModelLoader</span><span class="p">,</span> \
+    <span class="n">IndexLoader</span>
+<span class="kn">from</span> <span class="nn">safire.learning.interfaces</span> <span class="kn">import</span> <span class="n">MultimodalClampedSamplerModelHandle</span><span class="p">,</span> \
+    <span class="n">SafireTransformer</span>
+<span class="kn">from</span> <span class="nn">safire.learning.interfaces.model_handle</span> <span class="kn">import</span> <span class="n">BackwardModelHandle</span>
+<span class="kn">from</span> <span class="nn">safire.utils.transcorp</span> <span class="kn">import</span> <span class="n">dimension</span><span class="p">,</span> <span class="n">get_transformers</span><span class="p">,</span> \
+    <span class="n">reset_vtcorp_input</span><span class="p">,</span> <span class="n">bottom_corpus</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+<div class="viewcode-block" id="construct_pipeline_labels"><a class="viewcode-back" href="../../scripts.run.html#scripts.run.construct_pipeline_labels">[docs]</a><span class="k">def</span> <span class="nf">construct_pipeline_labels</span><span class="p">(</span><span class="n">labels</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Correctly concatenates the labels for one pipeline, to produce their full</span>
+<span class="sd">    versions.</span>
+
+<span class="sd">    :param labels: A list of partial labels (suffixes).</span>
+
+<span class="sd">    :return: The list of full labels.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">labels</span> <span class="o">==</span> <span class="p">[]:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+
+    <span class="n">first_label</span> <span class="o">=</span> <span class="n">labels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">first_label</span> <span class="o">==</span> <span class="s">&#39;.&#39;</span><span class="p">:</span>
+        <span class="n">first_label</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+    <span class="n">output_labels</span> <span class="o">=</span> <span class="p">[</span><span class="n">first_label</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">labels</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>
+        <span class="n">output_labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">output_labels</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">l</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">output_labels</span>
+
+</div>
+<div class="viewcode-block" id="construct_joint_label"><a class="viewcode-back" href="../../scripts.run.html#scripts.run.construct_joint_label">[docs]</a><span class="k">def</span> <span class="nf">construct_joint_label</span><span class="p">(</span><span class="n">text_label</span><span class="p">,</span> <span class="n">img_label</span><span class="p">,</span> <span class="n">joint_label</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Constructs the label for the joint layer.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">text_label</span> <span class="o">+</span> <span class="s">&#39;-&#39;</span> <span class="o">+</span> <span class="n">img_label</span> <span class="o">+</span> <span class="s">&#39;-&#39;</span> <span class="o">+</span> <span class="n">joint_label</span>
+
+</div>
+<div class="viewcode-block" id="emit_results"><a class="viewcode-back" href="../../scripts.run.html#scripts.run.emit_results">[docs]</a><span class="k">def</span> <span class="nf">emit_results</span><span class="p">(</span><span class="n">results</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Writes the query results. The output format is a CSV file with three</span>
+<span class="sd">    columns: query text name, sorted image IDs and sorted similarities.</span>
+<span class="sd">    The latter two columns are ``;``-separated.&quot;&quot;&quot;</span>
+    <span class="n">output_lines</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">text_file</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+        <span class="n">r</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="n">text_file</span><span class="p">]</span>
+        <span class="n">images</span><span class="p">,</span> <span class="n">similarities</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">r</span><span class="p">)</span>
+        <span class="n">img_string</span> <span class="o">=</span> <span class="s">&#39;;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">images</span><span class="p">)</span>
+        <span class="n">sim_string</span> <span class="o">=</span> <span class="s">&#39;;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span> <span class="s">&#39;</span><span class="si">%.5f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">similarities</span><span class="p">])</span>
+        <span class="n">line</span> <span class="o">=</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">text_file</span><span class="p">,</span> <span class="n">img_string</span><span class="p">,</span> <span class="n">sim_string</span><span class="p">])</span>
+        <span class="n">output_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_lines</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">output</span>
+
+<span class="c">###############################################################################</span>
+</div>
+<div class="viewcode-block" id="baseline_run"><a class="viewcode-back" href="../../scripts.run.html#scripts.run.baseline_run">[docs]</a><span class="k">def</span> <span class="nf">baseline_run</span><span class="p">(</span><span class="n">input_corpus</span><span class="p">,</span> <span class="n">text_index</span><span class="p">,</span> <span class="n">image_index</span><span class="p">,</span> <span class="n">multimodal_dataset</span><span class="p">,</span>
+                 <span class="n">retrieve_num_best</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Runs the baseline system: find most similar text, get its image,</span>
+<span class="sd">    find most similar.</span>
+
+<span class="sd">    :type multimodal_dataset: safire.data.sharded_multimodal_dataset.ShardedMultimodalDatasest</span>
+<span class="sd">    :param multimodal_dataset: The multimodal dataset that contains the appropriate</span>
+<span class="sd">        text-image mapping.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">text_num_best</span> <span class="o">=</span> <span class="mi">100</span>
+    <span class="n">text_index</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="n">text_num_best</span>
+
+    <span class="n">outputs</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c"># Retrieve most similar images to original images for most similar text</span>
+    <span class="n">n_processed</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="n">bow</span> <span class="ow">in</span> <span class="n">input_corpus</span><span class="p">:</span>
+        <span class="n">n_processed</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">n_processed</span> <span class="o">%</span> <span class="mi">100</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Processed </span><span class="si">%d</span><span class="s"> items in </span><span class="si">%d</span><span class="s"> s.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">n_processed</span><span class="p">,</span>
+                                                          <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span><span class="p">))</span>
+
+        <span class="n">best_texts</span> <span class="o">=</span> <span class="n">text_index</span><span class="p">[</span><span class="n">bow</span><span class="p">]</span>
+
+        <span class="n">qresults</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">text</span><span class="p">,</span> <span class="n">textsim</span> <span class="ow">in</span> <span class="n">best_texts</span><span class="p">:</span>
+            <span class="c"># The index built from the vtextcorpus may have some texts</span>
+            <span class="c"># that have no images. We need to find the closest text that</span>
+            <span class="c"># actually has an associated image.</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">iids</span> <span class="o">=</span> <span class="n">multimodal_dataset</span><span class="o">.</span><span class="n">textno2imno</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="k">for</span> <span class="n">iid</span> <span class="ow">in</span> <span class="n">iids</span><span class="p">:</span>
+                <span class="c">#logging.info(&#39;Text query %d: %s&#39; % (text, str(iid)))</span>
+                <span class="n">ibow</span> <span class="o">=</span> <span class="n">multimodal_dataset</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">get_sparse</span><span class="p">(</span><span class="n">iid</span><span class="p">)</span>
+                <span class="n">iid_qresults</span> <span class="o">=</span> <span class="n">image_index</span><span class="p">[</span><span class="n">ibow</span><span class="p">]</span>
+
+                <span class="c">#logging.info(&#39;Extending query by %s&#39; % str(iid_qresults))</span>
+                <span class="n">qresults</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">iid_qresults</span><span class="p">)</span>
+
+        <span class="n">result_totals</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c">#logging.info(&#39;QResults: %s&#39; % str(qresults))</span>
+        <span class="k">for</span> <span class="n">imno</span><span class="p">,</span> <span class="n">sim</span> <span class="ow">in</span> <span class="n">qresults</span><span class="p">:</span>
+            <span class="c">#logging.info(&#39;Imno: %s, sim: %s&#39; % (str(imno), str(sim)))</span>
+            <span class="k">if</span> <span class="n">imno</span> <span class="ow">in</span> <span class="n">result_totals</span><span class="p">:</span>
+                <span class="n">result_totals</span><span class="p">[</span><span class="n">imno</span><span class="p">]</span> <span class="o">+=</span> <span class="n">sim</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">result_totals</span><span class="p">[</span><span class="n">imno</span><span class="p">]</span> <span class="o">=</span> <span class="n">sim</span>
+
+        <span class="n">result_totals_list</span> <span class="o">=</span> <span class="n">result_totals</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="n">sorted_qresults</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">result_totals_list</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span>
+                                 <span class="n">reverse</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="n">output</span> <span class="o">=</span> <span class="n">sorted_qresults</span><span class="p">[:</span><span class="n">retrieve_num_best</span><span class="p">]</span>
+        <span class="n">outputs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+
+    <span class="c"># Convert to IIDs</span>
+    <span class="n">icorp</span> <span class="o">=</span> <span class="n">multimodal_dataset</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">icorp</span>
+    <span class="n">output_w_iids</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">outputs</span><span class="p">:</span>
+        <span class="n">o_w_iids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">imno</span><span class="p">,</span> <span class="n">sim</span> <span class="ow">in</span> <span class="n">o</span><span class="p">:</span>
+            <span class="n">iid</span> <span class="o">=</span> <span class="n">icorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">imno</span><span class="p">]</span>
+            <span class="n">o_w_iids</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">iid</span><span class="p">,</span> <span class="n">sim</span><span class="p">))</span>
+        <span class="n">output_w_iids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">o_w_iids</span><span class="p">)</span>
+
+    <span class="c"># Convert to tIDs</span>
+    <span class="n">input_vtcorp</span> <span class="o">=</span> <span class="n">bottom_corpus</span><span class="p">(</span><span class="n">input_corpus</span><span class="p">)</span>
+    <span class="n">tids</span> <span class="o">=</span> <span class="p">[</span> <span class="n">input_vtcorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">textno</span><span class="p">]</span>
+             <span class="k">for</span> <span class="n">textno</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">input_corpus</span><span class="p">))</span> <span class="p">]</span>
+
+    <span class="n">results</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">tid</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">tids</span><span class="p">):</span>
+        <span class="n">results</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="n">output_w_iids</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">results</span>
+
+
+
+<span class="c">###############################################################################</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../scripts.run.html#scripts.run.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Executing run.py...&#39;</span><span class="p">)</span>
+
+    <span class="c"># Construct full labels</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Constructing labels.&#39;</span><span class="p">)</span>
+    <span class="n">text_labels</span> <span class="o">=</span> <span class="n">construct_pipeline_labels</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">text_labels</span><span class="p">)</span>
+    <span class="n">img_labels</span> <span class="o">=</span> <span class="n">construct_pipeline_labels</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">img_labels</span><span class="p">)</span>
+    <span class="n">joint_label</span> <span class="o">=</span> <span class="n">construct_joint_label</span><span class="p">(</span><span class="n">text_labels</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">img_labels</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span>
+                                        <span class="n">args</span><span class="o">.</span><span class="n">joint_label</span><span class="p">)</span>
+
+    <span class="c"># Initialize loaders</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing loaders (root </span><span class="si">%s</span><span class="s">, name </span><span class="si">%s</span><span class="s">).&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+    <span class="n">loader</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">mloader</span> <span class="o">=</span> <span class="n">ModelLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">index_name</span><span class="p">:</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">index_name</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing index loader (root </span><span class="si">%s</span><span class="s">, name </span><span class="si">%s</span><span class="s">).&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">index_name</span><span class="p">))</span>
+    <span class="n">iloader</span> <span class="o">=</span> <span class="n">IndexLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">index_name</span><span class="p">)</span>
+
+    <span class="c"># Load index</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading index with label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">index_label</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">index_label</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">img_labels</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Index label (</span><span class="si">%s</span><span class="s">) does not correspond to any image processing label (</span><span class="si">%s</span><span class="s">).&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">index_label</span><span class="p">,</span> <span class="s">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">img_labels</span><span class="p">)))</span>
+    <span class="n">index</span> <span class="o">=</span> <span class="n">iloader</span><span class="o">.</span><span class="n">load_index</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">index_label</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">num_best</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">index</span><span class="p">):</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;num_best </span><span class="si">%d</span><span class="s"> greater than index size </span><span class="si">%d</span><span class="s">, setting to index size.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">num_best</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">index</span><span class="p">)))</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+    <span class="n">index</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">num_best</span>
+
+    <span class="c"># Load input corpora, derive modality dimensions</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading input corpora, deriving modality dimensions.&#39;</span><span class="p">)</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;  Text label:  </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">text_labels</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;  Image label: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">img_labels</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">text_processing_corpus</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load_text_corpus</span><span class="p">(</span><span class="n">text_labels</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">dim_text</span> <span class="o">=</span> <span class="n">dimension</span><span class="p">(</span><span class="n">text_processing_corpus</span><span class="p">)</span>
+    <span class="n">img_processing_corpus</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load_image_corpus</span><span class="p">(</span><span class="n">img_labels</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">dim_img</span> <span class="o">=</span> <span class="n">dimension</span><span class="p">(</span><span class="n">img_processing_corpus</span><span class="p">)</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;  dim_text: </span><span class="si">%d</span><span class="s">, dim_img: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">dim_text</span><span class="p">,</span> <span class="n">dim_img</span><span class="p">))</span>
+
+    <span class="c"># At this point, the baseline system code branch branches off.</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">baseline</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Running baseline model with text index </span><span class="si">%s</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="n">text_labels</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">text_index_label</span> <span class="o">=</span> <span class="n">text_labels</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="c"># This is fixed.</span>
+        <span class="n">tiloader</span> <span class="o">=</span> <span class="n">IndexLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="c"># Text index from training.</span>
+        <span class="n">text_index</span> <span class="o">=</span> <span class="n">tiloader</span><span class="o">.</span><span class="n">load_text_index</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">text_index_label</span><span class="p">)</span>
+        <span class="n">reset_vtcorp_input</span><span class="p">(</span><span class="n">text_processing_corpus</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">input</span><span class="p">)</span>
+
+        <span class="n">multimodal_dataset</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">text_infix</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">text_index_label</span><span class="p">,</span>
+                                         <span class="n">img_infix</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">index_label</span><span class="p">)</span>
+
+        <span class="n">results</span> <span class="o">=</span> <span class="n">baseline_run</span><span class="p">(</span><span class="n">text_processing_corpus</span><span class="p">,</span>
+                               <span class="n">text_index</span><span class="o">=</span><span class="n">text_index</span><span class="p">,</span> <span class="n">image_index</span><span class="o">=</span><span class="n">index</span><span class="p">,</span>
+                               <span class="n">multimodal_dataset</span><span class="o">=</span><span class="n">multimodal_dataset</span><span class="p">)</span>
+        <span class="n">results_report</span> <span class="o">=</span> <span class="n">emit_results</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+        <span class="k">print</span> <span class="n">results_report</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Exiting run.py, baseline.&#39;</span><span class="p">)</span>
+        <span class="k">return</span>
+
+    <span class="c"># Load joint transformer</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading joint transformer with label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">joint_label</span><span class="p">)</span>
+    <span class="n">joint_transformer</span> <span class="o">=</span> <span class="n">mloader</span><span class="o">.</span><span class="n">load_transformer</span><span class="p">(</span><span class="n">joint_label</span><span class="p">)</span>
+
+    <span class="c"># Construct sampling handle &amp; transformer</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Constructing joint sampling handle and transformer.&#39;</span><span class="p">)</span>
+    <span class="n">joint_sampling_handle</span> <span class="o">=</span> <span class="n">MultimodalClampedSamplerModelHandle</span><span class="o">.</span><span class="n">clone</span><span class="p">(</span>
+        <span class="n">joint_transformer</span><span class="o">.</span><span class="n">model_handle</span><span class="p">,</span>
+        <span class="n">dim_text</span><span class="o">=</span><span class="n">dim_text</span><span class="p">,</span>
+        <span class="n">dim_img</span><span class="o">=</span><span class="n">dim_img</span><span class="p">,</span>
+        <span class="n">k</span><span class="o">=</span><span class="mi">10</span>
+    <span class="p">)</span>
+    <span class="n">joint_sampling_transformer</span> <span class="o">=</span> <span class="n">SafireTransformer</span><span class="p">(</span><span class="n">joint_sampling_handle</span><span class="p">)</span>
+
+    <span class="c"># Apply image sampling handle</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Creating joint sampling corpus.&#39;</span><span class="p">)</span>
+    <span class="n">joint_sampling_corpus</span> <span class="o">=</span> <span class="n">joint_sampling_transformer</span><span class="p">[</span><span class="n">text_processing_corpus</span><span class="p">]</span>
+
+    <span class="c"># Construct backward handles &amp; transformers, link them</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Constructing backward handles &amp; transformers.&#39;</span><span class="p">)</span>
+    <span class="n">index_level</span> <span class="o">=</span> <span class="n">img_labels</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">index_label</span><span class="p">)</span>
+    <span class="c">#index_level = args.image_index_levelno</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;  Index level: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">index_level</span><span class="p">)</span>
+    <span class="n">transformers</span> <span class="o">=</span> <span class="n">get_transformers</span><span class="p">(</span><span class="n">img_processing_corpus</span><span class="p">)</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39; Available transformers: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">transformers</span><span class="p">))</span>
+    <span class="c"># How to stop at the correct level when there are more transformers</span>
+    <span class="c"># in the pipeline?</span>
+    <span class="c"># ...the quick fix: an argument that shifts the blame on the user.</span>
+
+    <span class="c"># Transformers now ordered from 0-th level. Need to get handles in reverse.</span>
+    <span class="n">backward_image_corpus</span> <span class="o">=</span> <span class="n">joint_sampling_corpus</span>
+    <span class="k">for</span> <span class="n">t_idx</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">transformers</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">index_level</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="n">current_handle</span> <span class="o">=</span> <span class="n">transformers</span><span class="p">[</span><span class="n">t_idx</span><span class="p">]</span><span class="o">.</span><span class="n">model_handle</span>
+        <span class="n">backward_handle</span> <span class="o">=</span> <span class="n">BackwardModelHandle</span><span class="o">.</span><span class="n">clone</span><span class="p">(</span><span class="n">current_handle</span><span class="p">)</span>
+        <span class="n">backward_transformer</span> <span class="o">=</span> <span class="n">SafireTransformer</span><span class="p">(</span><span class="n">backward_handle</span><span class="p">)</span>
+
+        <span class="c"># Linking the corpus transformations:</span>
+        <span class="n">backward_image_corpus</span> <span class="o">=</span> <span class="n">backward_transformer</span><span class="p">[</span><span class="n">backward_image_corpus</span><span class="p">]</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Full pipeline construction finished.&#39;</span><span class="p">)</span>
+    <span class="n">full_pipeline</span> <span class="o">=</span> <span class="n">backward_image_corpus</span> <span class="c"># Renaming, for clarity</span>
+
+    <span class="c"># Link input vtlist</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Setting vtcorp input to </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">input</span><span class="p">)</span>
+    <span class="n">reset_vtcorp_input</span><span class="p">(</span><span class="n">full_pipeline</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">input</span><span class="p">)</span>
+
+    <span class="c"># At this point, the transformation pipeline is set up.</span>
+    <span class="c"># We now need to transform the inputs, query the image index</span>
+
+    <span class="c"># Run transformations on text inputs</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Running transformation on text inputs.&#39;</span><span class="p">)</span>
+    <span class="n">outputs</span> <span class="o">=</span> <span class="p">[</span> <span class="n">img_features</span> <span class="k">for</span> <span class="n">img_features</span> <span class="ow">in</span> <span class="n">full_pipeline</span> <span class="p">]</span>
+
+    <span class="c"># Query images</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Querying image index.&#39;</span><span class="p">)</span>
+    <span class="n">query_results</span> <span class="o">=</span> <span class="p">[</span> <span class="n">index</span><span class="p">[</span><span class="n">query</span><span class="p">]</span> <span class="k">for</span> <span class="n">query</span> <span class="ow">in</span> <span class="n">outputs</span> <span class="p">]</span>
+
+    <span class="c"># Map results to image files</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Mapping results to image files...&#39;</span><span class="p">)</span>
+    <span class="n">icorp</span> <span class="o">=</span> <span class="n">bottom_corpus</span><span class="p">(</span><span class="n">img_processing_corpus</span><span class="p">)</span>
+    <span class="n">fnamed_query_results</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">query_result</span> <span class="ow">in</span> <span class="n">query_results</span><span class="p">:</span>
+        <span class="n">fq</span> <span class="o">=</span> <span class="p">[</span> <span class="p">(</span><span class="n">icorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">iid</span><span class="p">],</span> <span class="n">sim</span><span class="p">)</span> <span class="k">for</span> <span class="n">iid</span><span class="p">,</span> <span class="n">sim</span> <span class="ow">in</span> <span class="n">query_result</span> <span class="p">]</span>
+        <span class="n">fnamed_query_results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fq</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Mapping query documents to text files...&#39;</span><span class="p">)</span>
+    <span class="n">vtcorp</span> <span class="o">=</span> <span class="n">bottom_corpus</span><span class="p">(</span><span class="n">text_processing_corpus</span><span class="p">)</span>
+    <span class="n">text_files</span> <span class="o">=</span> <span class="p">[</span> <span class="n">vtcorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">query_results</span><span class="p">))</span> <span class="p">]</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Building results data structure.&#39;</span><span class="p">)</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">{</span> <span class="n">t</span> <span class="p">:</span> <span class="n">q</span> <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">q</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">text_files</span><span class="p">,</span> <span class="n">fnamed_query_results</span><span class="p">)</span> <span class="p">}</span>
+
+    <span class="c"># Emit results to CSV</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Emitting results.&#39;</span><span class="p">)</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">emit_results</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+    <span class="k">print</span> <span class="n">output</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Exiting run.py.&#39;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="build_argument_parser"><a class="viewcode-back" href="../../scripts.run.html#scripts.run.build_argument_parser">[docs]</a><span class="k">def</span> <span class="nf">build_argument_parser</span><span class="p">():</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="n">__doc__</span><span class="p">,</span> <span class="n">add_help</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                        <span class="n">formatter_class</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">RawDescriptionHelpFormatter</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-r&#39;</span><span class="p">,</span> <span class="s">&#39;--root&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The root dataset directory, passed to Loader.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-n&#39;</span><span class="p">,</span> <span class="s">&#39;--name&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The name passed to Loader.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--input&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The *.vtlist file (with full path) that specifies&#39;</span>
+                             <span class="s">&#39; the vtext files to use in testing.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--num_best&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;How many top images should be in the output. If &#39;</span>
+                             <span class="s">&#39;left to None (default), will not sort the results&#39;</span>
+                             <span class="s">&#39; and output similarities for all images (this may&#39;</span>
+                             <span class="s">&#39; be a very large number of outputs - thousands &#39;</span>
+                             <span class="s">&#39;per query document).&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-t&#39;</span><span class="p">,</span> <span class="s">&#39;--text_labels&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s">&#39;+&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The text label suffixes for individual layers of&#39;</span>
+                             <span class="s">&#39; the text processing pipeline.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-i&#39;</span><span class="p">,</span> <span class="s">&#39;--img_labels&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s">&#39;+&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The image label suffixes for individual layers of&#39;</span>
+                             <span class="s">&#39; the image processing pipeline.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-j&#39;</span><span class="p">,</span> <span class="s">&#39;--joint_label&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The joint layer label suffix. Required unless &#39;</span>
+                             <span class="s">&#39;the --baseline system is requested.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-b&#39;</span><span class="p">,</span> <span class="s">&#39;--baseline&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If given, will run the baseline retrieval system:&#39;</span>
+                             <span class="s">&#39; search for closest text, get images originally &#39;</span>
+                             <span class="s">&#39;associated with closest text, get images closest&#39;</span>
+                             <span class="s">&#39; to these originals.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--text_index_label&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The text index label for the baseline system. Has&#39;</span>
+                             <span class="s">&#39; to match the top-level text transformation &#39;</span>
+                             <span class="s">&#39;label. (The text index name always matches the&#39;</span>
+                             <span class="s">&#39; model name - we are only using training texts.)&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--index_name&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If the index label used for getting retrieval &#39;</span>
+                             <span class="s">&#39;results should be different from the name used&#39;</span>
+                             <span class="s">&#39; for loading the models, supply it through this&#39;</span>
+                             <span class="s">&#39; argument and a separate loader will be created&#39;</span>
+                             <span class="s">&#39; for the index. This is to facilliate retrieving&#39;</span>
+                             <span class="s">&#39; evaluation images that were not in the training&#39;</span>
+                             <span class="s">&#39; set and thus are not a part of the index with&#39;</span>
+                             <span class="s">&#39; the --name name.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-x&#39;</span><span class="p">,</span> <span class="s">&#39;--index_label&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The image index label. Has to correspond to &#39;</span>
+                             <span class="s">&#39;an image label at a level in the processing &#39;</span>
+                             <span class="s">&#39;pipeline to which it is possible to backtrack.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--image_index_levelno&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Will use the top transformer of the i.i.l.-th &#39;</span>
+                             <span class="s">&#39;image_label from the command line as the cutoff&#39;</span>
+                             <span class="s">&#39; for the backward activaiton.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-v&#39;</span><span class="p">,</span> <span class="s">&#39;--verbose&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on INFO logging messages.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--debug&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on DEBUG logging messages. (May get very &#39;</span>
+                             <span class="s">&#39;verbose.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">parser</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">build_argument_parser</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+    <span class="n">main</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

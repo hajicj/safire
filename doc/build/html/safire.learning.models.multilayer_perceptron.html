@@ -1,0 +1,180 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.multilayer_perceptron module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.learning.models.multilayer_perceptron">
+<span id="safire-learning-models-multilayer-perceptron-module"></span><h1>safire.learning.models.multilayer_perceptron module<a class="headerlink" href="#module-safire.learning.models.multilayer_perceptron" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.learning.models.multilayer_perceptron.MultilayerPerceptron">
+<em class="property">class </em><tt class="descclassname">safire.learning.models.multilayer_perceptron.</tt><tt class="descname">MultilayerPerceptron</tt><big>(</big><em>inputs</em>, <em>n_in</em>, <em>n_out</em>, <em>n_layers</em>, <em>n_hidden_list</em>, <em>hidden_activation=&lt;theano.tensor.elemwise.Elemwise object at 0x000000000AAB2240&gt;</em>, <em>rng=&lt;mtrand.RandomState object at 0x000000000BE2DAE0&gt;</em>, <em>L1_w=0.0</em>, <em>L2_w=0.0</em>, <em>hidden_layer_params=None</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/multilayer_perceptron.html#MultilayerPerceptron"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.multilayer_perceptron.MultilayerPerceptron" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="safire.learning.models.base_supervised_model.html#safire.learning.models.base_supervised_model.BaseSupervisedModel" title="safire.learning.models.base_supervised_model.BaseSupervisedModel"><tt class="xref py py-class docutils literal"><span class="pre">safire.learning.models.base_supervised_model.BaseSupervisedModel</span></tt></a></p>
+<p>Basic multi-layer perceptron class.</p>
+<p>A multilayer perceptron is a feedforward artificial neural network
+model that has one layer or more of hidden units and nonlinear
+activations. Intermediate layers usually have as activation function
+tanh or the sigmoid function (defined here by a <tt class="docutils literal"><span class="pre">HiddenLayer</span></tt> class)
+while the top layer is a softmax layer (defined here by the class
+<tt class="docutils literal"><span class="pre">LogisticRegression</span></tt>).</p>
+<dl class="method">
+<dt id="safire.learning.models.multilayer_perceptron.MultilayerPerceptron.L1">
+<tt class="descname">L1</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/learning/models/multilayer_perceptron.html#MultilayerPerceptron.L1"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.multilayer_perceptron.MultilayerPerceptron.L1" title="Permalink to this definition">¶</a></dt>
+<dd><p>L1 norm ; one regularization option is to enforce L1 norm to be 
+small.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">Returns the number, not the function to compute it it.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.multilayer_perceptron.MultilayerPerceptron.L2">
+<tt class="descname">L2</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/learning/models/multilayer_perceptron.html#MultilayerPerceptron.L2"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.multilayer_perceptron.MultilayerPerceptron.L2" title="Permalink to this definition">¶</a></dt>
+<dd><p>Square of L2 norm ; one regularization option is to enforce L2 norm
+to be small.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">Returns the number, not the function to compute it.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.multilayer_perceptron.MultilayerPerceptron.error">
+<tt class="descname">error</tt><big>(</big><em>y</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/multilayer_perceptron.html#MultilayerPerceptron.error"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.multilayer_perceptron.MultilayerPerceptron.error" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the proportion of misclassified examples. Again, this
+is the same as the error of the logistic regression layer.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>y</strong> (<em>theano.tensor.TensorType</em>) &#8211; Corresponds to a vector that gives for each example the
+correct label.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The proportion of incorrectly classified instances.</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Raises:</th><td class="field-body">TypeError</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.multilayer_perceptron.MultilayerPerceptron.negative_log_likelihood">
+<tt class="descname">negative_log_likelihood</tt><big>(</big><em>y</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/multilayer_perceptron.html#MultilayerPerceptron.negative_log_likelihood"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.multilayer_perceptron.MultilayerPerceptron.negative_log_likelihood" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the negative log likelihood of a response vector.
+Negative log likelihood of the MLP is given by the negative
+log likelihood of the output of the model, computed in the
+logistic regression layer.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>y</strong> (<em>theano.tensor.TensorType</em>) &#8211; Corresponds to a vector that gives for each example the
+correct label.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The negative log likelihood of the given response under
+the model.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.learning.models.multilayer_perceptron.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

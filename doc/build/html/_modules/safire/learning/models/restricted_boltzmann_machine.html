@@ -1,0 +1,1070 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.restricted_boltzmann_machine &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.learning.models.restricted_boltzmann_machine</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">.. module:: </span>
+<span class="sd">    :platform: Unix</span>
+<span class="sd">    :synopsis: ???</span>
+
+<span class="sd">.. moduleauthor: Jan Hajic &lt;hajicj@gmail.com&gt;</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">pdb</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">theano.tensor</span> <span class="kn">as</span> <span class="nn">TT</span>
+<span class="kn">from</span> <span class="nn">theano.tensor.shared_randomstreams</span> <span class="kn">import</span> <span class="n">RandomStreams</span>
+<span class="kn">import</span> <span class="nn">safire</span>
+
+<span class="kn">from</span> <span class="nn">safire.learning.models.base_unsupervised_model</span> <span class="kn">import</span> <span class="n">BaseUnsupervisedModel</span>
+<span class="kn">from</span> <span class="nn">safire.learning.interfaces.pretraining_model_handle</span> <span class="kn">import</span> <span class="n">PretrainingModelHandle</span>
+<span class="kn">from</span> <span class="nn">safire.learning.interfaces</span> <span class="kn">import</span> <span class="n">ModelHandle</span>
+<span class="kn">from</span> <span class="nn">safire.utils</span> <span class="kn">import</span> <span class="n">check_kwargs</span>
+
+<div class="viewcode-block" id="RestrictedBoltzmannMachine"><a class="viewcode-back" href="../../../../safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine">[docs]</a><span class="k">class</span> <span class="nc">RestrictedBoltzmannMachine</span><span class="p">(</span><span class="n">BaseUnsupervisedModel</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;This class implements the Restricted Boltzmann Machine model.</span>
+
+<span class="sd">    The RBM-derived models support *sampling*, both forward and backward.</span>
+<span class="sd">    This is accompolished using the following methods:</span>
+
+<span class="sd">    * :meth:`sample_h_given_v()` for forward sampling,</span>
+
+<span class="sd">    * :meth:`sample_v_given_h()` for backward sampling,</span>
+
+<span class="sd">    * :meth:`sample_vhv()` for getting an input sample for the given input,</span>
+
+<span class="sd">    * :meth:`sample_hvh()` for getting a hidden sample for the given hidden</span>
+<span class="sd">        state,</span>
+
+<span class="sd">    * :meth:`mean_h_given_v()` for forward expectation,</span>
+
+<span class="sd">    * :meth:`mean_v_given_h()` for backward expectation.</span>
+
+<span class="sd">    .. note::</span>
+
+<span class="sd">      Methods ``sample_vhv()`` and ``sample_hvh()`` implement sampling both ways:</span>
+<span class="sd">      both the non-input layer (hidden for ``vhv``, visible for ``hvh``) and then</span>
+<span class="sd">      the input layer is sampled. If you wish to combine means and samples, use</span>
+<span class="sd">      a composition of the ``sample_`` and ``mean_`` methods::</span>
+
+<span class="sd">         v_mean_from_h_sample = model.mean_v_given_h(model.sample_h_given_v(X))</span>
+
+<span class="sd">    However, for computing gradients and such, the naive implementation of these</span>
+<span class="sd">    methods has problems with numerical stability. Theano can perform</span>
+<span class="sd">    optimizations to remedy the problem, but in order to do that, it has to</span>
+<span class="sd">    have access to some intermediate steps. Therefore, this suite of sampling</span>
+<span class="sd">    methods has a protected counterpart: ``_sample_h_given_v()``, etc., which</span>
+<span class="sd">    should NOT be called from the outside, but is used in building the</span>
+<span class="sd">    expression graph for training with (P)CD.</span>
+<span class="sd">    </span>
+<span class="sd">    .. warning::</span>
+<span class="sd">    </span>
+<span class="sd">        There&#39;s some downwright ugly hacks here that have to do with how</span>
+<span class="sd">        Theano works. Specifically, the training updates cost definition</span>
+<span class="sd">        have to be in the same method. Other way round: the _cost() cannot</span>
+<span class="sd">        be computed without the gradient descent updates.</span>
+
+<span class="sd">        This, unfortunately, currently does affect how ``setup()`` needs to be</span>
+<span class="sd">        written. So, RBMs have their own setup.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> 
+                 <span class="n">activation</span><span class="o">=</span><span class="n">TT</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">,</span>
+                 <span class="n">backward_activation</span><span class="o">=</span><span class="n">TT</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">,</span>
+                 <span class="n">W</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">b_hidden</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">b_visible</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">persistent</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">CD_k</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">CD_use_mean</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                 <span class="n">sparsity_target</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">output_sparsity_target</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">numpy_rng</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">(),</span>
+                 <span class="n">L1_norm</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">L2_norm</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">bias_decay</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+                 <span class="n">entropy_loss</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">centering</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">prefer_extremes</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">noisy_input</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">theano_rng</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Initialize the parameters of the logistic regression</span>
+<span class="sd">        A Logistic Regression layer is the end layer in classification</span>
+<span class="sd">        network.</span>
+
+<span class="sd">        :type inputs: theano.tensor.var.TensorVariable</span>
+<span class="sd">        :param inputs: Symbolic variable that describes the input</span>
+<span class="sd">                       of the architecture (e.g., one minibatch of</span>
+<span class="sd">                       input images, or output of a previous layer)</span>
+
+
+<span class="sd">        :type n_in: int</span>
+<span class="sd">        :param n_in: Number of input units, the dimension of the space</span>
+<span class="sd">                     in which the data points live</span>
+
+<span class="sd">        :type n_out: int</span>
+<span class="sd">        :param n_out: The number of hidden units.</span>
+<span class="sd">        </span>
+<span class="sd">        :type activation: theano.tensor.elemwise.Elemwise</span>
+<span class="sd">        :param activation: The nonlinearity applied at visible neuron</span>
+<span class="sd">                           output.</span>
+
+<span class="sd">        :type backward_activation: theano.tensor.elemwise.Elemwise</span>
+<span class="sd">        :param backward_activation: The nonlinearity applied at hidden neuron</span>
+<span class="sd">                           output. If not given, same as ``activation``. (Some</span>
+<span class="sd">                           RBMs, like the Replicated Softmax model, use a</span>
+<span class="sd">                           different forward and backward activation function.)</span>
+
+<span class="sd">        :type W: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param W: Theano variable pointing to a set of weights that should</span>
+<span class="sd">                  be shared between the autoencoder and another architecture;</span>
+<span class="sd">                  if autoencoder should be standalone, leave this as None.</span>
+<span class="sd">                  This set of weights refers to the transition from visible</span>
+<span class="sd">                  to hidden layer.</span>
+<span class="sd">        </span>
+<span class="sd">                        </span>
+<span class="sd">        :type b: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param b: Theano variable pointing to a set of bias values that</span>
+<span class="sd">                  should be shared between the autoencoder and another</span>
+<span class="sd">                  architecture; if autoencoder should be standalone,</span>
+<span class="sd">                  leave this as None. This set of bias values refers</span>
+<span class="sd">                  to the transition from visible to hidden layer. </span>
+
+<span class="sd">                  .. note:</span>
+
+<span class="sd">                    The ``b`` name is used in the RBM for compatibility</span>
+<span class="sd">                    of class interface. Internally, the name ``b_hidden``</span>
+<span class="sd">                    is used to improve clarity of the sometimes more</span>
+<span class="sd">                    complicated math expressions, and for ontological</span>
+<span class="sd">                    symmetry with ``b_visible``.</span>
+
+<span class="sd">        :type b_hidden: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param b: Alias for b, used internally as the attribute name</span>
+<span class="sd">            to make the purpose clear.</span>
+<span class="sd">                  </span>
+<span class="sd">            .. warn:</span>
+
+<span class="sd">              Do not use both ``b`` and ``b_hidden`` at the same time!</span>
+<span class="sd">              The intended interface is ``b``, which is also used in</span>
+<span class="sd">              the ``link()`` class method to construct the RBM.</span>
+
+<span class="sd">                  </span>
+<span class="sd">        :type b_visible: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param b_visible: Theano variable pointing to a set of bias values</span>
+<span class="sd">                        that should be shared between the autoencoder and</span>
+<span class="sd">                        another architecture; if autoencoder should be </span>
+<span class="sd">                        standalone, leave this as None. This set of bias</span>
+<span class="sd">                        values refers to the transition from visible to </span>
+<span class="sd">                        hidden layer. </span>
+<span class="sd">                        </span>
+<span class="sd">        :type persistent: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param persistent: If you wish to train using Persistent Contrastive</span>
+<span class="sd">            Divergence, supply an initial state of the Markov chain. If set to</span>
+<span class="sd">            None (default), use Contrastive Divergence for training</span>
+<span class="sd">            (initialize the chain to the current data point).</span>
+
+<span class="sd">        :type CD_k: int</span>
+<span class="sd">        :param CD_k: How many Gibbs sampling steps should Contrastive</span>
+<span class="sd">            Divergence take in generating the negative particle.</span>
+<span class="sd">            </span>
+<span class="sd">        :type CD_use_mean: Boolean</span>
+<span class="sd">        :param CD_use_mean: Should the (P)CD Gibbs chain end use the mean</span>
+<span class="sd">            activation of the visible units as the chain end? If ``False``,</span>
+<span class="sd">            uses the visible sample. If ``True``, uses the visible mean.</span>
+<span class="sd">            Default is ``True``.</span>
+
+<span class="sd">        :type sparsity_target: float</span>
+<span class="sd">        :param sparsity_target: The target mean for features. If set, incurs</span>
+<span class="sd">            a sparsity penalty: the KL divergence of a unit being either off,</span>
+<span class="sd">            or on.</span>
+
+<span class="sd">        :type output_sparsity_target: float</span>
+<span class="sd">        :param output_sparsity_target: The sparsity target for output vectors</span>
+<span class="sd">            instead of features.</span>
+
+<span class="sd">        :type L1_norm: float</span>
+
+<span class="sd">        :type L2_norm: float</span>
+
+<span class="sd">        :type bias_decay: float</span>
+
+<span class="sd">        :type entropy_loss: float</span>
+<span class="sd">        :param entropy_loss: If nonzero, will add to cost the entropy of each</span>
+<span class="sd">            neuron.</span>
+
+<span class="sd">        :type prefer_extremes: float</span>
+<span class="sd">        :param prefer_extremes: Adds a - sum(log((2X - 1) ** 2)) with this</span>
+<span class="sd">            coefficient.</span>
+
+<span class="sd">        :type centering: bool</span>
+<span class="sd">        :param centering: If given, will use the centering trick.</span>
+
+<span class="sd">        :type noisy_input: float</span>
+<span class="sd">        :param noisy_input: If given, will add noise to the inputs uniformly</span>
+<span class="sd">            sampled from ``(0, noisy_input)``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Initializing RBM model - entered constructor.&#39;</span><span class="p">)</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Initializing superclass.&#39;</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">RestrictedBoltzmannMachine</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">activation</span> <span class="o">=</span> <span class="n">activation</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">backward_activation</span><span class="p">:</span>
+            <span class="n">backward_activation</span> <span class="o">=</span> <span class="n">activation</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">backward_activation</span> <span class="o">=</span> <span class="n">backward_activation</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Initializing weights.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">W</span><span class="p">:</span>
+            <span class="n">W</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_weights</span><span class="p">(</span><span class="s">&#39;W&#39;</span><span class="p">,</span> <span class="p">(</span><span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">),</span> <span class="n">numpy_rng</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>    <span class="c"># Check for consistency in supplied weights</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_init_param_consistency_check</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="p">(</span><span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">W</span> <span class="o">=</span> <span class="n">W</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Initializing hidden bias.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">b</span> <span class="ow">and</span> <span class="n">b_hidden</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&#39;Cannot call constructor with both </span><span class="se">\&#39;</span><span class="s">b</span><span class="se">\&#39;</span><span class="s"> and </span><span class="se">\</span>
+<span class="s">                            </span><span class="se">\&#39;</span><span class="s">b_hidden</span><span class="se">\&#39;</span><span class="s"> supplied.&#39;</span><span class="p">)</span>
+
+        <span class="c"># Mask b as b_hidden for the purposes of the class.</span>
+        <span class="k">if</span> <span class="n">b</span><span class="p">:</span>
+            <span class="n">b_hidden</span> <span class="o">=</span> <span class="n">b</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">b_hidden</span><span class="p">:</span>
+            <span class="n">b_hidden</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_bias</span><span class="p">(</span><span class="s">&#39;b_hidden&#39;</span><span class="p">,</span> <span class="n">n_out</span><span class="p">,</span> <span class="n">numpy_rng</span><span class="p">)</span>
+            <span class="c"># initialize the biases b_hidden as a vector of n_out 0s</span>
+            <span class="c">#b_hidden = theano.shared(value = numpy.zeros((n_out,),</span>
+            <span class="c">#                      dtype = theano.config.floatX),</span>
+            <span class="c">#                  name = &#39;b_hidden&#39;)</span>
+
+        <span class="k">else</span><span class="p">:</span>    <span class="c"># Check for consistency in supplied weights</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_init_param_consistency_check</span><span class="p">(</span><span class="n">b_hidden</span><span class="p">,</span> <span class="p">(</span><span class="n">n_out</span><span class="p">,))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span> <span class="o">=</span> <span class="n">b_hidden</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Initializing visible bias.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">b_visible</span><span class="p">:</span>
+            <span class="c"># initialize the biases b_hidden as a vector of n_out 0s</span>
+            <span class="n">b_visible</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_bias</span><span class="p">(</span><span class="s">&#39;b_visible&#39;</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">numpy_rng</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>    <span class="c"># Check for consistency in supplied weights</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_init_param_consistency_check</span><span class="p">(</span><span class="n">b_visible</span><span class="p">,</span> <span class="p">(</span><span class="n">n_in</span><span class="p">,))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">b_visible</span> <span class="o">=</span> <span class="n">b_visible</span>
+        
+        <span class="c"># Different params for tied weights!</span>
+        <span class="c"># This will be difficult to put in a general method.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_visible</span><span class="p">]</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Initializing RBM-specific parameters.&#39;</span><span class="p">)</span>
+        <span class="c"># RBM-specific parameters</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">persistent</span> <span class="o">=</span> <span class="n">persistent</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">CD_k</span> <span class="o">=</span> <span class="n">CD_k</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">CD_use_mean</span> <span class="o">=</span> <span class="n">CD_use_mean</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sparsity_target</span> <span class="o">=</span> <span class="n">sparsity_target</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_sparsity_target</span> <span class="o">=</span> <span class="n">output_sparsity_target</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">L1_norm</span> <span class="o">=</span> <span class="n">L1_norm</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">L2_norm</span> <span class="o">=</span> <span class="n">L2_norm</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bias_decay</span> <span class="o">=</span> <span class="n">bias_decay</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prefer_extremes</span> <span class="o">=</span> <span class="n">prefer_extremes</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">noisy_input</span> <span class="o">=</span> <span class="n">noisy_input</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">centering</span> <span class="o">=</span> <span class="n">centering</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">centering_offset</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">centering</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">centering_offset</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">shared</span><span class="p">()</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cost_and_updates_computed</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__rng_update</span> <span class="o">=</span> <span class="bp">None</span> <span class="c"># This is a Theano technicality: will need it</span>
+                                 <span class="c"># to keep _cost() and _training_updates()</span>
+                                 <span class="c"># interfaces consistent, but due to stuff with</span>
+                                 <span class="c"># theano.scan() and a Theano rng that has to</span>
+                                 <span class="c"># export its update from the _cost() method</span>
+                                 <span class="c"># to the _training_updates() method</span>
+        
+        <span class="k">if</span> <span class="n">theano_rng</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+          <span class="n">theano_rng</span> <span class="o">=</span> <span class="n">RandomStreams</span><span class="p">(</span><span class="n">numpy_rng</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">2</span> <span class="o">**</span> <span class="mi">30</span><span class="p">))</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">theano_rng</span> <span class="o">=</span> <span class="n">theano_rng</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">numpy_rng</span> <span class="o">=</span> <span class="n">numpy_rng</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Initializing outputs.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">outputs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">inputs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span><span class="p">)</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;RBM constructor done.&#39;</span><span class="p">)</span>
+
+
+    <span class="k">def</span> <span class="nf">_init_args_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Saves the model in the form of an init kwarg dict, since not all</span>
+<span class="sd">        attributes of the instance can be pickled. Upon loading, the saved</span>
+<span class="sd">        model kwarg dict will be used as ``**kwargs`` (the ``load`` method</span>
+<span class="sd">        is a classmethod) for an initialization of the model.&quot;&quot;&quot;</span>
+
+        <span class="n">init_arg_dict</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;W&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">,</span>
+            <span class="s">&#39;b_hidden&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span><span class="p">,</span>
+            <span class="s">&#39;b_visible&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_visible</span><span class="p">,</span>
+            <span class="s">&#39;n_in&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span><span class="p">,</span>
+            <span class="s">&#39;n_out&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span><span class="p">,</span>
+            <span class="s">&#39;activation&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span>
+            <span class="s">&#39;backward_activation&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">backward_activation</span><span class="p">,</span>
+            <span class="s">&#39;inputs&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">inputs</span><span class="p">,</span>
+            <span class="s">&#39;persistent&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">persistent</span><span class="p">,</span>
+            <span class="s">&#39;CD_k&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">CD_k</span><span class="p">,</span>
+            <span class="s">&#39;CD_use_mean&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">CD_use_mean</span><span class="p">,</span>
+            <span class="s">&#39;sparsity_target&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">sparsity_target</span><span class="p">,</span>
+            <span class="s">&#39;output_sparsity_target&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_sparsity_target</span><span class="p">,</span>
+            <span class="s">&#39;L1_norm&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">L1_norm</span><span class="p">,</span>
+            <span class="s">&#39;L2_norm&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">L2_norm</span><span class="p">,</span>
+            <span class="s">&#39;bias_decay&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias_decay</span><span class="p">,</span>
+            <span class="s">&#39;centering&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">centering</span><span class="p">,</span>
+            <span class="s">&#39;prefer_extremes&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefer_extremes</span>
+        <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">init_arg_dict</span>
+
+<div class="viewcode-block" id="RestrictedBoltzmannMachine.mean_h_given_v"><a class="viewcode-back" href="../../../../safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.mean_h_given_v">[docs]</a>    <span class="k">def</span> <span class="nf">mean_h_given_v</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">visible</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes expected activation on hidden units.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">noisy_input</span><span class="p">:</span>
+            <span class="n">new_visible</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">matutils</span><span class="o">.</span><span class="n">uniform_noise</span><span class="p">(</span><span class="n">visible</span><span class="p">,</span>
+                                                              <span class="bp">self</span><span class="o">.</span><span class="n">noisy_input</span><span class="p">,</span>
+                                                              <span class="bp">self</span><span class="o">.</span><span class="n">theano_rng</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">new_visible</span> <span class="o">=</span> <span class="n">visible</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">new_visible</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="RestrictedBoltzmannMachine.sample_h_given_v"><a class="viewcode-back" href="../../../../safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_h_given_v">[docs]</a>    <span class="k">def</span> <span class="nf">sample_h_given_v</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">visible</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Samples the hidden layer given the visible layer.</span>
+
+<span class="sd">        As opposed to the protected ``_sample_h_given_v()`` method, only returns</span>
+<span class="sd">        the sample.&quot;&quot;&quot;</span>
+        <span class="n">mean_h</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">visible</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span><span class="p">)</span>
+        <span class="c">#pdb.set_trace()</span>
+        <span class="n">sample_h</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theano_rng</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="n">mean_h</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+                                            <span class="n">n</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">mean_h</span><span class="p">,</span>
+                                            <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sample_h</span>
+</div>
+<div class="viewcode-block" id="RestrictedBoltzmannMachine.sample_vhv"><a class="viewcode-back" href="../../../../safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_vhv">[docs]</a>    <span class="k">def</span> <span class="nf">sample_vhv</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">visible</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Performs one Gibbs sampling step from visible to visible layer.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sample_v_given_h</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sample_h_given_v</span><span class="p">(</span><span class="n">visible</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="RestrictedBoltzmannMachine.mean_v_given_h"><a class="viewcode-back" href="../../../../safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.mean_v_given_h">[docs]</a>    <span class="k">def</span> <span class="nf">mean_v_given_h</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the expected visible layer activation the hidden layer.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">backward_activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">hidden</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_visible</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="RestrictedBoltzmannMachine.sample_v_given_h"><a class="viewcode-back" href="../../../../safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_v_given_h">[docs]</a>    <span class="k">def</span> <span class="nf">sample_v_given_h</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Samples the visible layer given the hidden layer.&quot;&quot;&quot;</span>
+        <span class="n">mean_v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">backward_activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">hidden</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_visible</span><span class="p">)</span>
+        <span class="n">sample_v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theano_rng</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="n">mean_v</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+                                            <span class="n">n</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">mean_v</span><span class="p">,</span>
+                                            <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sample_v</span>
+</div>
+<div class="viewcode-block" id="RestrictedBoltzmannMachine.sample_hvh"><a class="viewcode-back" href="../../../../safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_hvh">[docs]</a>    <span class="k">def</span> <span class="nf">sample_hvh</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Performs one Gibbs sampling step from hidden to hidden layer.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">sample_h_given_v</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sample_v_given_h</span><span class="p">(</span><span class="n">hidden</span><span class="p">))</span>
+
+    <span class="c">##########################################################################</span>
+    <span class="c"># Functions that implement sampling one layer given the other internally #</span>
+    <span class="c">##########################################################################</span>
+    </div>
+    <span class="k">def</span> <span class="nf">_mean_h_given_v</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">visible</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the hidden layer given a visible layer. Returns both</span>
+<span class="sd">        the hidden layer mean AND the pre-activation TT.dot(...) form, for</span>
+<span class="sd">        obscure Theano reasons (numerical stability optimizations further</span>
+<span class="sd">        down the line). I might figure some way around this later.</span>
+<span class="sd">        </span>
+<span class="sd">        :type visible: theano.tensor.var.TensorVariable</span>
+<span class="sd">        :param visible: The state of the visible units (either 1/0, or mean -</span>
+<span class="sd">            not important).</span>
+<span class="sd">            </span>
+<span class="sd">        :rtype: list[theano.function.type(???), theano.tensor.TensorType]</span>
+<span class="sd">        :returns: A list where the first member is the pre-nonlinearity</span>
+<span class="sd">            activation of the hidden layer and the second is the mean </span>
+<span class="sd">            activation of hidden units after the nonlinearity is applied.</span>
+<span class="sd">        &quot;&quot;&quot;</span>    
+        <span class="n">pre_activation_mean_h</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">visible</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span>
+        <span class="n">mean_h</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">pre_activation_mean_h</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">pre_activation_mean_h</span><span class="p">,</span> <span class="n">mean_h</span><span class="p">]</span>
+    
+    <span class="k">def</span> <span class="nf">_mean_v_given_h</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the hidden layer given a visible layer. Returns both</span>
+<span class="sd">        the hidden layer mean AND the pre-activation TT.dot(...) form, for</span>
+<span class="sd">        obscure Theano reasons (numerical stability optimizations further</span>
+<span class="sd">        down the line). I might figure some way around this later.</span>
+<span class="sd">        </span>
+<span class="sd">        :type hidden: theano.tensor.var.TensorVariable</span>
+<span class="sd">        :param hidden: The state of the hidden units (either 1/0, or mean -</span>
+<span class="sd">            not important).</span>
+<span class="sd">            </span>
+<span class="sd">        :rtype: list[theano.function.type(???), theano.tensor.TensorType]</span>
+<span class="sd">        :returns: A list where the first member is the pre-nonlinearity</span>
+<span class="sd">            activation of the visible layer and the second is the mean </span>
+<span class="sd">            activation of visible units after the nonlinearity is applied.</span>
+<span class="sd">        &quot;&quot;&quot;</span>    
+        <span class="n">pre_activation_mean_v</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">hidden</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_visible</span>
+        <span class="n">mean_v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">backward_activation</span><span class="p">(</span><span class="n">pre_activation_mean_v</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">pre_activation_mean_v</span><span class="p">,</span> <span class="n">mean_v</span><span class="p">]</span>
+    
+    <span class="k">def</span> <span class="nf">_sample_h_given_v</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">visible</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Samples the hidden layer given the activation of the visible layer</span>
+<span class="sd">        (mean or sample, doesn&#39;t matter).</span>
+<span class="sd">        </span>
+<span class="sd">        :type visible: theano.tensor.var.TensorVariable</span>
+<span class="sd">        :param visible: The state of the visible units (either 1/0, or mean -</span>
+<span class="sd">            not important).</span>
+<span class="sd">            </span>
+<span class="sd">        :rtype: list[theano.function.type(???), theano.tensor.TensorType,</span>
+<span class="sd">            theano.tensor.TensorType]</span>
+<span class="sd">        :returns: A list where the first member is the pre-nonlinearity</span>
+<span class="sd">            activation of the hidden layer, the second is the mean </span>
+<span class="sd">            activation of hidden units after the nonlinearity is applied</span>
+<span class="sd">            and the third is the hidden layer sample from the given mean.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="p">[</span><span class="n">pre_activation_mean_h</span><span class="p">,</span> <span class="n">mean_h</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mean_h_given_v</span><span class="p">(</span><span class="n">visible</span><span class="p">)</span>
+        <span class="n">sample_h</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theano_rng</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="n">size</span> <span class="o">=</span> <span class="n">mean_h</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> 
+                                            <span class="n">n</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">p</span> <span class="o">=</span> <span class="n">mean_h</span><span class="p">,</span> 
+                                            <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">pre_activation_mean_h</span><span class="p">,</span> <span class="n">mean_h</span><span class="p">,</span> <span class="n">sample_h</span><span class="p">]</span>
+        
+    <span class="k">def</span> <span class="nf">_sample_v_given_h</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Samples the visible layer given the activation of the hidden layer</span>
+<span class="sd">        (mean or sample, doesn&#39;t matter).</span>
+<span class="sd">        </span>
+<span class="sd">        :type hidden: theano.tensor.var.TensorVariable</span>
+<span class="sd">        :param hidden: The state of the hidden units (either 1/0, or mean -</span>
+<span class="sd">            not important).</span>
+<span class="sd">            </span>
+<span class="sd">        :rtype: list[theano.tensor.var.TensorVariable, </span>
+<span class="sd">            theano.tensor.var.TensorVariable,</span>
+<span class="sd">            theano.tensor.var.TensorVariable]</span>
+<span class="sd">        :returns: A list where the first member is the pre-nonlinearity</span>
+<span class="sd">            activation of the visible layer, the second is the mean </span>
+<span class="sd">            activation of visible units after the nonlinearity is applied</span>
+<span class="sd">            and the third is the visible layer sample from the given mean.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="p">[</span><span class="n">pre_activation_mean_v</span><span class="p">,</span> <span class="n">mean_v</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mean_v_given_h</span><span class="p">(</span><span class="n">hidden</span><span class="p">)</span>
+        <span class="n">sample_v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theano_rng</span><span class="o">.</span><span class="n">binomial</span><span class="p">(</span><span class="n">size</span> <span class="o">=</span> <span class="n">mean_v</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> 
+                                            <span class="n">n</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">p</span> <span class="o">=</span> <span class="n">mean_v</span><span class="p">,</span> 
+                                            <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">pre_activation_mean_v</span><span class="p">,</span> <span class="n">mean_v</span><span class="p">,</span> <span class="n">sample_v</span><span class="p">]</span>
+    
+<div class="viewcode-block" id="RestrictedBoltzmannMachine.gibbs_step_vhv"><a class="viewcode-back" href="../../../../safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.gibbs_step_vhv">[docs]</a>    <span class="k">def</span> <span class="nf">gibbs_step_vhv</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">visible</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Given the activation of the visible units (mean or sample, doesn&#39;t</span>
+<span class="sd">        matter), perform one step of Gibbs sampling and return all partial results.</span>
+<span class="sd">        </span>
+<span class="sd">        Re-samples the visible layer from the hidden layer *sample*, not mean.</span>
+<span class="sd">               </span>
+<span class="sd">        :type visible: theano.tensor.var.TensorVariable</span>
+<span class="sd">        :param visible: The state of the visible units (either 1/0, or mean -</span>
+<span class="sd">            not important).</span>
+<span class="sd">            </span>
+<span class="sd">        :rtype: list[theano.tensor.var.TensorVariable x 6]</span>
+<span class="sd">        :returns: A list of Gibbs sampling results and partial resuls. See</span>
+<span class="sd">            documentation on :func:`mean_h_given_v` for why pre-nonlinearity</span>
+<span class="sd">            activation is also returned. The returned values are::</span>
+<span class="sd">            </span>
+<span class="sd">                [pre_activation_mean_h, mean_h, sample_h, </span>
+<span class="sd">                pre_activation_mean_v, mean_v, sample_v]</span>
+<span class="sd">                </span>
+<span class="sd">            (See documentation of :func:`sample_v_given_h` and </span>
+<span class="sd">            :func:`sample_h_given_v` on what they are.)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">pre_activation_mean_h</span><span class="p">,</span> <span class="n">mean_h</span><span class="p">,</span> <span class="n">sample_h</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sample_h_given_v</span><span class="p">(</span><span class="n">visible</span><span class="p">)</span>
+        <span class="n">pre_activation_mean_v</span><span class="p">,</span> <span class="n">mean_v</span><span class="p">,</span> <span class="n">sample_v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sample_v_given_h</span><span class="p">(</span><span class="n">sample_h</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">pre_activation_mean_h</span><span class="p">,</span> <span class="n">mean_h</span><span class="p">,</span> <span class="n">sample_h</span><span class="p">,</span>
+                <span class="n">pre_activation_mean_v</span><span class="p">,</span> <span class="n">mean_v</span><span class="p">,</span> <span class="n">sample_v</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="RestrictedBoltzmannMachine.gibbs_step_hvh"><a class="viewcode-back" href="../../../../safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.gibbs_step_hvh">[docs]</a>    <span class="k">def</span> <span class="nf">gibbs_step_hvh</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Given the activation of the hidden units (mean or sample, doesn&#39;t</span>
+<span class="sd">        matter), perform one step of Gibbs sampling and return all partial results.</span>
+<span class="sd">        </span>
+<span class="sd">        Re-samples the hidden layer from the visible layer *sample*, not mean.</span>
+<span class="sd">               </span>
+<span class="sd">        :type hidden: theano.tensor.var.TensorVariable</span>
+<span class="sd">        :param hidden: The state of the hidden units (either 1/0, or mean -</span>
+<span class="sd">            not important).</span>
+<span class="sd">            </span>
+<span class="sd">        :rtype: list[theano.tensor.var.TensorVariable x 6]</span>
+<span class="sd">        :returns: A list of Gibbs sampling results and partial resuls. See</span>
+<span class="sd">            documentation on :func:`mean_h_given_v` for why pre-nonlinearity</span>
+<span class="sd">            activation is also returned. The returned values are::</span>
+<span class="sd">            </span>
+<span class="sd">                [pre_activation_mean_v, mean_v, sample_v, </span>
+<span class="sd">                pre_activation_mean_h, mean_h, sample_h]</span>
+<span class="sd">                </span>
+<span class="sd">            (See documentation of :func:`sample_v_given_h` and </span>
+<span class="sd">            :func:`sample_h_given_v` on what they are.)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">pre_activation_mean_v</span><span class="p">,</span> <span class="n">mean_v</span><span class="p">,</span> <span class="n">sample_v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sample_v_given_h</span><span class="p">(</span><span class="n">hidden</span><span class="p">)</span>
+        <span class="n">pre_activation_mean_h</span><span class="p">,</span> <span class="n">mean_h</span><span class="p">,</span> <span class="n">sample_h</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sample_h_given_v</span><span class="p">(</span><span class="n">sample_v</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">pre_activation_mean_v</span><span class="p">,</span> <span class="n">mean_v</span><span class="p">,</span> <span class="n">sample_v</span><span class="p">,</span>
+                <span class="n">pre_activation_mean_h</span><span class="p">,</span> <span class="n">mean_h</span><span class="p">,</span> <span class="n">sample_h</span><span class="p">]</span>
+
+        </div>
+<div class="viewcode-block" id="RestrictedBoltzmannMachine.free_energy"><a class="viewcode-back" href="../../../../safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.free_energy">[docs]</a>    <span class="k">def</span> <span class="nf">free_energy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">visible</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the free energy of the model.</span>
+
+<span class="sd">        :type visible: theano.tensor.TensorType</span>
+<span class="sd">        :param visible: The state of the visible units (either 1/0, or mean -</span>
+<span class="sd">            not important).</span>
+<span class="sd">        </span>
+<span class="sd">        :rtype: theano.tensor.var.TensorVariable</span>
+<span class="sd">        :returns: The free energy of the model, given the visible activation.</span>
+<span class="sd">            Computed as </span>
+<span class="sd">            </span>
+<span class="sd">            .. math::</span>
+<span class="sd">               :label: free_energy</span>
+
+<span class="sd">                \mathcal{F}(x) = - \log \sum_h e^{-E(x,h)}</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">pre_activation_mean_h</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">visible</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span>
+        <span class="c"># I don&#39;t really know what this does:</span>
+        <span class="n">hidden_term</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">TT</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">pre_activation_mean_h</span><span class="p">)),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">b_visible_term</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">visible</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_visible</span><span class="p">)</span>
+        <span class="n">free_energy</span> <span class="o">=</span> <span class="o">-</span> <span class="n">hidden_term</span> <span class="o">-</span> <span class="n">b_visible_term</span>
+        <span class="k">return</span> <span class="n">free_energy</span>
+    </div>
+    <span class="k">def</span> <span class="nf">_cost_and_training_updates</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the symbolic expression for the cost function of</span>
+<span class="sd">        the network used for training and the corresponding updates.</span>
+<span class="sd">        </span>
+<span class="sd">        .. warn:</span>
+<span class="sd">          </span>
+<span class="sd">          This method is intended to be only run ONCE per model life.</span>
+<span class="sd">          No guarantees on what happens if you run it a second time.</span>
+<span class="sd">        </span>
+<span class="sd">        We&#39;re using the expression</span>
+
+<span class="sd">        .. math::</span>
+<span class="sd">          :label: free_energy_grad</span>
+
+<span class="sd">          - \frac{\partial  \log p(x)}{\partial \theta}</span>
+<span class="sd">           &amp;= \frac{\partial \mathcal{F}(x)}{\partial \theta} -</span>
+<span class="sd">                 \sum_{\tilde{x}} p(\tilde{x}) \</span>
+<span class="sd">                     \frac{\partial \mathcal{F}(\tilde{x})}{\partial \theta}.</span>
+<span class="sd">        </span>
+<span class="sd">        for the cost, since it&#39;s the form the gradient of the log probability</span>
+<span class="sd">        takes.</span>
+<span class="sd">        </span>
+<span class="sd">        :type X: theano.tensor.var.TensorVariable</span>
+<span class="sd">        :param X: The input data on which to compute cost. (Expected shape:</span>
+<span class="sd">            batch_size * self.n_in) Maps to &#39;visible&#39;.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c"># Compute positive phase (the &#39;p&#39; in ph_)</span>
+        <span class="n">pre_sigmoid_ph</span><span class="p">,</span> <span class="n">ph_mean</span><span class="p">,</span> <span class="n">ph_sample</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sample_h_given_v</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        
+        <span class="c"># Compute negative phase (the &#39;n&#39; in &#39;nv_&#39;, &#39;nh_&#39;)</span>
+        <span class="c"># chain_start is the starting </span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">persistent</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">chain_start</span> <span class="o">=</span> <span class="n">ph_sample</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">chain_start</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">persistent</span>
+            
+        <span class="c"># Note that the &#39;updates&#39; variable gets initialized</span>
+        <span class="c"># here. It contains the theano_rng update expression</span>
+        <span class="c"># that is used during theano.scan() in sampling the</span>
+        <span class="c"># hidden/visible units from their means.</span>
+        <span class="p">[</span><span class="n">pre_sigmoid_nvs</span><span class="p">,</span> <span class="n">nv_means</span><span class="p">,</span> <span class="n">nv_samples</span><span class="p">,</span> 
+         <span class="n">pre_sigmoid_nhs</span><span class="p">,</span> <span class="n">nh_means</span><span class="p">,</span> <span class="n">nh_samples</span><span class="p">],</span> <span class="n">updates</span> <span class="o">=</span> \
+            <span class="n">theano</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gibbs_step_hvh</span><span class="p">,</span> 
+                        <span class="n">outputs_info</span><span class="o">=</span><span class="p">[</span><span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="n">chain_start</span><span class="p">],</span>
+                        <span class="n">n_steps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">CD_k</span><span class="p">)</span>
+        
+        <span class="n">chain_end</span> <span class="o">=</span> <span class="n">nv_samples</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">CD_use_mean</span><span class="p">:</span>
+            <span class="n">chain_end</span> <span class="o">=</span> <span class="n">nv_means</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        
+        <span class="n">cost</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">free_energy</span><span class="p">(</span><span class="n">X</span><span class="p">))</span> <span class="o">-</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">free_energy</span><span class="p">(</span><span class="n">chain_end</span><span class="p">))</span>
+
+        <span class="c"># Various means of adjusting the cost</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">sparsity_target</span><span class="p">:</span>
+            <span class="n">cost</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sparsity_cross_entropy</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_sparsity_target</span><span class="p">:</span>
+            <span class="n">cost</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_output_sparsity_cross_entropy</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+
+        <span class="c"># extremes preference function: -log((2*X - 1.0)**2)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prefer_extremes</span><span class="p">:</span>
+            <span class="n">mean_act</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span><span class="p">)</span>
+            <span class="n">cost</span> <span class="o">+=</span>  <span class="bp">self</span><span class="o">.</span><span class="n">prefer_extremes</span> <span class="o">*</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="o">-</span><span class="n">TT</span><span class="o">.</span><span class="n">log</span><span class="p">((</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">mean_act</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="mf">0.00001</span><span class="p">))</span>
+
+        <span class="c">#if self.L1_norm != 0.0:</span>
+        <span class="c">#    cost += self.L1_norm * (2 * TT.sum(self.W) \</span>
+        <span class="c">#         + TT.sum(self.b_hidden) + TT.sum(self.b_visible))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias_decay</span> <span class="o">!=</span> <span class="mf">0.0</span><span class="p">:</span>
+            <span class="n">extra_bias_decay</span> <span class="o">=</span> <span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="n">TT</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b_visible</span> <span class="o">**</span> <span class="mi">2</span><span class="p">))</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias_decay</span>
+            <span class="n">cost</span> <span class="o">+=</span> <span class="n">extra_bias_decay</span>
+
+        <span class="c">#############################</span>
+        <span class="c"># The training updates part #</span>
+        <span class="c">#############################</span>
+        
+        <span class="n">check_kwargs</span><span class="p">(</span><span class="n">kwargs</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;learning_rate&#39;</span><span class="p">])</span>
+
+        <span class="n">learning_rate</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;learning_rate&#39;</span><span class="p">]</span>
+
+        <span class="c"># (Too connected with gradient cost/monitoring cost mess-up</span>
+        <span class="c"># to keep separate...)</span>
+        <span class="c"># --connection through consider_constant=[chain_end].</span>
+        <span class="c">#   Couldn&#39;t we convince Theano otherwise that chain_end is a constant?</span>
+        <span class="c">#   Like, saying so in the cost expression? *Before* the cost </span>
+        <span class="c">#   expression?</span>
+        
+        <span class="n">gparams</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">cost</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="n">consider_constant</span><span class="o">=</span><span class="p">[</span><span class="n">chain_end</span><span class="p">])</span>
+        <span class="c"># constructs the update dictionary</span>
+        <span class="k">for</span> <span class="n">gparam</span><span class="p">,</span> <span class="n">param</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">gparams</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">):</span>
+            <span class="c"># updates already contains the Theano rng update</span>
+            <span class="n">updates</span><span class="p">[</span><span class="n">param</span><span class="p">]</span> <span class="o">=</span> <span class="n">param</span> <span class="o">-</span> <span class="n">gparam</span> <span class="o">*</span> <span class="n">learning_rate</span>       
+        
+        <span class="c"># We need an extra update of the persistent Markov chains</span>
+        <span class="c"># if we&#39;re running PCD, plus we&#39;re using a different monitoring</span>
+        <span class="c"># cost expression for CD vs. PCD.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">persistent</span><span class="p">:</span>
+            <span class="c"># Note that this works only if persistent is a shared variable</span>
+            <span class="n">updates</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">persistent</span><span class="p">]</span> <span class="o">=</span> <span class="n">nh_samples</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="c"># pseudo-likelihood is a better proxy for PCD</span>
+            <span class="n">monitoring_cost</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_pseudo_likelihood_cost</span><span class="p">(</span><span class="n">updates</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c"># reconstruction cross-entropy is a better proxy for CD.</span>
+            <span class="c"># This is the only place where we actually use the pre-sigmoid</span>
+            <span class="c"># activation we are returning all the way from mean_v_given_h.</span>
+            <span class="c"># But it still *is* necessary.</span>
+            <span class="c"># ...this is the second point of extra coupling between getting </span>
+            <span class="c"># the training cost expression and getting the training updates.</span>
+            <span class="c"># Can we get rid of the &#39;updates&#39; in the call to _get_rec_cost?</span>
+            <span class="c">#  ...no, because we&#39;ll be again updating the **** theano RNG</span>
+            <span class="c"># in the process.</span>
+            <span class="c"># ...or maybe not? When we have pre_sigmoid_nvs...</span>
+            <span class="c"># How can we pass pre_sigmoid_nvs[-1]?</span>
+            <span class="n">monitoring_cost</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_reconstruction_cost</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="c">#updates,</span>
+                                                        <span class="n">pre_sigmoid_nvs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            
+        <span class="c"># Keeping track of things</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_training_cost</span> <span class="o">=</span> <span class="n">cost</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_precomputed_training_updates</span> <span class="o">=</span> <span class="n">updates</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_monitoring_cost</span> <span class="o">=</span> <span class="n">monitoring_cost</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cost_and_updates_computed</span> <span class="o">=</span> <span class="bp">True</span>
+        
+        <span class="k">return</span> <span class="n">monitoring_cost</span><span class="p">,</span> <span class="n">updates</span> <span class="c"># Does this need a return value, anyway?</span>
+    
+    <span class="k">def</span> <span class="nf">_cost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the MONITORING cost expression, which is used by the </span>
+<span class="sd">        learner  to monitor progress, validate, check on improvements, </span>
+<span class="sd">        etc. </span>
+<span class="sd">        </span>
+<span class="sd">        This behavior is NOT in line with how _cost usually works.</span>
+<span class="sd">        </span>
+<span class="sd">        .. warn:</span>
+<span class="sd">        </span>
+<span class="sd">            Depends on the :func:`_cost_and_training_updates()` method being</span>
+<span class="sd">            run before  _cost() is called!</span>
+<span class="sd">            </span>
+<span class="sd">        .. note:</span>
+<span class="sd">        </span>
+<span class="sd">            This is all a facade to keep the interface of the RBM consistent </span>
+<span class="sd">            with the others. The internal workings are a true Theano-inflicted</span>
+<span class="sd">            giant  mess-up. Will (maybe) deal with it later; for now I gave up</span>
+<span class="sd">            and just copied over the solution from deeplearning.net tutorials.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cost_and_updates_computed</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&quot;Before calling _training_updates, you should</span><span class="se">\</span>
+<span class="s">             definitely call  _cost_and_updates_computed()&quot;</span><span class="p">)</span>
+            
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_monitoring_cost</span>
+    
+    <span class="k">def</span> <span class="nf">_training_updates</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the updates dictionary necessary to train the RBM. </span>
+<span class="sd">        </span>
+<span class="sd">         .. warn:</span>
+<span class="sd">        </span>
+<span class="sd">            Depends on the :func:`_cost_and_training_updates()` method being</span>
+<span class="sd">            run before  _cost() is called!</span>
+<span class="sd">            </span>
+<span class="sd">        .. note:</span>
+<span class="sd">        </span>
+<span class="sd">            This is all a facade to keep the interface of the RBM consistent </span>
+<span class="sd">            with the others. The internal workings are a true Theano-inflicted</span>
+<span class="sd">            giant  mess-up. Will (maybe) deal with it later; for now I gave up</span>
+<span class="sd">            and just copied over the solution from deeplearning.net tutorials.</span>
+<span class="sd">            </span>
+<span class="sd">        .. warn:</span>
+<span class="sd">        </span>
+<span class="sd">            Don&#39;t do anything with these updates except use them in setup() to</span>
+<span class="sd">            pass to ``theano.function`` as the ``updates`` parameter for the</span>
+<span class="sd">            RBM training function.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cost_and_updates_computed</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s">&quot;Before calling _training_updates, you should</span><span class="se">\</span>
+<span class="s">             definitely call  _cost_and_updates_computed()&quot;</span><span class="p">)</span>
+            
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_precomputed_training_updates</span>
+    
+    
+    <span class="k">def</span> <span class="nf">_get_pseudo_likelihood_cost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">updates</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Stochastic approximation to the pseudo-likelihood</span>
+<span class="sd">        </span>
+<span class="sd">        Copied over from deeplearning.net. I have little idea about</span>
+<span class="sd">        what it does, why the ``updates`` are passed here, etc.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c"># index of bit i in expression p(x_i | x_{\i})</span>
+        <span class="n">bit_i_idx</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">shared</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">&#39;bit_i_idx&#39;</span><span class="p">)</span>
+
+        <span class="c"># binarize the input image by rounding to nearest integer</span>
+        <span class="n">xi</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">iround</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">inputs</span><span class="p">)</span>
+
+        <span class="c"># calculate free energy for the given bit configuration</span>
+        <span class="n">fe_xi</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">free_energy</span><span class="p">(</span><span class="n">xi</span><span class="p">)</span>
+
+        <span class="c"># flip bit x_i of matrix xi and preserve all other bits x_{\i}</span>
+        <span class="c"># Equivalent to xi[:,bit_i_idx] = 1-xi[:, bit_i_idx], but assigns</span>
+        <span class="c"># the result to xi_flip, instead of working in place on xi.</span>
+        <span class="n">xi_flip</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">set_subtensor</span><span class="p">(</span><span class="n">xi</span><span class="p">[:,</span> <span class="n">bit_i_idx</span><span class="p">],</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">xi</span><span class="p">[:,</span> <span class="n">bit_i_idx</span><span class="p">])</span>
+
+        <span class="c"># calculate free energy with bit flipped</span>
+        <span class="n">fe_xi_flip</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">free_energy</span><span class="p">(</span><span class="n">xi_flip</span><span class="p">)</span>
+
+        <span class="c"># equivalent to e^(-FE(x_i)) / (e^(-FE(x_i)) + e^(-FE(x_{\i})))</span>
+        <span class="n">cost</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">*</span> <span class="n">TT</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="n">fe_xi_flip</span> <span class="o">-</span> <span class="n">fe_xi</span><span class="p">)))</span>
+
+        <span class="c"># increment bit_i_idx % number as part of updates</span>
+        <span class="n">updates</span><span class="p">[</span><span class="n">bit_i_idx</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">bit_i_idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span>
+
+        <span class="k">return</span> <span class="n">cost</span>
+        
+    <span class="k">def</span> <span class="nf">_get_reconstruction_cost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">chain_start_v</span><span class="p">,</span>
+                                  <span class="n">pre_sigmoid_chain_end_v</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes cross-entropy between visible units&#39; at chain start</span>
+<span class="sd">        and at chain end. Uses the pre-sigmoid activation Theano</span>
+<span class="sd">        optimization hack.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">chain_end_v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">backward_activation</span><span class="p">(</span><span class="n">pre_sigmoid_chain_end_v</span><span class="p">)</span>
+        <span class="c"># We&#39;re not using the monitoring cost in theano.grad, so we can</span>
+        <span class="c"># use the numpy rng and thus get rid of the updates.</span>
+        <span class="c">#chain_end_v_sample = self.theano_rng.binomial(size=chain_end_v.shape,</span>
+        <span class="c">#                                              n=1, p=chain_end_v,</span>
+        <span class="c">#                                       dtype = theano.config.floatX)</span>
+        
+        <span class="k">return</span> <span class="o">-</span><span class="n">TT</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">chain_start_v</span> <span class="o">*</span> <span class="n">TT</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">chain_end_v</span><span class="p">)</span> <span class="o">+</span>
+                <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">chain_start_v</span><span class="p">)</span> <span class="o">*</span> <span class="n">TT</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">chain_end_v</span><span class="p">))</span>
+    
+                
+<div class="viewcode-block" id="RestrictedBoltzmannMachine.error"><a class="viewcode-back" href="../../../../safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.error">[docs]</a>    <span class="k">def</span> <span class="nf">error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cost</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_sparsity_cross_entropy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Computes the KL divergence of distribution of the sparsity target</span>
+<span class="sd">        w.r.t. mean activation of each hidden neuron.</span>
+
+<span class="sd">        :param X: The input data batch.</span>
+
+<span class="sd">        :return: The KL-divergence... (see desc.)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">mean_act</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">mean_act_compl</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">mean_act</span>
+        <span class="n">rho_term</span> <span class="o">=</span> <span class="n">mean_act</span> <span class="o">*</span> <span class="n">TT</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">mean_act</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">sparsity_target</span><span class="p">)</span>
+        <span class="n">neg_rho_term</span> <span class="o">=</span> <span class="n">mean_act_compl</span> <span class="o">*</span> <span class="n">TT</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">mean_act_compl</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">sparsity_target</span><span class="p">))</span>
+        <span class="n">kl_divergence</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">rho_term</span> <span class="o">+</span> <span class="n">neg_rho_term</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">kl_divergence</span>
+
+    <span class="k">def</span> <span class="nf">_output_sparsity_cross_entropy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Computes the KL divergence of distribution of the sparsity target</span>
+<span class="sd">        w.r.t. mean activation of each hidden neuron.</span>
+
+<span class="sd">        :param X: The input data batch.</span>
+
+<span class="sd">        :return: The KL-divergence... (see desc.)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">mean_act</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b_hidden</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">mean_act_compl</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">mean_act</span>
+        <span class="n">rho_term</span> <span class="o">=</span> <span class="n">mean_act</span> <span class="o">*</span> <span class="n">TT</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">mean_act</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_sparsity_target</span><span class="p">)</span>
+        <span class="n">neg_rho_term</span> <span class="o">=</span> <span class="n">mean_act_compl</span> <span class="o">*</span> <span class="n">TT</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">mean_act_compl</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_sparsity_target</span><span class="p">))</span>
+        <span class="n">kl_divergence</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">rho_term</span> <span class="o">+</span> <span class="n">neg_rho_term</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">kl_divergence</span>
+
+    <span class="k">def</span> <span class="nf">_entropy_cost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the sum of entropies of the bernoulli distributions with</span>
+<span class="sd">        hidden activations as means. (Divided by size of minibatch.)&quot;&quot;&quot;</span>
+        <span class="c">#entropy = -1.0 * (X * TT.log(X) + (1.0 - X) * TT.log(1.0 - X))</span>
+        <span class="n">entropies</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">binary_crossentropy</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">X</span><span class="p">)</span>
+        <span class="n">rowsum</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">entropies</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">rowsum</span><span class="p">)</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="RestrictedBoltzmannMachine.setup_as_pretraining"><a class="viewcode-back" href="../../../../safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.setup_as_pretraining">[docs]</a>    <span class="k">def</span> <span class="nf">setup_as_pretraining</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">supervised_model_instance</span><span class="p">,</span>
+                             <span class="n">linked_layer_index</span><span class="p">,</span> 
+                             <span class="n">batch_size</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.13</span><span class="p">,</span>
+                             <span class="o">**</span><span class="n">model_init_args</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Links a model instance to the ``link_layer_index``-th layer</span>
+<span class="sd">        of ``supervised_model_instance`` for pre-training and generates</span>
+<span class="sd">        the pretraining function. Returns a ``PretrainingModelHandle``</span>
+<span class="sd">        that contains the pretraining model instance and the pretraining</span>
+<span class="sd">        function.</span>
+
+<span class="sd">        :type data: Dataset</span>
+<span class="sd">        :param data: The dataset on which pre-training should work.</span>
+
+<span class="sd">        :type model_instance: BaseSupervisedModel</span>
+<span class="sd">        :param model: The model instance which should be pre-trained.</span>
+<span class="sd">        </span>
+<span class="sd">        :type linked_layer_index: int</span>
+<span class="sd">        :param linked_layer_index: Which layer of ``model_instance`` to</span>
+<span class="sd">        link to. Starting with 0, the output layer of the model would be </span>
+<span class="sd">        index ``model_instance.n_layers - 1``.</span>
+<span class="sd">        </span>
+<span class="sd">        :type batch_size: int</span>
+<span class="sd">        :param batch_size: how many data items will be in one minibatch</span>
+<span class="sd">        (the data is split to minibatches for training,</span>
+<span class="sd">        validation and testing)</span>
+
+<span class="sd">        :type learning_rate: theano.config.floatX</span>
+<span class="sd">        :param learning_rate: How fast will the model move in the direction</span>
+<span class="sd">        of the gradient.</span>
+
+<span class="sd">        :type model_init_args: kwargs</span>
+<span class="sd">        :param model_init_args: Various keyword arguments passed to</span>
+<span class="sd">        pretraining model constructor.</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="c"># TODO: sanity checks</span>
+    
+        <span class="n">model</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">link</span><span class="p">(</span><span class="n">supervised_model_instance</span><span class="p">,</span> <span class="n">linked_layer_index</span><span class="p">,</span>
+                         <span class="o">**</span><span class="n">model_init_args</span><span class="p">)</span>
+
+        <span class="n">model</span><span class="o">.</span><span class="n">_cost_and_training_updates</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">inputs</span><span class="p">,</span>
+                                          <span class="n">learning_rate</span><span class="o">=</span><span class="n">learning_rate</span><span class="p">)</span>
+                
+        <span class="n">bound_cost</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">_cost</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">inputs</span><span class="p">)</span>
+        <span class="n">updates</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">_precomputed_training_updates</span><span class="p">(</span><span class="n">cost</span> <span class="o">=</span> <span class="n">bound_cost</span><span class="p">,</span>
+                                          <span class="n">learning_rate</span> <span class="o">=</span> <span class="n">learning_rate</span><span class="p">)</span>
+        
+        <span class="c"># Notice the trick in givens = {}: we link the data to the</span>
+        <span class="c"># supervised_model_instance&#39;s inputs, so that the data runs</span>
+        <span class="c"># through the previous layers first and gets correctly transformed.</span>
+        <span class="n">batch_index</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">lscalar</span><span class="p">(</span><span class="s">&#39;batch_index&#39;</span><span class="p">)</span>
+        <span class="n">pretrain_model</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="n">inputs</span> <span class="o">=</span> <span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">inputs</span><span class="p">],</span>
+                                <span class="n">outputs</span> <span class="o">=</span> <span class="n">bound_cost</span><span class="p">,</span>
+                                <span class="n">updates</span> <span class="o">=</span> <span class="n">updates</span><span class="p">,</span>
+                                <span class="n">allow_input_downcast</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">PretrainingModelHandle</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">pretrain_model</span><span class="p">)</span>
+        
+
+    </div>
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="RestrictedBoltzmannMachine.setup"><a class="viewcode-back" href="../../../../safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.setup">[docs]</a>    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.13</span><span class="p">,</span>
+              <span class="n">heavy_debug</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="o">**</span><span class="n">model_init_kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Prepares the train_model, validate_model and test_model methods</span>
+<span class="sd">        on the given dataset and with the given parameters.</span>
+
+<span class="sd">        It is a CLASS METHOD, which during its run actually creates</span>
+<span class="sd">        an instance of the model. It is called as </span>
+
+<span class="sd">            &gt;&gt;&gt; model_handle = ModelClass.setup(dataset, params...)</span>
+
+<span class="sd">        :type data: Dataset</span>
+<span class="sd">        :param data: The dataset on which the model will be run.</span>
+
+<span class="sd">        :type model: BaseUnsupervisedModel</span>
+<span class="sd">        :param model: A model instance that the setup should use.</span>
+
+<span class="sd">        :type batch_size: int</span>
+<span class="sd">        :param batch_size: how many data items will be in one minibatch</span>
+<span class="sd">        (the data is split to minibatches for training,</span>
+<span class="sd">        validation and testing)</span>
+
+<span class="sd">        :type learning_rate: theano.config.floatX</span>
+<span class="sd">        :param learning_rate: How fast will the model move in the direction</span>
+<span class="sd">        of the gradient.</span>
+
+<span class="sd">        :type model_init_kwargs: kwargs</span>
+<span class="sd">        :param model_init_kwargs: Various keyword arguments that get passed</span>
+<span class="sd">        to the model constructor. See constructor</span>
+<span class="sd">        argument documentation.</span>
+<span class="sd">                </span>
+<span class="sd">        :rtype: ModelHandle                     </span>
+<span class="sd">        :returns: ``ModelHandle(model, train_f, validate_f, test_f)``</span>
+<span class="sd">        where ``model`` is the Model instance initialized during</span>
+<span class="sd">        :func:`setup` and the ``_func`` variables are compiled</span>
+<span class="sd">        theano.functions to use in a learner.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Setting up RBM model.&#39;</span><span class="p">)</span>
+
+        <span class="n">index</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">lscalar</span><span class="p">()</span> <span class="c"># index of minibatch</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="s">&#39;X&#39;</span><span class="p">)</span>   <span class="c"># data as a matrix</span>
+        <span class="c"># There is no response vector.</span>
+       
+        <span class="c"># Check for kwargs ... obsolete?</span>
+<span class="c">#       cls._check_init_args(model_init_kwargs)</span>
+        <span class="c"># Debugging...</span>
+        <span class="n">training_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">heavy_debug</span><span class="p">:</span>
+            <span class="n">training_kwargs</span><span class="p">[</span><span class="s">&#39;mode&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">compile</span><span class="o">.</span><span class="n">MonitorMode</span><span class="p">(</span>
+                        <span class="n">post_func</span><span class="o">=</span><span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">merciless_print</span><span class="p">)</span><span class="o">.</span><span class="n">excluding</span><span class="p">(</span>
+                                            <span class="s">&#39;local_elemwise_fusion&#39;</span><span class="p">,</span> <span class="s">&#39;inplace&#39;</span><span class="p">)</span>
+
+        <span class="n">dummy_inputs</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">train_X_batch</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span>
+        <span class="k">print</span> <span class="n">dummy_inputs</span>
+        <span class="n">X</span><span class="o">.</span><span class="n">tag</span><span class="o">.</span><span class="n">test_value</span> <span class="o">=</span> <span class="n">dummy_inputs</span>
+
+        <span class="c">#print &#39;Dummy inputs:&#39;, X.tag.test_value</span>
+
+        <span class="c"># Construct the model instance, or use supplied and do sanity checks.</span>
+        <span class="k">if</span> <span class="n">model</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+
+            <span class="k">if</span> <span class="s">&#39;n_out&#39;</span> <span class="ow">in</span> <span class="n">model_init_kwargs</span><span class="p">:</span>
+                <span class="n">n_out</span> <span class="o">=</span> <span class="n">model_init_kwargs</span><span class="p">[</span><span class="s">&#39;n_out&#39;</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s">&#39;n_out&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">n_out</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+                <span class="n">model_init_kwargs</span><span class="p">[</span><span class="s">&#39;n_out&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">n_out</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Must supply n_out either from dataset or **model_init_kwargs.&#39;</span><span class="p">)</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing model.&#39;</span><span class="p">)</span>
+
+        <span class="c"># Construct the model instance, or use supplied and do sanity checks.</span>
+        <span class="k">if</span> <span class="n">model</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">(from scratch)&#39;</span><span class="p">)</span>
+            <span class="n">model</span> <span class="o">=</span> <span class="n">cls</span><span class="p">(</span><span class="n">inputs</span><span class="o">=</span><span class="n">X</span><span class="p">,</span> <span class="n">n_in</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">n_in</span><span class="p">,</span>
+                        <span class="o">**</span><span class="n">model_init_kwargs</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c"># Sanity (dimensionality...) checks: </span>
+            <span class="c"># - Are we passing a model of the same type as we&#39;re trying</span>
+            <span class="c">#   to set up?</span>
+            <span class="c"># - Are we passing a dataset that the model can work on?</span>
+            <span class="k">assert</span> <span class="n">cls</span> <span class="o">==</span> <span class="nb">type</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="n">model</span><span class="o">.</span><span class="n">n_in</span> <span class="o">==</span> <span class="n">data</span><span class="o">.</span><span class="n">n_in</span>
+            <span class="c"># assert model.n_out == data.n_out</span>
+            <span class="n">model</span><span class="o">.</span><span class="n">inputs</span> <span class="o">=</span> <span class="n">X</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">Preparing cost and training updates...&#39;</span><span class="p">)</span>
+
+        <span class="c"># Key difference for RBM setup: have to call the **()@!*!#*!!!#$!!</span>
+        <span class="c"># _cost_and_training_updates() method</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">_cost_and_training_updates</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">inputs</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="n">learning_rate</span><span class="p">)</span>
+
+        <span class="c"># The &#39;X&#39; variable has no role on the returned expression here.</span>
+        <span class="n">bound_cost</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">_cost</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">inputs</span><span class="p">)</span>
+
+        <span class="c"># The &#39;cost&#39; parameter is perfectly obsolete here.</span>
+        <span class="n">updates</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">_training_updates</span><span class="p">(</span><span class="n">cost</span><span class="o">=</span><span class="n">bound_cost</span><span class="p">,</span>
+                                          <span class="n">learning_rate</span><span class="o">=</span><span class="n">learning_rate</span><span class="p">)</span>
+
+        <span class="c"># Compile a Theano function that trains the model: returns the cost</span>
+        <span class="c"># and updates the model parameters based on the rules defined by the</span>
+        <span class="c"># model._training_updates() function.</span>
+        <span class="n">train_model</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="n">inputs</span> <span class="o">=</span> <span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">inputs</span><span class="p">],</span>
+                                      <span class="n">outputs</span> <span class="o">=</span> <span class="n">bound_cost</span><span class="p">,</span>
+                                      <span class="n">updates</span> <span class="o">=</span> <span class="n">updates</span><span class="p">,</span>
+                                      <span class="n">allow_input_downcast</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                                      <span class="o">**</span><span class="n">training_kwargs</span><span class="p">)</span>
+
+        <span class="c"># Compile a Theano function that computes the cost that are made</span>
+        <span class="c"># by the model on a minibatch of devel/test data</span>
+        <span class="n">validate_model</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="n">inputs</span> <span class="o">=</span> <span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">inputs</span><span class="p">],</span>
+                                <span class="n">outputs</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">inputs</span><span class="p">),</span>
+                                <span class="n">allow_input_downcast</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        
+        <span class="n">test_model</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="n">inputs</span> <span class="o">=</span> <span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">inputs</span><span class="p">],</span>
+                                <span class="n">outputs</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">inputs</span><span class="p">),</span>
+                                <span class="n">allow_input_downcast</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="n">run_model</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="n">inputs</span> <span class="o">=</span> <span class="p">[</span><span class="n">model</span><span class="o">.</span><span class="n">inputs</span><span class="p">],</span>
+                                    <span class="n">outputs</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">outputs</span><span class="p">,</span>
+                                    <span class="n">allow_input_downcast</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">ModelHandle</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">train_model</span><span class="p">,</span> <span class="n">validate_model</span><span class="p">,</span> <span class="n">test_model</span><span class="p">,</span>
+                           <span class="n">run_model</span><span class="p">)</span>
+
+        
+        </div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,407 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.train_multimodal_model &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for scripts.train_multimodal_model</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+
+<span class="sd">&quot;&quot;&quot;Helper script that builds the test-data LogisticRegression transformer</span>
+<span class="sd">and index. Intended to be run from the safire/source directory.&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">safire</span>
+
+<span class="kn">from</span> <span class="nn">gensim.similarities</span> <span class="kn">import</span> <span class="n">Similarity</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">exception_verbosity</span> <span class="o">=</span> <span class="s">&#39;high&#39;</span>
+
+<span class="kn">from</span> <span class="nn">safire.data.loaders</span> <span class="kn">import</span> <span class="n">MultimodalDatasetLoader</span><span class="p">,</span> <span class="n">MultimodalShardedDatasetLoader</span>
+<span class="kn">from</span> <span class="nn">safire.data.loaders</span> <span class="kn">import</span> <span class="n">ModelLoader</span>
+<span class="kn">from</span> <span class="nn">safire.learning.learners.base_sgd_learner</span> <span class="kn">import</span> <span class="n">BaseSGDLearner</span>
+<span class="kn">from</span> <span class="nn">safire.learning.interfaces.safire_transformer</span> <span class="kn">import</span> <span class="n">SafireTransformer</span>
+<span class="kn">import</span> <span class="nn">safire.learning.models</span> <span class="kn">as</span> <span class="nn">models</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+<span class="c">############################</span>
+
+<span class="c"># Default values for multilayer perceptron layer parameters.</span>
+<span class="n">hidden_layer_defaults</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;activation&#39;</span> <span class="p">:</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">tanh</span>
+<span class="p">}</span>
+
+<span class="c"># Default values for pre-training layer parameters.</span>
+<span class="n">pretraining_defaults</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s">&#39;corruption_level&#39;</span> <span class="p">:</span> <span class="mf">0.3</span><span class="p">,</span>
+    <span class="s">&#39;tied_weights&#39;</span> <span class="p">:</span> <span class="bp">True</span><span class="p">,</span>
+    <span class="s">&#39;activation&#39;</span> <span class="p">:</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">tanh</span>
+<span class="p">}</span>
+
+
+<span class="k">def</span> <span class="nf">_create_transformer</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Wrapper around transformer training for profiling purposes.&quot;&quot;&quot;</span>
+    <span class="n">transformer</span> <span class="o">=</span> <span class="n">SafireTransformer</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">transformer</span>
+
+<span class="c">###############################################</span>
+
+<span class="c"># Functions for loading individual layers</span>
+
+<div class="viewcode-block" id="layer_loading_infixes"><a class="viewcode-back" href="../../scripts.train_multimodal_model.html#scripts.train_multimodal_model.layer_loading_infixes">[docs]</a><span class="k">def</span> <span class="nf">layer_loading_infixes</span><span class="p">(</span><span class="n">load_layers</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Parses the layers-to-load infixes. Returns a dict such that</span>
+<span class="sd">    i-th layer infix has key i.&quot;&quot;&quot;</span>
+    <span class="n">output_infixes</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">ll</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">load_layers</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">ll</span> <span class="o">!=</span> <span class="s">&#39;None&#39;</span><span class="p">:</span>
+            <span class="n">output_infixes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">ll</span>
+    <span class="k">return</span> <span class="n">output_infixes</span>
+</div>
+<div class="viewcode-block" id="layer_loading_init_args"><a class="viewcode-back" href="../../scripts.train_multimodal_model.html#scripts.train_multimodal_model.layer_loading_init_args">[docs]</a><span class="k">def</span> <span class="nf">layer_loading_init_args</span><span class="p">(</span><span class="n">layer_infixes</span><span class="p">,</span> <span class="n">model_loader</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Loads for each layer with infix specified by layer_infixes the</span>
+<span class="sd">    appropriate init args. Returns the dict with init args as values.&quot;&quot;&quot;</span>
+    <span class="n">layer_init_args</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">layer_infixes</span><span class="p">:</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">model_loader</span><span class="o">.</span><span class="n">load_model</span><span class="p">(</span><span class="n">layer_infixes</span><span class="p">[</span><span class="n">layer</span><span class="p">])</span>
+        <span class="n">init_args</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">_init_args_snapshot</span><span class="p">()</span>
+        <span class="n">layer_init_args</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">=</span> <span class="n">init_args</span>
+    <span class="k">return</span> <span class="n">layer_init_args</span>
+
+<span class="c">###################################################</span>
+</div>
+<div class="viewcode-block" id="set_dataset_mode"><a class="viewcode-back" href="../../scripts.train_multimodal_model.html#scripts.train_multimodal_model.set_dataset_mode">[docs]</a><span class="k">def</span> <span class="nf">set_dataset_mode</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">dataset</span><span class="p">):</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;unsupervised&#39;</span><span class="p">:</span>
+        <span class="n">dataset</span><span class="o">.</span><span class="n">set_mode</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">dataset</span><span class="o">.</span><span class="n">n_out</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">n_out</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;supervised&#39;</span><span class="p">:</span>
+        <span class="n">dataset</span><span class="o">.</span><span class="n">set_mode</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s">&#39;supervised-reverse&#39;</span><span class="p">:</span>
+        <span class="n">dataset</span><span class="o">.</span><span class="n">set_mode</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Incorrect mode set: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">mode</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="check_model_dataset_compatibility"><a class="viewcode-back" href="../../scripts.train_multimodal_model.html#scripts.train_multimodal_model.check_model_dataset_compatibility">[docs]</a><span class="k">def</span> <span class="nf">check_model_dataset_compatibility</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">model_class</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">model_class</span><span class="p">,</span> <span class="n">models</span><span class="o">.</span><span class="n">BaseSupervisedModel</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">dataset</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Cannot run supervised training with unsupervised&#39;</span><span class="o">+</span>
+                             <span class="s">&#39; dataset mode. (Model </span><span class="si">%s</span><span class="s">, dataset mode </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span>
+                             <span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">model_class</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">mode</span><span class="p">)))</span>
+
+<span class="c">###############################################################################</span>
+</div>
+<div class="viewcode-block" id="parse_model_init_args"><a class="viewcode-back" href="../../scripts.train_multimodal_model.html#scripts.train_multimodal_model.parse_model_init_args">[docs]</a><span class="k">def</span> <span class="nf">parse_model_init_args</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Creates a dict that can be passed like kwargs to the model&#39;s setup()</span>
+<span class="sd">    method.</span>
+
+<span class="sd">    :param args: The argparse.Namespace that holds script command-line args.</span>
+
+<span class="sd">    :returns: The init arg dict.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">init_args</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">hidden_layer_defaults</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s">&#39;activation&#39;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">activation</span> <span class="o">==</span> <span class="s">&#39;sigmoid&#39;</span><span class="p">:</span>
+            <span class="n">init_args</span><span class="p">[</span><span class="s">&#39;activation&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">sigmoid</span>
+        <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">activation</span> <span class="o">==</span> <span class="s">&#39;tanh&#39;</span><span class="p">:</span>
+            <span class="n">init_args</span><span class="p">[</span><span class="s">&#39;activation&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">tanh</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid activation given: &#39;</span> <span class="o">+</span>
+                             <span class="s">&#39;</span><span class="si">%s</span><span class="s">, use </span><span class="se">\&#39;</span><span class="s">sigmoid</span><span class="se">\&#39;</span><span class="s"> or </span><span class="se">\&#39;</span><span class="s">tanh</span><span class="se">\&#39;</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">activation</span><span class="p">)</span>
+
+    <span class="c"># Special case...</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">model</span> <span class="o">==</span> <span class="s">&#39;MultilayerPerceptron&#39;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="s">&#39;activation&#39;</span> <span class="ow">in</span> <span class="n">init_args</span><span class="p">:</span>
+            <span class="n">init_args</span><span class="p">[</span><span class="s">&#39;hidden_activation&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">init_args</span><span class="p">[</span><span class="s">&#39;activation&#39;</span><span class="p">]</span>
+            <span class="c">#init_args[&#39;log_regression_params&#39;] = { &#39;activation&#39; : init_args[&#39;activation&#39;] }</span>
+            <span class="k">del</span> <span class="n">init_args</span><span class="p">[</span><span class="s">&#39;activation&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s">&#39;n_layers&#39;</span><span class="p">):</span>
+        <span class="n">init_args</span><span class="p">[</span><span class="s">&#39;n_layers&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">n_layers</span>
+
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s">&#39;hidden_sizes&#39;</span><span class="p">):</span>
+        <span class="n">init_args</span><span class="p">[</span><span class="s">&#39;n_hidden_list&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">hidden_sizes</span>
+
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s">&#39;L1_w&#39;</span><span class="p">):</span>
+        <span class="n">init_args</span><span class="p">[</span><span class="s">&#39;L1_w&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">L1_w</span>
+
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s">&#39;L2_w&#39;</span><span class="p">):</span>
+        <span class="n">init_args</span><span class="p">[</span><span class="s">&#39;L1_w&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">L2_w</span>
+
+
+    <span class="k">return</span> <span class="n">init_args</span>
+
+
+<span class="c">###############################################################################</span></div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../scripts.train_multimodal_model.html#scripts.train_multimodal_model.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing loaders (root: </span><span class="si">%s</span><span class="s">, name: </span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                 <span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+
+    <span class="c"># Initialize loaders</span>
+    <span class="n">dloader</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">mloader</span> <span class="o">=</span> <span class="n">ModelLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading dataset (text label: </span><span class="si">%s</span><span class="s">, image label: </span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                 <span class="n">args</span><span class="o">.</span><span class="n">text_label</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">img_label</span><span class="p">))</span>
+
+    <span class="c"># Setup and train model</span>
+    <span class="n">dataset</span> <span class="o">=</span> <span class="n">dloader</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">text_infix</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">text_label</span><span class="p">,</span>
+                           <span class="n">img_infix</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">img_label</span><span class="p">)</span>
+
+    <span class="c"># Correctly initialize dataset mode (and n_out, for unsupervised settings)</span>
+    <span class="n">set_dataset_mode</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">dataset</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Dataset dimension: n_in = </span><span class="si">%d</span><span class="s">, n_out = </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="n">dataset</span><span class="o">.</span><span class="n">n_in</span><span class="p">,</span> <span class="n">dataset</span><span class="o">.</span><span class="n">n_out</span><span class="p">))</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing model class </span><span class="si">%s</span><span class="s"> setting up handle.&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">model</span><span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">model_class</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">models</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">model</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid model specified: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">model</span><span class="p">)</span>
+
+    <span class="n">check_model_dataset_compatibility</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">model_class</span><span class="p">)</span>
+
+    <span class="n">model_init_args</span> <span class="o">=</span> <span class="n">parse_model_init_args</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+
+    <span class="c"># Parsing intermediate layer loading</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s">&#39;load_layers&#39;</span><span class="p">):</span>
+        <span class="n">l_infixes</span> <span class="o">=</span> <span class="n">layer_loading_infixes</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">load_layers</span><span class="p">)</span>
+        <span class="n">l_init_args</span> <span class="o">=</span> <span class="n">layer_loading_init_args</span><span class="p">(</span><span class="n">l_infixes</span><span class="p">,</span> <span class="n">mloader</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">model_class</span> <span class="o">==</span> <span class="s">&#39;MultilayerPerceptron&#39;</span><span class="p">:</span> <span class="c"># This will usually be the case.</span>
+            <span class="n">hparams</span> <span class="o">=</span> <span class="p">[</span> <span class="p">{}</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">n_layers</span><span class="p">)</span> <span class="p">]</span>
+            <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">l_init_args</span><span class="p">:</span>
+                <span class="n">hparams</span><span class="p">[</span><span class="n">l</span><span class="p">]</span> <span class="o">=</span> <span class="n">l_init_args</span><span class="p">[</span><span class="n">l</span><span class="p">]</span>
+            <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;hidden_layer_params&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">hparams</span>
+
+    <span class="n">model_handle</span> <span class="o">=</span> <span class="n">model_class</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span>
+                                     <span class="n">batch_size</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span>
+                                     <span class="n">learning_rate</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">learning_rate</span><span class="p">,</span>
+                                     <span class="o">**</span><span class="n">model_init_args</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing learner...&#39;</span><span class="p">)</span>
+
+    <span class="n">learner</span> <span class="o">=</span> <span class="n">BaseSGDLearner</span><span class="p">(</span><span class="n">n_epochs</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">n_epochs</span><span class="p">,</span>
+                             <span class="n">b_size</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span>
+                             <span class="n">validation_frequency</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">validation_frequency</span><span class="p">)</span>
+
+    <span class="c">#if args.pretraining:</span>
+    <span class="c">#    #pretraining_args = parse_pretraining_args(args) # TODO</span>
+    <span class="c">#    #pretraining_handles = setup_pretraining_handles(pretraining_args)</span>
+    <span class="c">#</span>
+    <span class="c"># TODO: pretraining execution. Currently not implemented.</span>
+    <span class="c">#</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing and training transformer...&#39;</span><span class="p">)</span>
+
+    <span class="c"># Train &amp; save</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">no_training</span><span class="p">:</span>
+        <span class="n">transformer</span> <span class="o">=</span> <span class="n">SafireTransformer</span><span class="p">(</span><span class="n">model_handle</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">profile_training</span><span class="p">:</span>
+            <span class="n">report</span><span class="p">,</span> <span class="n">transformer</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">profile_run</span><span class="p">(</span><span class="n">_create_transformer</span><span class="p">,</span>
+                                                <span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">learner</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">transformer</span> <span class="o">=</span> <span class="n">SafireTransformer</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">learner</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Saving transformer...&#39;</span><span class="p">)</span>
+
+    <span class="n">mloader</span><span class="o">.</span><span class="n">save_transformer</span><span class="p">(</span><span class="n">transformer</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">transformer_label</span><span class="p">)</span>
+
+<span class="c">###############################################################################</span>
+</div>
+<span class="k">def</span> <span class="nf">_build_argument_parser</span><span class="p">():</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="n">__doc__</span><span class="p">,</span> <span class="n">add_help</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="c"># Dataset identification</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-r&#39;</span><span class="p">,</span> <span class="s">&#39;--root&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The root dataset directory, passed to Loader.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-n&#39;</span><span class="p">,</span> <span class="s">&#39;--name&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The name passed to Loader.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-t&#39;</span><span class="p">,</span> <span class="s">&#39;--text_label&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Label of text corpus to use for training the &#39;</span> <span class="o">+</span>
+                             <span class="s">&#39;model. Used to load an existing text corpus&#39;</span> <span class="o">+</span>
+                             <span class="s">&#39; (serialized) in the multimodal dataset.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-i&#39;</span><span class="p">,</span> <span class="s">&#39;--img_label&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Label of image corpus to use for building the &#39;</span> <span class="o">+</span>
+                             <span class="s">&#39;model. (Important especially in supervised &#39;</span> <span class="o">+</span>
+                             <span class="s">&#39;training.)&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--mode&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;supervised&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Which training mode should be used. The choice &#39;</span>
+    <span class="s">&#39;is: </span><span class="se">\&#39;</span><span class="s">supervised</span><span class="se">\&#39;</span><span class="s">, for training on texts with images as response, &#39;</span>
+    <span class="s">&#39;</span><span class="se">\&#39;</span><span class="s">unsupervised</span><span class="se">\&#39;</span><span class="s"> for training on texts and images together, and &#39;</span>
+    <span class="s">&#39;</span><span class="se">\&#39;</span><span class="s">supervised-reverse</span><span class="se">\&#39;</span><span class="s">, for training on images with texts as response.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--n_out&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If unsupervised training mode is used, the number&#39;</span>
+                             <span class="s">&#39;of output neurons needs to be set.&#39;</span><span class="p">)</span>
+
+    <span class="c"># Model settings</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-m&#39;</span><span class="p">,</span> <span class="s">&#39;--model&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;MultilayerPerceptron&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Name of model class. In order to use multiple&#39;</span>
+                             <span class="s">&#39;layers, a MultilayerPerceptron should be used.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--n_layers&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;No. of hidden layers.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--hidden_sizes&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="p">[],</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s">&#39;+&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The sizes of hidden layers.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--activation&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;tanh&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Accepts </span><span class="se">\&#39;</span><span class="s">sigmoid</span><span class="se">\&#39;</span><span class="s">, </span><span class="se">\&#39;</span><span class="s">tanh</span><span class="se">\&#39;</span><span class="s"> and </span><span class="se">\&#39;</span><span class="s">softmax</span><span class="se">\&#39;</span><span class="s">.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--layer_labels&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s">&#39;+&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;For loading layers. If the i-th layers should be&#39;</span>
+                             <span class="s">&#39; loaded, the model infix for the layer should be&#39;</span>
+                             <span class="s">&#39; the i-th argument to --layer_labels. If a model&#39;</span>
+                             <span class="s">&#39; should not be loaded for a layer, give the&#39;</span>
+                             <span class="s">&#39; layer label as None (the script will parse it&#39;</span>
+                             <span class="s">&#39; correctly).&#39;</span><span class="p">)</span>
+
+    <span class="c"># Pretraining settings</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-p&#39;</span><span class="p">,</span> <span class="s">&#39;--pretraining&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, gives the unsupervised model class used&#39;</span>
+                             <span class="s">&#39; for pre-training. Currently, all layers are&#39;</span>
+                             <span class="s">&#39; pre-trained using the same default model:&#39;</span>
+                             <span class="s">&#39; Denoising Autoencoder&#39;</span><span class="p">)</span>
+    <span class="c">#parser.add_argument(&#39;--pmodel&#39;, default=&#39;DenoisingAutoencoder&#39;,</span>
+    <span class="c">#                    help=&#39;Which model class to use for pre-training.&#39;)</span>
+
+
+    <span class="c"># TODO:</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-c&#39;</span><span class="p">,</span> <span class="s">&#39;--config&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Configuration file label. The configuration file&#39;</span>
+                             <span class="s">&#39;is a Python file that contains&#39;</span><span class="p">)</span>
+
+    <span class="c"># Saving the trained model</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-l&#39;</span><span class="p">,</span> <span class="s">&#39;--transformer_label&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The label under which to save the trained &#39;</span> <span class="o">+</span>
+                             <span class="s">&#39;SafireTransformer object.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_training&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Doesn</span><span class="se">\&#39;</span><span class="s">t train model, only performs initialization.&#39;</span>
+                             <span class="s">&#39; Useful for debugging save/load or dimension&#39;</span>
+                             <span class="s">&#39; problems.&#39;</span><span class="p">)</span>
+
+    <span class="c"># Learner settings</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--batch_size&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;How many data points will be used to perform one&#39;</span>
+                             <span class="s">&#39;gradient update.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--learning_rate&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.13</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;How fast will the gradient update be.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--n_epochs&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;3&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;How many training epochs should be taken.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--validation_frequency&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;4&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Run validation once every X training batches.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--profile_training&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn &#39;</span>
+                        <span class="s">&#39;on profiling for model training.&#39;</span><span class="p">)</span>
+
+    <span class="c"># Logging</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-v&#39;</span><span class="p">,</span> <span class="s">&#39;--verbose&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; INFO logging messages.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--debug&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on debug &#39;</span><span class="o">+</span>
+                        <span class="s">&#39;prints.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">parser</span>
+
+<span class="c">##############################################################################</span>
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">_build_argument_parser</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+    <span class="n">main</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,496 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.pretrain &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for scripts.pretrain</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Trains an unsupervised layer on image data.</span>
+
+<span class="sd">Use to build individual layers of the image stack. Choose your labels carefully!</span>
+<span class="sd">There is no automated mechanism as of yet to keep track of what is what.</span>
+
+<span class="sd">You can build layers on top of already trained layers by simply selecting the</span>
+<span class="sd">labels for the previous layers. Unless ``--no_transform_corpus`` and</span>
+<span class="sd">``--no_transform_dataset`` flags are given, the source corpus and dataset</span>
+<span class="sd">will be at the end run through the trained model and saved with the</span>
+<span class="sd">``--transformation_label`` label.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">operator</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">theano.compile.pfunc</span>
+<span class="kn">from</span> <span class="nn">safire.data.loaders</span> <span class="kn">import</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">,</span> <span class="n">ModelLoader</span><span class="p">,</span> \
+    <span class="n">LearnerLoader</span>
+<span class="kn">from</span> <span class="nn">safire.learning.interfaces</span> <span class="kn">import</span> <span class="n">SafireTransformer</span>
+<span class="kn">from</span> <span class="nn">safire.learning.learners</span> <span class="kn">import</span> <span class="n">BaseSGDLearner</span>
+<span class="kn">import</span> <span class="nn">safire.learning.models</span> <span class="kn">as</span> <span class="nn">models</span>
+<span class="kn">from</span> <span class="nn">safire.utils</span> <span class="kn">import</span> <span class="n">ReLU</span><span class="p">,</span> <span class="n">cappedReLU</span><span class="p">,</span> <span class="n">build_cappedReLU</span><span class="p">,</span> <span class="n">abstanh</span>
+
+<span class="k">print</span> <span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">compute_test_value</span>
+
+<span class="kn">from</span> <span class="nn">train_multimodal_model</span> <span class="kn">import</span> <span class="n">check_model_dataset_compatibility</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+
+
+<div class="viewcode-block" id="init_activation"><a class="viewcode-back" href="../../scripts.pretrain.html#scripts.pretrain.init_activation">[docs]</a><span class="k">def</span> <span class="nf">init_activation</span><span class="p">(</span><span class="n">activation_str</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Resolves which activation function to use.&quot;&quot;&quot;</span>
+    <span class="n">activation</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">tanh</span>
+    <span class="k">if</span> <span class="n">activation_str</span> <span class="o">==</span> <span class="s">&#39;tanh&#39;</span><span class="p">:</span>
+        <span class="n">activation</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">tanh</span>
+    <span class="k">elif</span> <span class="n">activation_str</span> <span class="o">==</span> <span class="s">&#39;abstanh&#39;</span><span class="p">:</span>
+        <span class="n">activation</span> <span class="o">=</span> <span class="n">abstanh</span>
+    <span class="k">elif</span> <span class="n">activation_str</span> <span class="o">==</span> <span class="s">&#39;sigmoid&#39;</span><span class="p">:</span>
+        <span class="n">activation</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">sigmoid</span>
+    <span class="k">elif</span> <span class="n">activation_str</span> <span class="o">==</span> <span class="s">&#39;hard_sigmoid&#39;</span><span class="p">:</span>
+        <span class="n">activation</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">hard_sigmoid</span>
+    <span class="k">elif</span> <span class="n">activation_str</span> <span class="o">==</span> <span class="s">&#39;ultra_fast_sigmoid&#39;</span><span class="p">:</span>
+        <span class="n">activation</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">ultra_fast_sigmoid</span>
+    <span class="k">elif</span> <span class="n">activation_str</span> <span class="o">==</span> <span class="s">&#39;softmax&#39;</span><span class="p">:</span>
+        <span class="n">activation</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">softmax</span>
+    <span class="k">elif</span> <span class="n">activation_str</span> <span class="o">==</span> <span class="s">&#39;softplus&#39;</span><span class="p">:</span>
+        <span class="n">activation</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">softplus</span>
+    <span class="k">elif</span> <span class="n">activation_str</span> <span class="o">==</span> <span class="s">&#39;relu&#39;</span><span class="p">:</span> <span class="c">## Returns NaN for some reason???</span>
+        <span class="n">activation</span> <span class="o">=</span> <span class="n">build_cappedReLU</span><span class="p">(</span><span class="mf">2.0</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">activation</span>
+
+</div>
+<div class="viewcode-block" id="init_dataset_args"><a class="viewcode-back" href="../../scripts.pretrain.html#scripts.pretrain.init_dataset_args">[docs]</a><span class="k">def</span> <span class="nf">init_dataset_args</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Initializes args for dataset loading.&quot;&quot;&quot;</span>
+    <span class="n">d_args</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">save_dataset</span><span class="p">:</span>
+        <span class="n">d_args</span><span class="p">[</span><span class="s">&#39;save_dataset&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">save_dataset</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">:</span>
+        <span class="n">d_args</span><span class="p">[</span><span class="s">&#39;load_dataset&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">load_dataset</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">try_loading</span><span class="p">:</span>
+        <span class="n">d_args</span><span class="p">[</span><span class="s">&#39;try_loading&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">True</span>
+
+    <span class="k">return</span> <span class="n">d_args</span>
+
+</div>
+<span class="k">def</span> <span class="nf">_build_argument_parser</span><span class="p">():</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="n">__doc__</span><span class="p">,</span> <span class="n">add_help</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                        <span class="n">formatter_class</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">RawDescriptionHelpFormatter</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-r&#39;</span><span class="p">,</span> <span class="s">&#39;--root&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The path to&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; the directory which is the root of a dataset.&#39;</span> <span class="o">+</span>
+                        <span class="s">&#39; (Will be passed to a Loader as a root.)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-n&#39;</span><span class="p">,</span> <span class="s">&#39;--name&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The dataset name passed to the&#39;</span> <span class="o">+</span>
+                        <span class="s">&#39; Loader. Has to correspond to the *.vtlist file name.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-i&#39;</span><span class="p">,</span> <span class="s">&#39;--img_label&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The image corpus label from which to load data. &#39;</span>
+                             <span class="s">&#39;Only one of -t, -i can be specified.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-t&#39;</span><span class="p">,</span> <span class="s">&#39;--text_label&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The text corpus label from which to load data. &#39;</span>
+                             <span class="s">&#39;Only one of -t, -i can be specified.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-l&#39;</span><span class="p">,</span> <span class="s">&#39;--transformation_label&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The output label. This is to help distinguish &#39;</span> <span class="o">+</span>
+                        <span class="s">&#39;models made with different options. Controls saving names,&#39;</span>
+                        <span class="s">&#39;both for the model and for the transformed corpus.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--n_out&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The number of model output neurons.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-m&#39;</span><span class="p">,</span> <span class="s">&#39;--model&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;DenoisingAutoencoder&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The name of the model class to use. Default is&#39;</span>
+                             <span class="s">&#39;DenoisingAutoencoder.&#39;</span><span class="p">)</span>
+
+    <span class="c"># Learner settings</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--batch_size&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;How many data points will be used to perform one&#39;</span>
+                             <span class="s">&#39;gradient update.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--learning_rate&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.13</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;How fast will the gradient update be.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--n_epochs&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;How many training epochs should be taken.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--validation_frequency&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Run validation once every X training batches.&#39;</span><span class="p">)</span>
+
+    <span class="c"># Model settings</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--activation&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;sigmoid&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The activation function to use. Currently&#39;</span>
+                             <span class="s">&#39;supported: </span><span class="se">\&#39;</span><span class="s">tanh</span><span class="se">\&#39;</span><span class="s">, </span><span class="se">\&#39;</span><span class="s">sigmoid</span><span class="se">\&#39;</span><span class="s">,&#39;</span>
+                             <span class="s">&#39;</span><span class="se">\&#39;</span><span class="s">softmax</span><span class="se">\&#39;</span><span class="s"> and </span><span class="se">\&#39;</span><span class="s">relu</span><span class="se">\&#39;</span><span class="s">.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--backward_activation&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;sigmoid&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The backward activation function to use. Currently&#39;</span>
+                             <span class="s">&#39; supported: see --activation.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--reconstruction&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;cross-entropy&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The reconstruction measure to use. Currently &#39;</span>
+                             <span class="s">&#39;supported is </span><span class="se">\&#39;</span><span class="s">cross-entropy</span><span class="se">\&#39;</span><span class="s">, </span><span class="se">\&#39;</span><span class="s">mse</span><span class="se">\&#39;</span><span class="s">&#39;</span>
+                             <span class="s">&#39; and </span><span class="se">\&#39;</span><span class="s">exaggerated-mse</span><span class="se">\&#39;</span><span class="s">.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--corruption&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Corruption level for denoising autoencoders.&#39;</span><span class="p">)</span>
+
+    <span class="c"># Sparsity parameters</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--sparsity&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Sparsity target for sparse denoising &#39;</span>
+                             <span class="s">&#39;autoencoders and sparse RBMs.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--output_sparsity&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Sparsity target for sparse denoising &#39;</span>
+                             <span class="s">&#39;autoencoders and sparse RBMs.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--CD_k&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;For RBMs: how many pre-training steps should be &#39;</span>
+                             <span class="s">&#39;taken.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--CD_use_sample&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Use the sample as the negative gradient particle,&#39;</span>
+                             <span class="s">&#39;not the mean.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--L1_norm&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Weight of L1-regularization.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--L2_norm&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Weight of L2-regularization.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--prefer_extremes&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Adds an extremes-preference cost: negative log&#39;</span>
+                             <span class="s">&#39;of 2 * distance from 0.5 (so that this cost is 0&#39;</span>
+                             <span class="s">&#39; at 1.0 and 0.0).&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--noisy_input&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Adds small noise sampled uniformly from up to&#39;</span>
+                             <span class="s">&#39;this number to each visible input.&#39;</span><span class="p">)</span>
+
+    <span class="c"># Weight decay</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--bias_decay&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;A decay coefficient for bias parameters only &#39;</span>
+                             <span class="s">&#39;(weights stay untouched).&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--feature_centering&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will initialize a centering parameter&#39;</span>
+                             <span class="s">&#39; that will subtract the mean of each feature&#39;</span>
+                             <span class="s">&#39; from the input.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--shared&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, dataset batches will be theano shared&#39;</span>
+                             <span class="s">&#39;variables.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--track_weights&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Useful for debugging. Will print out a submatrix&#39;</span>
+                             <span class="s">&#39;of the model weights each iteration, to see that&#39;</span>
+                             <span class="s">&#39;they are changing.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--track_weights_change&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Useful for debugging. Will print out the three&#39;</span>
+                             <span class="s">&#39;largest weight changes between iterations.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--save_every&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Saves the intermediate model every k-th epoch.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_overwrite_intermediate_saves&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set and saving is set, will not overwrite &#39;</span>
+                             <span class="s">&#39;the intermediate saved models and retain all of &#39;</span>
+                             <span class="s">&#39;them, not just the last one.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--resume&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Attempt to resume training.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_save&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will not save anything.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_corpus_transform&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will not save the transformed input&#39;</span>
+                             <span class="s">&#39; corpus.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_dataset_transform&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will not save the transformed dataset.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_save_transformer&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will not save the transformer. (Useful&#39;</span>
+                             <span class="s">&#39;for debugging purposes.)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_save_learner&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will not save the learner. Saving the &#39;</span>
+                             <span class="s">&#39;learner is useful if you will want to resume &#39;</span>
+                             <span class="s">&#39;training later.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--profile_training&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will profile the training procedure.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--plot_monitors&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will plot the training and validation &#39;</span>
+                             <span class="s">&#39;errors to this file.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--plot_transformation&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will plot a sample of the learned &#39;</span>
+                             <span class="s">&#39;transformation after each epoch.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--plot_weights&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will plot the weights after each epoch.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--plot_every&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Plot transformations/weights every X epochs.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--plot_on_init&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Plot transformation/weights at initialization.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-v&#39;</span><span class="p">,</span> <span class="s">&#39;--verbose&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; INFO logging messages.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--debug&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on debug &#39;</span><span class="o">+</span>
+                        <span class="s">&#39;prints.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--heavy_debug&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on a brutal amount of debugging from inside&#39;</span>
+                             <span class="s">&#39; the compiled theano functions.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">parser</span>
+
+<span class="c">##############################################################################</span>
+
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../scripts.pretrain.html#scripts.pretrain.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing loaders with root </span><span class="si">%s</span><span class="s">, name </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+
+    <span class="n">mdloader</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">mloader</span> <span class="o">=</span> <span class="n">ModelLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">img_label</span> <span class="ow">and</span> <span class="n">args</span><span class="o">.</span><span class="n">text_label</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Can only specify one of text and image label.&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">img_label</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">text_label</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Must specify either text or image label.&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">img_label</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading sharded dataset with img. label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">img_label</span><span class="p">)</span>
+        <span class="n">dataset</span> <span class="o">=</span> <span class="n">mdloader</span><span class="o">.</span><span class="n">load_img</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">img_label</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">text_label</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loading sharded dataset with text label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">text_label</span><span class="p">)</span>
+        <span class="n">dataset</span> <span class="o">=</span> <span class="n">mdloader</span><span class="o">.</span><span class="n">load_text</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">text_label</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Setting up </span><span class="si">%s</span><span class="s"> handle with output dimension </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">model</span><span class="p">,</span>
+                                                                    <span class="n">args</span><span class="o">.</span><span class="n">n_out</span><span class="p">))</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">model_class</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">models</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">model</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid model specified: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">model</span><span class="p">)</span>
+
+    <span class="n">check_model_dataset_compatibility</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">model_class</span><span class="p">)</span>
+
+    <span class="n">activation</span> <span class="o">=</span> <span class="n">init_activation</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">activation</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">backward_activation</span><span class="p">:</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">backward_activation</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">activation</span>
+    <span class="n">backward_activation</span> <span class="o">=</span> <span class="n">init_activation</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">backward_activation</span><span class="p">)</span>
+
+    <span class="n">model_init_args</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">&#39;heavy_debug&#39;</span> <span class="p">:</span> <span class="n">args</span><span class="o">.</span><span class="n">heavy_debug</span><span class="p">,</span>
+        <span class="s">&#39;activation&#39;</span> <span class="p">:</span> <span class="n">activation</span><span class="p">,</span>
+        <span class="s">&#39;backward_activation&#39;</span> <span class="p">:</span> <span class="n">backward_activation</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">model</span> <span class="o">==</span> <span class="s">&#39;DenoisingAutoencoder&#39;</span><span class="p">:</span>
+        <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;corruption_level&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">corruption</span>
+        <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;reconstruction&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">reconstruction</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">model</span> <span class="o">==</span> <span class="s">&#39;SparseDenoisingAutoencoder&#39;</span> <span class="p">:</span>
+        <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;corruption_level&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">corruption</span>
+        <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;sparsity_target&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">sparsity</span>
+        <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;reconstruction&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">reconstruction</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">model</span> <span class="o">==</span> <span class="s">&#39;RestrictedBoltzmannMachine&#39;</span> <span class="ow">or</span> <span class="n">args</span><span class="o">.</span><span class="n">model</span> <span class="o">==</span> <span class="s">&#39;ReplicatedSoftmax&#39;</span><span class="p">:</span>
+        <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;sparsity_target&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">sparsity</span>
+        <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;output_sparsity_target&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">output_sparsity</span>
+        <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;CD_k&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">CD_k</span>
+        <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;bias_decay&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">bias_decay</span>
+        <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;CD_use_mean&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">CD_use_sample</span>
+        <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;prefer_extremes&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">prefer_extremes</span>
+        <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;L1_norm&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">L1_norm</span>
+        <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;L2_norm&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">L2_norm</span>
+        <span class="n">model_init_args</span><span class="p">[</span><span class="s">&#39;noisy_input&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">noisy_input</span>
+
+    <span class="n">model_handle</span> <span class="o">=</span> <span class="n">model_class</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">n_out</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">n_out</span><span class="p">,</span>
+                                     <span class="o">**</span><span class="n">model_init_args</span><span class="p">)</span>
+
+
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Setting up learner...&#39;</span><span class="p">)</span>
+
+    <span class="n">lloader</span> <span class="o">=</span> <span class="n">LearnerLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="n">learner</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">resume</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">learner</span> <span class="o">=</span> <span class="n">lloader</span><span class="o">.</span><span class="n">load_learner</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Could not load learner for resuming training, will&#39;</span>
+                         <span class="s">&#39;start again. (Infix: </span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">learner</span><span class="p">:</span>
+        <span class="n">learner</span> <span class="o">=</span> <span class="n">BaseSGDLearner</span><span class="p">(</span><span class="n">n_epochs</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">n_epochs</span><span class="p">,</span>
+                                 <span class="n">b_size</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span>
+                                 <span class="n">validation_frequency</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">validation_frequency</span><span class="p">,</span>
+                                 <span class="n">track_weights</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">track_weights</span><span class="p">,</span>
+                                 <span class="n">track_weights_change</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">track_weights_change</span><span class="p">,</span>
+                                 <span class="n">plot_transformation</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">plot_transformation</span><span class="p">,</span>
+                                 <span class="n">plot_weights</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">plot_weights</span><span class="p">,</span>
+                                 <span class="n">plot_every</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">plot_every</span><span class="p">,</span>
+                                 <span class="n">plot_on_init</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">plot_on_init</span><span class="p">)</span>
+
+    <span class="c"># Intermediate model saving during training</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">save_every</span><span class="p">:</span>
+
+        <span class="n">learner_saving_overwrite</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_overwrite_intermediate_saves</span>
+        <span class="n">learner</span><span class="o">.</span><span class="n">set_saving</span><span class="p">(</span><span class="n">infix</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">,</span>
+                           <span class="n">model_loader</span><span class="o">=</span><span class="n">mloader</span><span class="p">,</span>
+                           <span class="n">save_every</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">save_every</span><span class="p">,</span>
+                           <span class="n">overwrite</span><span class="o">=</span><span class="n">learner_saving_overwrite</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Setting up and training transformer...&#39;</span><span class="p">)</span>
+
+    <span class="n">transformer</span> <span class="o">=</span> <span class="n">SafireTransformer</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">learner</span><span class="p">,</span>
+                                    <span class="n">attempt_resume</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">resume</span><span class="p">,</span>
+                                    <span class="n">profile_training</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">profile_training</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">no_save</span><span class="p">:</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">no_corpus_transform</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">no_dataset_transform</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">no_save_transformer</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">no_save_learner</span> <span class="o">=</span> <span class="bp">True</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_save_learner</span><span class="p">:</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Saving learner with label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+        <span class="n">lloader</span><span class="o">.</span><span class="n">save_learner</span><span class="p">(</span><span class="n">learner</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">plot_monitors</span><span class="p">:</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Plotting monitors to </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">plot_monitors</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+        <span class="n">monitor</span> <span class="o">=</span> <span class="n">learner</span><span class="o">.</span><span class="n">monitor</span>
+        <span class="n">training_cost</span> <span class="o">=</span> <span class="n">monitor</span><span class="p">[</span><span class="s">&#39;training_cost&#39;</span><span class="p">]</span>
+        <span class="n">validation_cost</span> <span class="o">=</span> <span class="n">monitor</span><span class="p">[</span><span class="s">&#39;validation_cost&#39;</span><span class="p">]</span>
+
+        <span class="n">tc_x</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">training_cost</span><span class="p">)</span>
+        <span class="n">tc_y</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">training_cost</span><span class="p">)</span>
+        <span class="n">vc_x</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">validation_cost</span><span class="p">)</span>
+        <span class="n">vc_y</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">validation_cost</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">tc_x</span><span class="p">,</span> <span class="n">tc_y</span><span class="p">,</span> <span class="s">&#39;b&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">vc_x</span><span class="p">,</span> <span class="n">vc_y</span><span class="p">,</span> <span class="s">&#39;g&#39;</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">plot_monitors</span><span class="p">)</span>
+
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_save_transformer</span><span class="p">:</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Saving transformer with label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+        <span class="n">mloader</span><span class="o">.</span><span class="n">save_transformer</span><span class="p">(</span><span class="n">transformer</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Creating transformed corpus with label </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">img_label</span><span class="p">:</span>
+        <span class="n">corpus</span> <span class="o">=</span> <span class="n">mdloader</span><span class="o">.</span><span class="n">load_image_corpus</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">img_label</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">text_label</span><span class="p">:</span>
+        <span class="n">corpus</span> <span class="o">=</span> <span class="n">mdloader</span><span class="o">.</span><span class="n">load_text_corpus</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">text_label</span><span class="p">)</span>
+
+    <span class="c"># This merely applies the transformation to the input corpus.</span>
+    <span class="n">transformed_corpus</span> <span class="o">=</span> <span class="n">transformer</span><span class="p">[</span><span class="n">corpus</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_corpus_transform</span><span class="p">:</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Saving transformed corpus with label </span><span class="si">%s</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">img_label</span><span class="p">:</span>
+            <span class="n">mdloader</span><span class="o">.</span><span class="n">serialize_image_corpus</span><span class="p">(</span><span class="n">transformed_corpus</span><span class="p">,</span>
+                                          <span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+            <span class="n">mdloader</span><span class="o">.</span><span class="n">save_image_corpus</span><span class="p">(</span><span class="n">transformed_corpus</span><span class="p">,</span>
+                                       <span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">text_label</span><span class="p">:</span>
+            <span class="n">mdloader</span><span class="o">.</span><span class="n">serialize_text_corpus</span><span class="p">(</span><span class="n">transformed_corpus</span><span class="p">,</span>
+                                           <span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+            <span class="n">mdloader</span><span class="o">.</span><span class="n">save_text_corpus</span><span class="p">(</span><span class="n">transformed_corpus</span><span class="p">,</span>
+                                       <span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_dataset_transform</span><span class="p">:</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Saving transformed dataset with label </span><span class="si">%s</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">img_label</span><span class="p">:</span>
+            <span class="n">mdloader</span><span class="o">.</span><span class="n">build_img</span><span class="p">(</span><span class="n">transformed_corpus</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">text_label</span><span class="p">:</span>
+            <span class="n">mdloader</span><span class="o">.</span><span class="n">build_text</span><span class="p">(</span><span class="n">transformed_corpus</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">transformation_label</span><span class="p">)</span>
+
+<span class="c">###############################################################################</span>
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">_build_argument_parser</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+    <span class="n">main</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

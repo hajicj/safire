@@ -1,0 +1,15 @@
+[global]
+device=gpu
+floatX=float32
+#compute_test_value=warn
+allow_gc=false
+exception_verbosity=high
+
+[nvcc]
+compiler_bindir=C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin
+# flags=-m32 # we have this hard coded for now
+fastmath=True
+
+[blas]
+ldflags=
+# ldflags = -lopenblas # placeholder for openblas support

@@ -1,0 +1,467 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.interfaces.model_handle &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.learning.interfaces.model_handle</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">cPickle</span>
+<span class="kn">import</span> <span class="nn">gensim</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">safire</span>
+<span class="kn">from</span> <span class="nn">safire.learning.interfaces.clamped_sampler</span> <span class="kn">import</span> <span class="n">MultimodalClampedSampler</span>
+
+
+<div class="viewcode-block" id="ModelHandle"><a class="viewcode-back" href="../../../../safire.learning.interfaces.model_handle.html#safire.learning.interfaces.model_handle.ModelHandle">[docs]</a><span class="k">class</span> <span class="nc">ModelHandle</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Provides the train/validate/test handle for a learner class.</span>
+<span class="sd">    This is, so far, just a wrapper for the model plus output of</span>
+<span class="sd">    the ModelClass.setup() function.</span>
+
+<span class="sd">    A handle is the &quot;runnable&quot; interface to a model.</span>
+
+<span class="sd">    Also, it provides save/load functionality for model persistence.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_instance</span><span class="p">,</span> <span class="n">train</span><span class="p">,</span> <span class="n">validate</span><span class="p">,</span> <span class="n">test</span><span class="p">,</span> <span class="n">run</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the handle.</span>
+
+<span class="sd">        :type model_instance: safire.learning.models.BaseModel</span>
+<span class="sd">        :param model_instance: The model to which the handle provieds</span>
+<span class="sd">                               access. Think about it as a read-only</span>
+<span class="sd">                               thing.</span>
+
+<span class="sd">        :type train: theano.function</span>
+<span class="sd">        :param train: Theano function used to train the given model.</span>
+
+<span class="sd">        :type validate: theano.function</span>
+<span class="sd">        :param validate: Theano function used to test the given model.</span>
+
+<span class="sd">        :type test: theano.function</span>
+<span class="sd">        :param test: Theano function used to test the given model.</span>
+
+<span class="sd">        :type run: theano.function</span>
+<span class="sd">        :param run: Theano function used to run the model, i.e. transform</span>
+<span class="sd">            inputs into outputs.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_instance</span> <span class="o">=</span> <span class="n">model_instance</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_class</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">model_instance</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_instance</span><span class="o">.</span><span class="n">n_in</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_instance</span><span class="o">.</span><span class="n">n_out</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">train</span> <span class="o">=</span> <span class="n">train</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">validate</span> <span class="o">=</span> <span class="n">validate</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test</span> <span class="o">=</span> <span class="n">test</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">run</span> <span class="o">=</span> <span class="n">run</span>
+
+<div class="viewcode-block" id="ModelHandle.save"><a class="viewcode-back" href="../../../../safire.learning.interfaces.model_handle.html#safire.learning.interfaces.model_handle.ModelHandle.save">[docs]</a>    <span class="k">def</span> <span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">protocol</span><span class="o">=-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Saves the handle. Uses the ``_init_arg_snapshot()`` method of the</span>
+<span class="sd">        model to save the model, attempts to save the theano functions</span>
+<span class="sd">        directly.&quot;&quot;&quot;</span>
+
+        <span class="n">save_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_export_pickleable_obj</span><span class="p">()</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">pickle_handle</span><span class="p">:</span>
+            <span class="n">cPickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">save_dict</span><span class="p">,</span> <span class="n">pickle_handle</span><span class="p">,</span> <span class="n">protocol</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_export_pickleable_obj</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Exports a dicitonary that can directly be pickled to sufficiently</span>
+<span class="sd">        describe the handle.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">model_pickleable_obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_instance</span><span class="o">.</span><span class="n">_export_pickleable_object</span><span class="p">()</span>
+
+        <span class="n">init_args</span> <span class="o">=</span> <span class="p">{</span> <span class="s">&#39;train&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
+                      <span class="s">&#39;validate&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">validate</span><span class="p">,</span>
+                      <span class="s">&#39;test&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">test</span><span class="p">,</span>
+                      <span class="s">&#39;run&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">run</span> <span class="p">}</span>
+
+        <span class="n">save_dict</span> <span class="o">=</span> <span class="p">{</span> <span class="s">&#39;model&#39;</span> <span class="p">:</span> <span class="n">model_pickleable_obj</span><span class="p">,</span>
+                      <span class="s">&#39;init_args&#39;</span> <span class="p">:</span> <span class="n">init_args</span> <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">save_dict</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="ModelHandle.load"><a class="viewcode-back" href="../../../../safire.learning.interfaces.model_handle.html#safire.learning.interfaces.model_handle.ModelHandle.load">[docs]</a>    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Loads handle from previously saved handle.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">unpickle_handle</span><span class="p">:</span>
+            <span class="n">save_dict</span> <span class="o">=</span> <span class="n">cPickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">unpickle_handle</span><span class="p">)</span>
+
+        <span class="n">model_handle</span> <span class="o">=</span> <span class="n">cls</span><span class="o">.</span><span class="n">_load_from_save_dict</span><span class="p">(</span><span class="n">save_dict</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">model_handle</span>
+</div>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_load_from_save_dict</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">save_dict</span><span class="p">):</span>
+
+        <span class="n">model_init_args</span> <span class="o">=</span> <span class="n">save_dict</span><span class="p">[</span><span class="s">&#39;model&#39;</span><span class="p">][</span><span class="s">&#39;init_args&#39;</span><span class="p">]</span>
+        <span class="n">model_class</span> <span class="o">=</span> <span class="n">save_dict</span><span class="p">[</span><span class="s">&#39;model&#39;</span><span class="p">][</span><span class="s">&#39;class&#39;</span><span class="p">]</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Handle: loading model class: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">model_class</span><span class="p">))</span>
+
+        <span class="n">model</span> <span class="o">=</span> <span class="n">model_class</span><span class="p">(</span><span class="o">**</span><span class="n">model_init_args</span><span class="p">)</span>
+
+        <span class="n">handle_init_args</span> <span class="o">=</span> <span class="n">save_dict</span><span class="p">[</span><span class="s">&#39;init_args&#39;</span><span class="p">]</span>
+        <span class="n">model_handle</span> <span class="o">=</span> <span class="n">ModelHandle</span><span class="p">(</span><span class="n">model_instance</span><span class="o">=</span><span class="n">model</span><span class="p">,</span> <span class="o">**</span><span class="n">handle_init_args</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">model_handle</span>
+
+</div>
+<div class="viewcode-block" id="AlternatingGibbsHandle"><a class="viewcode-back" href="../../../../safire.learning.interfaces.model_handle.html#safire.learning.interfaces.model_handle.AlternatingGibbsHandle">[docs]</a><span class="k">class</span> <span class="nc">AlternatingGibbsHandle</span><span class="p">(</span><span class="n">ModelHandle</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Runs an alternating Gibbs chain from a sampleable handle. The last step</span>
+<span class="sd">    is a mean, all others are samples.&quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="BackwardModelHandle"><a class="viewcode-back" href="../../../../safire.learning.interfaces.model_handle.html#safire.learning.interfaces.model_handle.BackwardModelHandle">[docs]</a><span class="k">class</span> <span class="nc">BackwardModelHandle</span><span class="p">(</span><span class="n">ModelHandle</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Performs a backward pass on the model, instead of forward.</span>
+<span class="sd">    Requires a sampleable model.</span>
+
+<span class="sd">    The ``run`` member of this handle will expect a *hidden* activation</span>
+<span class="sd">    and will compute the *visible* activation for the given model.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_instance</span><span class="p">,</span> <span class="n">train</span><span class="p">,</span> <span class="n">validate</span><span class="p">,</span> <span class="n">test</span><span class="p">,</span> <span class="n">run</span><span class="p">,</span>
+                 <span class="n">heavy_debug</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the handle. Assumes the model is sample-able.</span>
+
+<span class="sd">        :type model_instance: safire.learning.models.BaseModel</span>
+<span class="sd">        :param model_instance: The model to which the handle provides</span>
+<span class="sd">            access. Think about it as a read-only thing.</span>
+
+<span class="sd">        :type train: theano.function</span>
+<span class="sd">        :param train: Theano function used to train the given model.</span>
+
+<span class="sd">        :type validate: theano.function</span>
+<span class="sd">        :param validate: Theano function used to test the given model.</span>
+
+<span class="sd">        :type test: theano.function</span>
+<span class="sd">        :param test: Theano function used to test the given model.</span>
+
+<span class="sd">        :type run: theano.function</span>
+<span class="sd">        :param run: Theano function used to run the model, i.e. transform</span>
+<span class="sd">            inputs into outputs. However, this function will not be used</span>
+<span class="sd">            as the ``run`` member of the handle; it will remain as the more</span>
+<span class="sd">            obscure ``get_hidden`` member.</span>
+
+<span class="sd">        :type heavy_debug: bool</span>
+<span class="sd">        :param heavy_debug: If set, will compile the sampling functions in</span>
+<span class="sd">            theano&#39;s ``MonitorMode`` with a detailed input/output/node printing</span>
+<span class="sd">            function.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_instance</span> <span class="o">=</span> <span class="n">model_instance</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_class</span> <span class="o">=</span> <span class="n">model_instance</span><span class="o">.</span><span class="n">__class__</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">train</span> <span class="o">=</span> <span class="n">train</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">validate</span> <span class="o">=</span> <span class="n">validate</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test</span> <span class="o">=</span> <span class="n">test</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">get_hidden</span> <span class="o">=</span> <span class="n">run</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">heavy_debug</span> <span class="o">=</span> <span class="n">heavy_debug</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">backward_mean</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">init_backward_run</span><span class="p">(</span><span class="n">sample_visible</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">backward_sample</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">init_backward_run</span><span class="p">(</span><span class="n">sample_visible</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_instance</span><span class="o">.</span><span class="n">n_out</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_instance</span><span class="o">.</span><span class="n">n_in</span>
+
+<div class="viewcode-block" id="BackwardModelHandle.init_backward_run"><a class="viewcode-back" href="../../../../safire.learning.interfaces.model_handle.html#safire.learning.interfaces.model_handle.BackwardModelHandle.init_backward_run">[docs]</a>    <span class="k">def</span> <span class="nf">init_backward_run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sample_visible</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Creates the Theano function  to compute the backward mean.&quot;&quot;&quot;</span>
+        <span class="n">h</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="s">&#39;backward_h&#39;</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">sample_visible</span><span class="p">:</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_instance</span><span class="o">.</span><span class="n">sample_v_given_h</span><span class="p">(</span><span class="n">h</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_instance</span><span class="o">.</span><span class="n">mean_v_given_h</span><span class="p">(</span><span class="n">h</span><span class="p">)</span>
+
+        <span class="n">vhv_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">heavy_debug</span><span class="p">:</span>
+            <span class="n">vhv_kwargs</span><span class="p">[</span><span class="s">&#39;mode&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">compile</span><span class="o">.</span><span class="n">MonitorMode</span><span class="p">(</span>
+                <span class="n">post_func</span><span class="o">=</span><span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">merciless_print</span><span class="p">)</span><span class="o">.</span><span class="n">excluding</span><span class="p">(</span>
+                    <span class="s">&#39;local_elemwise_fusion&#39;</span><span class="p">,</span> <span class="s">&#39;inplace&#39;</span><span class="p">)</span>
+
+        <span class="n">backward_run</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">function</span><span class="p">(</span><span class="n">inputs</span><span class="o">=</span><span class="p">[</span><span class="n">h</span><span class="p">],</span>
+                                       <span class="n">outputs</span><span class="o">=</span><span class="n">v</span><span class="p">,</span>
+                                       <span class="n">allow_input_downcast</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                                       <span class="o">**</span><span class="n">vhv_kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">backward_run</span>
+</div>
+<div class="viewcode-block" id="BackwardModelHandle.run"><a class="viewcode-back" href="../../../../safire.learning.interfaces.model_handle.html#safire.learning.interfaces.model_handle.BackwardModelHandle.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden</span><span class="p">,</span> <span class="n">sample</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+
+        <span class="k">if</span> <span class="n">sample</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">backward_sample</span><span class="p">(</span><span class="n">hidden</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">backward_mean</span><span class="p">(</span><span class="n">hidden</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">result</span>
+</div>
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="BackwardModelHandle.clone"><a class="viewcode-back" href="../../../../safire.learning.interfaces.model_handle.html#safire.learning.interfaces.model_handle.BackwardModelHandle.clone">[docs]</a>    <span class="k">def</span> <span class="nf">clone</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">handle</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Clones a BackwardModelHandle from an existing ModelHandle.</span>
+<span class="sd">        We needed the dataset anyway to call model ``setup`` that created</span>
+<span class="sd">        the first handle.</span>
+
+<span class="sd">        :type handle: ModelHandle</span>
+<span class="sd">        :param handle: The model handle from which to take the model instance,</span>
+<span class="sd">            train, validate and test functions. The ``run`` function is</span>
+<span class="sd">            taken as well, but tucked away under a ``handle.get_hidden()``</span>
+<span class="sd">            member, since the &quot;product&quot; of this handle are not the hidden</span>
+<span class="sd">            values.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">handle</span><span class="p">,</span> <span class="s">&#39;get_hidden&#39;</span><span class="p">):</span>
+            <span class="n">run_fn</span> <span class="o">=</span> <span class="n">handle</span><span class="o">.</span><span class="n">get_hidden</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">run_fn</span> <span class="o">=</span> <span class="n">handle</span><span class="o">.</span><span class="n">run</span>
+
+        <span class="n">cl_handle</span> <span class="o">=</span> <span class="n">BackwardModelHandle</span><span class="p">(</span><span class="n">handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">,</span>
+                                        <span class="n">handle</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
+                                        <span class="n">handle</span><span class="o">.</span><span class="n">validate</span><span class="p">,</span>
+                                        <span class="n">handle</span><span class="o">.</span><span class="n">test</span><span class="p">,</span>
+                                        <span class="n">run_fn</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">cl_handle</span>
+</div>
+    <span class="k">def</span> <span class="nf">_export_pickleable_obj</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Exports a dicitonary that can directly be pickled to sufficiently</span>
+<span class="sd">        describe the handle.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">model_pickleable_obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_instance</span><span class="o">.</span><span class="n">_export_pickleable_object</span><span class="p">()</span>
+
+        <span class="n">init_args</span> <span class="o">=</span> <span class="p">{</span> <span class="s">&#39;train&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
+                      <span class="s">&#39;validate&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">validate</span><span class="p">,</span>
+                      <span class="s">&#39;test&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">test</span><span class="p">,</span>
+                      <span class="s">&#39;run&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_hidden</span><span class="p">,</span>
+                      <span class="s">&#39;dim_text&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span><span class="p">,</span>
+                      <span class="s">&#39;dim_img&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span> <span class="p">}</span>
+
+        <span class="n">save_dict</span> <span class="o">=</span> <span class="p">{</span> <span class="s">&#39;model&#39;</span> <span class="p">:</span> <span class="n">model_pickleable_obj</span><span class="p">,</span>
+                      <span class="s">&#39;init_args&#39;</span> <span class="p">:</span> <span class="n">init_args</span> <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">save_dict</span>
+
+</div>
+<div class="viewcode-block" id="MultimodalClampedSamplerModelHandle"><a class="viewcode-back" href="../../../../safire.learning.interfaces.model_handle.html#safire.learning.interfaces.model_handle.MultimodalClampedSamplerModelHandle">[docs]</a><span class="k">class</span> <span class="nc">MultimodalClampedSamplerModelHandle</span><span class="p">(</span><span class="n">ModelHandle</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;This handle provides special ``run()`` functionality. Instead of using</span>
+<span class="sd">    the ``run`` function given by a model&#39;s ``setup``, it will use</span>
+<span class="sd">    a MultimodalClampedSampler to sample image one part of input values</span>
+<span class="sd">    based on clamping the values of the other part.</span>
+
+<span class="sd">    To set up a clamped sampling handle:</span>
+
+<span class="sd">    &gt;&gt;&gt; mdloader = MultimodalShardedDatasetLoader(root_orig, name_orig)</span>
+<span class="sd">    &gt;&gt;&gt; multimodal_dataset = mdloader.load(text_infix, img_infix)</span>
+<span class="sd">    &gt;&gt;&gt; handle = RestrictedBoltzmannMachine.setup(multimodal_dataset, n_out=1000)</span>
+<span class="sd">    &gt;&gt;&gt;</span>
+<span class="sd">    &gt;&gt;&gt; clamped_handle = MultimodalClampedSamplerModelHandle.clone(handle, multimodal_dataset)</span>
+<span class="sd">    &gt;&gt;&gt;</span>
+<span class="sd">    &gt;&gt;&gt; transformer = SafireTransformer(clamped_handle)</span>
+
+<span class="sd">    To run the handle: the text data can come from a different dataset,</span>
+<span class="sd">    but bear in mind they need to share the same feature space.</span>
+
+<span class="sd">    &gt;&gt;&gt; run_mdloader = MultimodalShardedDatasetLoader(root_run, name_run)</span>
+<span class="sd">    &gt;&gt;&gt; text_dataset = run_mdloader.load_text(text_infix)</span>
+<span class="sd">    &gt;&gt;&gt; text = text_dataset.test_X_batch(0, 1)</span>
+<span class="sd">    &gt;&gt;&gt; img = clamped_handle.run(text)</span>
+
+
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_instance</span><span class="p">,</span> <span class="n">train</span><span class="p">,</span> <span class="n">validate</span><span class="p">,</span> <span class="n">test</span><span class="p">,</span> <span class="n">run</span><span class="p">,</span>
+                 <span class="n">dim_text</span><span class="p">,</span> <span class="n">dim_img</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the handle. Assumes the model is sample-able.</span>
+
+<span class="sd">        :type model_instance: safire.learning.models.BaseModel</span>
+<span class="sd">        :param model_instance: The model to which the handle provides</span>
+<span class="sd">            access. Think about it as a read-only thing.</span>
+
+<span class="sd">        :type train: theano.function</span>
+<span class="sd">        :param train: Theano function used to train the given model.</span>
+
+<span class="sd">        :type validate: theano.function</span>
+<span class="sd">        :param validate: Theano function used to test the given model.</span>
+
+<span class="sd">        :type test: theano.function</span>
+<span class="sd">        :param test: Theano function used to test the given model.</span>
+
+<span class="sd">        :type run: theano.function</span>
+<span class="sd">        :param run: Theano function used to run the model, i.e. transform</span>
+<span class="sd">            inputs into outputs. However, this function will not be used</span>
+<span class="sd">            as the ``run`` member of the handle; it will remain as the more</span>
+<span class="sd">            obscure ``get_hidden`` member.</span>
+
+<span class="sd">        :type dim_text: int</span>
+<span class="sd">        :param dim_text: The size of the text feature section from the beginning</span>
+<span class="sd">            of the multimodal dataset features.</span>
+
+<span class="sd">        :type dim_img: int</span>
+<span class="sd">        :param dim_img: The size of the image feature section from the end</span>
+<span class="sd">            of the multimodal dataset features.</span>
+
+<span class="sd">        :type k: int</span>
+<span class="sd">        :param k: The number of sampling steps to produce an image sample.</span>
+<span class="sd">            The first ``k - 1`` steps are sampled, the</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_instance</span> <span class="o">=</span> <span class="n">model_instance</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_class</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">model_instance</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">train</span> <span class="o">=</span> <span class="n">train</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">validate</span> <span class="o">=</span> <span class="n">validate</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">test</span> <span class="o">=</span> <span class="n">test</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sampler</span> <span class="o">=</span> <span class="n">MultimodalClampedSampler</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_instance</span><span class="p">,</span>
+                                                <span class="n">dim_text</span><span class="o">=</span><span class="n">dim_text</span><span class="p">,</span>
+                                                <span class="n">dim_img</span><span class="o">=</span><span class="n">dim_img</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">k</span> <span class="o">=</span> <span class="n">k</span>
+
+        <span class="c"># A trick for transparent swapping of normal handles/clamped sampling</span>
+        <span class="c"># handles in SafireTransformer</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampler</span><span class="o">.</span><span class="n">n_in</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampler</span><span class="o">.</span><span class="n">n_out</span>
+
+        <span class="c"># The &#39;run&#39; function is implemented differently.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">get_hidden</span> <span class="o">=</span> <span class="n">run</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="MultimodalClampedSamplerModelHandle.clone"><a class="viewcode-back" href="../../../../safire.learning.interfaces.model_handle.html#safire.learning.interfaces.model_handle.MultimodalClampedSamplerModelHandle.clone">[docs]</a>    <span class="k">def</span> <span class="nf">clone</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">handle</span><span class="p">,</span> <span class="n">dim_text</span><span class="p">,</span> <span class="n">dim_img</span><span class="p">,</span> <span class="o">**</span><span class="n">clamped_handle_kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Clones a clamped sampling handle from the existing ModelHandle.</span>
+<span class="sd">        We needed the dataset anyway to call model ``setup`` that created</span>
+<span class="sd">        the first handle.</span>
+
+<span class="sd">        :type handle: ModelHandle</span>
+<span class="sd">        :param handle: The model handle from which to take the model instance,</span>
+<span class="sd">            train, validate and test functions. The ``run`` function is</span>
+<span class="sd">            taken as well, but tucked away under a ``handle.get_hidden()``</span>
+<span class="sd">            member, since the &quot;product&quot; of this handle are not the hidden</span>
+<span class="sd">            values.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c"># Different types of handles redefine their ``run`` function.</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">handle</span><span class="p">,</span> <span class="s">&#39;get_hidden&#39;</span><span class="p">):</span>
+            <span class="n">run_fn</span> <span class="o">=</span> <span class="n">handle</span><span class="o">.</span><span class="n">get_hidden</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">run_fn</span> <span class="o">=</span> <span class="n">handle</span><span class="o">.</span><span class="n">run</span>
+
+        <span class="n">cl_handle</span> <span class="o">=</span> <span class="n">MultimodalClampedSamplerModelHandle</span><span class="p">(</span><span class="n">handle</span><span class="o">.</span><span class="n">model_instance</span><span class="p">,</span>
+                                                        <span class="n">handle</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
+                                                        <span class="n">handle</span><span class="o">.</span><span class="n">validate</span><span class="p">,</span>
+                                                        <span class="n">handle</span><span class="o">.</span><span class="n">test</span><span class="p">,</span>
+                                                        <span class="n">run_fn</span><span class="p">,</span>
+                                                        <span class="n">dim_text</span><span class="p">,</span>
+                                                        <span class="n">dim_img</span><span class="p">,</span>
+                                                        <span class="o">**</span><span class="n">clamped_handle_kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">cl_handle</span>
+</div>
+<div class="viewcode-block" id="MultimodalClampedSamplerModelHandle.run"><a class="viewcode-back" href="../../../../safire.learning.interfaces.model_handle.html#safire.learning.interfaces.model_handle.MultimodalClampedSamplerModelHandle.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text_features</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Runs the sampler on text features input. Returns image</span>
+<span class="sd">        representation.&quot;&quot;&quot;</span>
+        <span class="n">img</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampler</span><span class="o">.</span><span class="n">t2i_run_chain_mean_last</span><span class="p">(</span><span class="n">text_features</span><span class="o">=</span><span class="n">text_features</span><span class="p">,</span>
+                                                   <span class="n">k</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">img</span>
+</div>
+    <span class="k">def</span> <span class="nf">_export_pickleable_obj</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Exports a dicitonary that can directly be pickled to sufficiently</span>
+<span class="sd">        describe the handle.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">model_pickleable_obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_instance</span><span class="o">.</span><span class="n">_export_pickleable_object</span><span class="p">()</span>
+
+        <span class="n">init_args</span> <span class="o">=</span> <span class="p">{</span> <span class="s">&#39;train&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">train</span><span class="p">,</span>
+                      <span class="s">&#39;validate&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">validate</span><span class="p">,</span>
+                      <span class="s">&#39;test&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">test</span><span class="p">,</span>
+                      <span class="s">&#39;run&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_hidden</span><span class="p">,</span>
+                      <span class="s">&#39;dim_text&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span><span class="p">,</span>
+                      <span class="s">&#39;dim_img&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span><span class="p">,</span>
+                      <span class="s">&#39;k&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">k</span> <span class="p">}</span>
+
+        <span class="n">save_dict</span> <span class="o">=</span> <span class="p">{</span> <span class="s">&#39;model&#39;</span> <span class="p">:</span> <span class="n">model_pickleable_obj</span><span class="p">,</span>
+                      <span class="s">&#39;init_args&#39;</span> <span class="p">:</span> <span class="n">init_args</span> <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">save_dict</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,225 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.imagenetcorpus &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.data.imagenetcorpus</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+
+<span class="kn">import</span> <span class="nn">gzip</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="kn">from</span> <span class="nn">gensim</span> <span class="kn">import</span> <span class="n">matutils</span>
+<span class="kn">from</span> <span class="nn">gensim.interfaces</span> <span class="kn">import</span> <span class="n">CorpusABC</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ImagenetCorpus"><a class="viewcode-back" href="../../../safire.data.imagenetcorpus.html#safire.data.imagenetcorpus.ImagenetCorpus">[docs]</a><span class="k">class</span> <span class="nc">ImagenetCorpus</span><span class="p">(</span><span class="n">CorpusABC</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;The ImgnetCorpus is capable of reading the results of running</span>
+<span class="sd">    images through the ImageNet convolutional network, giving out 4096-dim</span>
+<span class="sd">    vectors of floats.</span>
+
+<span class="sd">    Through a set of</span>
+<span class="sd">    common document IDs, it&#39;s possible to link the image vectors to text</span>
+<span class="sd">    documents in a :class:`MultimodalDataset`.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-9</span><span class="p">,</span>
+                 <span class="n">doc2id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">id2doc</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">gzipped</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the ImageNet image vector corpus.</span>
+
+<span class="sd">        :param input: The input for an ImagenetCorpus is a handle</span>
+<span class="sd">            with the ImageNet result file open. Alternately, a filename may be</span>
+<span class="sd">            supplied.</span>
+
+<span class="sd">            The file format is::</span>
+
+<span class="sd">              docname [tab] x1;x2;x3;....;x4096</span>
+
+<span class="sd">            where ``;`` is the delimiter for the vector values and ``docname``</span>
+<span class="sd">            is whichever ID the picture is given. This ID is then used when</span>
+<span class="sd">            pairing images to documents in a multimodal corpus.</span>
+
+<span class="sd">        :param delimiter: The delimiter of the vector value columns. If</span>
+<span class="sd">            left at ``None``, python&#39;s default ``split()`` is used.</span>
+
+<span class="sd">        :param dim: The dimension of the image vector. Default is 4096.</span>
+
+<span class="sd">        :param eps: The minimum required value for a feature to be included</span>
+<span class="sd">            in the sparse output. Default is 1e-9.</span>
+
+<span class="sd">        :param doc2id: If specified, the corpus will use the given map</span>
+<span class="sd">            from document names to their IDs (order in the corpus).</span>
+
+<span class="sd">        :param id2doc: If specified, the corpus will use the given map</span>
+<span class="sd">            from document IDs (order in the corpus) to their names</span>
+<span class="sd">            (as given in the input file). While doc2id is a dictionary,</span>
+<span class="sd">            id2doc is an array.</span>
+
+<span class="sd">        :param gzipped: If set to true, expects ``input`` to be a filename</span>
+<span class="sd">            and the input ImageNet result file to be gzipped.</span>
+
+<span class="sd">        :param label: An optional descriptive label of the corpus (could for</span>
+<span class="sd">            instance describe the dimension, or gzipped state). Used by Loader</span>
+<span class="sd">            classes to determine what the ImagenetCorpus export file names</span>
+<span class="sd">            should be.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__do_cleanup</span> <span class="o">=</span> <span class="bp">False</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">input</span> <span class="o">=</span> <span class="nb">input</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">delimiter</span> <span class="o">=</span> <span class="n">delimiter</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">eps</span> <span class="o">=</span> <span class="n">eps</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">label</span> <span class="o">=</span> <span class="n">label</span>
+
+        <span class="k">if</span> <span class="n">doc2id</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">doc2id</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">id2doc</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">id2doc</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">doc2id</span> <span class="o">=</span> <span class="n">doc2id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">id2doc</span> <span class="o">=</span> <span class="n">id2doc</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_processed</span> <span class="o">=</span> <span class="mi">0</span>
+
+
+    <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;The function that defines a corpus.</span>
+
+<span class="sd">        Iterating over the corpus must yield sparse vectors, one for each</span>
+<span class="sd">        document.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">image</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_images</span><span class="p">()):</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;__iter__ Yielding image no. </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">i</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="n">matutils</span><span class="o">.</span><span class="n">full2sparse</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">eps</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ImagenetCorpus.reset"><a class="viewcode-back" href="../../../safire.data.imagenetcorpus.html#safire.data.imagenetcorpus.ImagenetCorpus.reset">[docs]</a>    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Resetting corpus as if it never iterated.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">doc2id</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">id2doc</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Old n_processed: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_processed</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_processed</span> <span class="o">=</span> <span class="mi">0</span>
+</div>
+<div class="viewcode-block" id="ImagenetCorpus.get_images"><a class="viewcode-back" href="../../../safire.data.imagenetcorpus.html#safire.data.imagenetcorpus.ImagenetCorpus.get_images">[docs]</a>    <span class="k">def</span> <span class="nf">get_images</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;One iteration of get_images should yield one document, which means</span>
+<span class="sd">        one line of input.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">input_handle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">input</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">input_handle</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">imno</span><span class="p">,</span> <span class="n">imline</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">input_handle</span><span class="p">):</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Processing image no. </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">imno</span><span class="p">)</span>
+
+            <span class="n">docname</span><span class="p">,</span> <span class="n">feature_str</span> <span class="o">=</span> <span class="n">imline</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+            <span class="n">features</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="n">feature_str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delimiter</span><span class="p">))</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">features</span><span class="p">)</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid input data: data dimension </span><span class="si">%d</span><span class="s"> does not correspond to declared dimension </span><span class="si">%d</span><span class="s"> (on line </span><span class="si">%d</span><span class="s"> of input, with docno </span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">features</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span> <span class="n">imno</span><span class="p">))</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">doc2id</span><span class="p">[</span><span class="n">docname</span><span class="p">]</span> <span class="o">=</span> <span class="n">imno</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">id2doc</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">docname</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">n_processed</span> <span class="o">+=</span> <span class="mi">1</span>
+
+            <span class="k">yield</span> <span class="n">features</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">input_handle</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</div>
+    <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_processed</span>
+
+    <span class="k">def</span> <span class="nf">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__do_cleanup</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,155 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.utils.transformers module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.utils.transformers">
+<span id="safire-utils-transformers-module"></span><h1>safire.utils.transformers module<a class="headerlink" href="#module-safire.utils.transformers" title="Permalink to this headline">¶</a></h1>
+<p><tt class="docutils literal"><span class="pre">transformers.py</span></tt> is a library that contains various non-NNET SAFIRE
+transformer components, mainly used for miscellaneous preprocessing (scaling,
+normalization, sigmoid nonlinearity, etc.).</p>
+<dl class="class">
+<dt id="safire.utils.transformers.CappedNormalizationTransform">
+<em class="property">class </em><tt class="descclassname">safire.utils.transformers.</tt><tt class="descname">CappedNormalizationTransform</tt><big>(</big><em>corpus</em>, <em>max_target=0.9999</em><big>)</big><a class="reference internal" href="_modules/safire/utils/transformers.html#CappedNormalizationTransform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.transformers.CappedNormalizationTransform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#safire.utils.transformers.NormalizationTransform" title="safire.utils.transformers.NormalizationTransform"><tt class="xref py py-class docutils literal"><span class="pre">safire.utils.transformers.NormalizationTransform</span></tt></a></p>
+<p>Given a corpus, normalizes each item to a sum such that the largest
+feature value in the corpus is just under 1.0.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.utils.transformers.GeneralFunctionTransform">
+<em class="property">class </em><tt class="descclassname">safire.utils.transformers.</tt><tt class="descname">GeneralFunctionTransform</tt><big>(</big><em>fn</em>, <em>multiplicative_coef=1.0</em>, <em>additive_coef=0.0</em>, <em>outer_multiplicative_coef=0.99975</em>, <em>outer_additive_coef=0.0</em><big>)</big><a class="reference internal" href="_modules/safire/utils/transformers.html#GeneralFunctionTransform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.transformers.GeneralFunctionTransform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">gensim.interfaces.TransformationABC</span></tt></p>
+<p>Transforms each value by the function given at initialization.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.utils.transformers.GlobalUnitScalingTransform">
+<em class="property">class </em><tt class="descclassname">safire.utils.transformers.</tt><tt class="descname">GlobalUnitScalingTransform</tt><big>(</big><em>corpus</em>, <em>cutoff=None</em><big>)</big><a class="reference internal" href="_modules/safire/utils/transformers.html#GlobalUnitScalingTransform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.transformers.GlobalUnitScalingTransform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">gensim.interfaces.TransformationABC</span></tt></p>
+<p>Scales vectors in the corpus so that the maximum element in the corpus
+is 1. This is to retain proportions between items in an unnormalized
+setting.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.utils.transformers.LeCunnVarianceScalingTransform">
+<em class="property">class </em><tt class="descclassname">safire.utils.transformers.</tt><tt class="descname">LeCunnVarianceScalingTransform</tt><big>(</big><em>corpus</em>, <em>sample=1000</em>, <em>chunksize=1000</em><big>)</big><a class="reference internal" href="_modules/safire/utils/transformers.html#LeCunnVarianceScalingTransform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.transformers.LeCunnVarianceScalingTransform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">gensim.interfaces.TransformationABC</span></tt></p>
+<p>Transforms features so that they all have the same &#8220;variance&#8221; defined
+by LeCunn, 1998: Efficient BackProp, 4.3, Eq. 13.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.utils.transformers.NormalizationTransform">
+<em class="property">class </em><tt class="descclassname">safire.utils.transformers.</tt><tt class="descname">NormalizationTransform</tt><big>(</big><em>C=1.0</em><big>)</big><a class="reference internal" href="_modules/safire/utils/transformers.html#NormalizationTransform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.transformers.NormalizationTransform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">gensim.interfaces.TransformationABC</span></tt></p>
+<p>Given a corpus, will simply normalize all BOW inputs to sum to 1.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.utils.transformers.SigmoidTransform">
+<em class="property">class </em><tt class="descclassname">safire.utils.transformers.</tt><tt class="descname">SigmoidTransform</tt><big>(</big><em>M=2.0</em>, <em>K=0.5</em>, <em>C=1.0</em><big>)</big><a class="reference internal" href="_modules/safire/utils/transformers.html#SigmoidTransform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.transformers.SigmoidTransform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">gensim.interfaces.TransformationABC</span></tt></p>
+<p>Transforms vectors through a squishing function:</p>
+<p>f(x) = M / (1 + e^(-Kx)) - C</p>
+<p>The defaults are M = 2.0, K = 0.5 and C = 1.0.
+MAKE SURE THAT f(0) = 0 !!!!</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.utils.transformers.UnitScalingTransform">
+<em class="property">class </em><tt class="descclassname">safire.utils.transformers.</tt><tt class="descname">UnitScalingTransform</tt><a class="reference internal" href="_modules/safire/utils/transformers.html#UnitScalingTransform"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.transformers.UnitScalingTransform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">gensim.interfaces.TransformationABC</span></tt></p>
+<p>Scales the vector so that its maximum element is 1.</p>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.utils.transformers.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

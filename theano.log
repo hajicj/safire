@@ -1,0 +1,10 @@
+warn
+Creating delta update for W_rprop_delta:
+Creating lastgrad update for Elemwise{add,no_inplace}.0:
+Creating weights change update for W_rprop_lastchange:
+Creating delta update for b_rprop_delta:
+Creating lastgrad update for DimShuffle{1}.0:
+Creating weights change update for b_rprop_lastchange:
+Creating delta update for b_prime_rprop_delta:
+Creating lastgrad update for DimShuffle{1}.0:
+Creating weights change update for b_prime_rprop_lastchange:

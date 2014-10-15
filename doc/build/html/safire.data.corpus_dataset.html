@@ -1,0 +1,196 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.corpus_dataset module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.data.corpus_dataset">
+<span id="safire-data-corpus-dataset-module"></span><h1>safire.data.corpus_dataset module<a class="headerlink" href="#module-safire.data.corpus_dataset" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.data.corpus_dataset.UnsupervisedCorpusDataset">
+<em class="property">class </em><tt class="descclassname">safire.data.corpus_dataset.</tt><tt class="descname">UnsupervisedCorpusDataset</tt><big>(</big><em>mm_corpus_filename</em>, <em>dim</em>, <em>test_p=0.1</em>, <em>devel_p=0.1</em>, <em>serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em>, <em>try_loading=True</em>, <em>save_dataset=None</em>, <em>load_dataset=None</em>, <em>profile_loading=False</em><big>)</big><a class="reference internal" href="_modules/safire/data/corpus_dataset.html#UnsupervisedCorpusDataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.corpus_dataset.UnsupervisedCorpusDataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="safire.data.unsupervised_dataset.html#safire.data.unsupervised_dataset.UnsupervisedDataset" title="safire.data.unsupervised_dataset.UnsupervisedDataset"><tt class="xref py py-class docutils literal"><span class="pre">safire.data.unsupervised_dataset.UnsupervisedDataset</span></tt></a></p>
+<p>This dataset implements a memory-efficient way of feeding
+large corpora by batch. Only the requested batch is loaded
+into memory.</p>
+<p>Internally keeps a reference to a gensim-style indexed corpus,
+which it uses to retrieve batches.</p>
+<dl class="method">
+<dt id="safire.data.corpus_dataset.UnsupervisedCorpusDataset.get_sparse">
+<tt class="descname">get_sparse</tt><big>(</big><em>idx</em><big>)</big><a class="reference internal" href="_modules/safire/data/corpus_dataset.html#UnsupervisedCorpusDataset.get_sparse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.corpus_dataset.UnsupervisedCorpusDataset.get_sparse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieves the given item in the sparse form from the source
+corpus.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.corpus_dataset.UnsupervisedCorpusDataset.iter_sparse">
+<tt class="descname">iter_sparse</tt><big>(</big><em>idx</em><big>)</big><a class="reference internal" href="_modules/safire/data/corpus_dataset.html#UnsupervisedCorpusDataset.iter_sparse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.corpus_dataset.UnsupervisedCorpusDataset.iter_sparse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Iterates through the corpus inside, yielding the sparse vectors.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.corpus_dataset.UnsupervisedCorpusDataset.n_devel_batches">
+<tt class="descname">n_devel_batches</tt><big>(</big><em>batch_size</em><big>)</big><a class="reference internal" href="_modules/safire/data/corpus_dataset.html#UnsupervisedCorpusDataset.n_devel_batches"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.corpus_dataset.UnsupervisedCorpusDataset.n_devel_batches" title="Permalink to this definition">¶</a></dt>
+<dd><p>Determines how many batches of given size the training data will
+be split into.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>batch_size</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The intended size of one batch of the data.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The number of batches the training data will be split into
+for the given <tt class="docutils literal"><span class="pre">batch_size</span></tt>.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.corpus_dataset.UnsupervisedCorpusDataset.n_test_batches">
+<tt class="descname">n_test_batches</tt><big>(</big><em>batch_size</em><big>)</big><a class="reference internal" href="_modules/safire/data/corpus_dataset.html#UnsupervisedCorpusDataset.n_test_batches"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.corpus_dataset.UnsupervisedCorpusDataset.n_test_batches" title="Permalink to this definition">¶</a></dt>
+<dd><p>Determines how many batches of given size the training data will
+be split into.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>batch_size</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The intended size of one batch of the data.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The number of batches the training data will be split into
+for the given <tt class="docutils literal"><span class="pre">batch_size</span></tt>.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.corpus_dataset.UnsupervisedCorpusDataset.n_train_batches">
+<tt class="descname">n_train_batches</tt><big>(</big><em>batch_size</em><big>)</big><a class="reference internal" href="_modules/safire/data/corpus_dataset.html#UnsupervisedCorpusDataset.n_train_batches"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.corpus_dataset.UnsupervisedCorpusDataset.n_train_batches" title="Permalink to this definition">¶</a></dt>
+<dd><p>Determines how many batches of given size the training data will
+be split into.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>batch_size</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The intended size of one batch of the data.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The number of batches the training data will be split into
+for the given <tt class="docutils literal"><span class="pre">batch_size</span></tt>.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.data.corpus_dataset.UnsupervisedImagenetCorpusDataset">
+<em class="property">class </em><tt class="descclassname">safire.data.corpus_dataset.</tt><tt class="descname">UnsupervisedImagenetCorpusDataset</tt><big>(</big><em>mm_corpus_filename</em>, <em>ic_corpus_filename</em>, <em>dim=None</em>, <em>test_p=0.1</em>, <em>devel_p=0.1</em>, <em>serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em>, <em>try_loading=True</em>, <em>save_dataset=None</em>, <em>load_dataset=None</em>, <em>profile_loading=False</em><big>)</big><a class="reference internal" href="_modules/safire/data/corpus_dataset.html#UnsupervisedImagenetCorpusDataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.corpus_dataset.UnsupervisedImagenetCorpusDataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#safire.data.corpus_dataset.UnsupervisedCorpusDataset" title="safire.data.corpus_dataset.UnsupervisedCorpusDataset"><tt class="xref py py-class docutils literal"><span class="pre">safire.data.corpus_dataset.UnsupervisedCorpusDataset</span></tt></a></p>
+<p>Adds ImgnetCorpus capabilities to UnsupervisedCorpusDataset:
+in addition to loading a MmCorpus-serialized corpus and making
+it available as a dataset, it will load an ImgnetCorpus used to
+build the MmCorpus-serialized data. The ImgnetCorpus is then
+made available as the <tt class="docutils literal"><span class="pre">icorp</span></tt> member of the object.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.data.corpus_dataset.UnsupervisedVTextCorpusDataset">
+<em class="property">class </em><tt class="descclassname">safire.data.corpus_dataset.</tt><tt class="descname">UnsupervisedVTextCorpusDataset</tt><big>(</big><em>mm_corpus_filename</em>, <em>vt_corpus_filename</em>, <em>dim=None</em>, <em>test_p=0.1</em>, <em>devel_p=0.1</em>, <em>serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em>, <em>try_loading=True</em>, <em>save_dataset=None</em>, <em>load_dataset=None</em>, <em>profile_loading=False</em><big>)</big><a class="reference internal" href="_modules/safire/data/corpus_dataset.html#UnsupervisedVTextCorpusDataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.corpus_dataset.UnsupervisedVTextCorpusDataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#safire.data.corpus_dataset.UnsupervisedCorpusDataset" title="safire.data.corpus_dataset.UnsupervisedCorpusDataset"><tt class="xref py py-class docutils literal"><span class="pre">safire.data.corpus_dataset.UnsupervisedCorpusDataset</span></tt></a></p>
+<p>Adds VTextCorpus capabilities to UnsupervisedCorpusDataset:
+in addition to loading a MmCorpus-serialized corpus and making
+it available as a dataset, it will load a VTextCorpus used to
+build the MmCorpus-serialized data. The VTextCorpus is then
+made available as the <tt class="docutils literal"><span class="pre">vtcorp</span></tt> member of the object.</p>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.data.corpus_dataset.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

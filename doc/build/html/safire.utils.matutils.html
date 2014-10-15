@@ -1,0 +1,244 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.utils.matutils module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.utils.matutils">
+<span id="safire-utils-matutils-module"></span><h1>safire.utils.matutils module<a class="headerlink" href="#module-safire.utils.matutils" title="Permalink to this headline">¶</a></h1>
+<p><tt class="docutils literal"><span class="pre">math.py</span></tt> is a library that provides mathematical utility functions.</p>
+<dl class="function">
+<dt id="safire.utils.matutils.avg">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">avg</tt><big>(</big><em>iterable</em>, <em>weights=None</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#avg"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.avg" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the average from the iterable (assumes that the iterable can
+be summed). If weights are given, the weighed average is computed.</p>
+<p>Weights do not have to be normalized.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.avg_grid">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">avg_grid</tt><big>(</big><em>grid</em>, <em>use_cols=None</em>, <em>cols=True</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#avg_grid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.avg_grid" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes average MSE between given matrix columns.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.avg_pairwise_mutual_precision">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">avg_pairwise_mutual_precision</tt><big>(</big><em>items</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#avg_pairwise_mutual_precision"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.avg_pairwise_mutual_precision" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the average pairwise mutual precision of all the given items.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.crmse">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">crmse</tt><big>(</big><em>x</em>, <em>y</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#crmse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.crmse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Mean-normalized RMSE.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.f_score">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">f_score</tt><big>(</big><em>prediction</em>, <em>true</em>, <em>w_prec=0.5</em>, <em>w_rec=0.5</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#f_score"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.f_score" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the weighed f-score of the prediction item predicting members
+of the test item.</p>
+<p>Currently only supports f1-score.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.generate_grid">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">generate_grid</tt><big>(</big><em>matrix</em>, <em>fn</em>, <em>use_cols=None</em>, <em>cols=True</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#generate_grid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.generate_grid" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns mean squared errors between pairs of matrix columns. Results
+are returned as a grid dict with keys in use_cols.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.grid2sym_matrix">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">grid2sym_matrix</tt><big>(</big><em>grid</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#grid2sym_matrix"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.grid2sym_matrix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Unrolls the grid into a 2d ndarray. Assumes that the grid is an upper
+diagonal. Doesn&#8217;t symmetrize (the rest is left at 0.0).</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.grid_max">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">grid_max</tt><big>(</big><em>grid</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#grid_max"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.grid_max" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.kappa">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">kappa</tt><big>(</big><em>a1</em>, <em>a2</em>, <em>length=12.0</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#kappa"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.kappa" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes Cohen&#8217;s kappa for the given annotation members. The <tt class="docutils literal"><span class="pre">length</span></tt>
+parameter is used to see how many</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.mae">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">mae</tt><big>(</big><em>x</em>, <em>y</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#mae"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.mae" title="Permalink to this definition">¶</a></dt>
+<dd><p>Mean absolute error.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.maxn_sparse_rmse">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">maxn_sparse_rmse</tt><big>(</big><em>x</em>, <em>y</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#maxn_sparse_rmse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.maxn_sparse_rmse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes proportion of attainable RMSE. Assumes X and Y are sparse enough
+so that if X is sorted min-&gt;max and Y is sorted max-&gt;min, one of X[i], Y[i]
+will always be 0. For x,y &gt;= 0, this definitely does maximize RMSE.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.mse">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">mse</tt><big>(</big><em>x</em>, <em>y</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#mse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.mse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.pairwise_mutual_precision">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">pairwise_mutual_precision</tt><big>(</big><em>i1</em>, <em>i2</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#pairwise_mutual_precision"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.pairwise_mutual_precision" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the mutual precision of two items. Mutual precision is defined
+as the average of the proportion of members in <tt class="docutils literal"><span class="pre">i1</span></tt> that are members of
+<tt class="docutils literal"><span class="pre">i2</span></tt> and vice versa.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.precision">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">precision</tt><big>(</big><em>prediction</em>, <em>true</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#precision"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.precision" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the precision of the prediction item predicting members of the
+true item.</p>
+<p>Precision for an empty prediction is defined as 1.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.recall">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">recall</tt><big>(</big><em>prediction</em>, <em>true</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#recall"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.recall" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the precision of the prediction item predicting members of the
+true item.</p>
+<p>Recall for an empty prediction is defined as 0.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.rmse">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">rmse</tt><big>(</big><em>x</em>, <em>y</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#rmse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.rmse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.rn_rmse">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">rn_rmse</tt><big>(</big><em>x</em>, <em>y</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#rn_rmse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.rn_rmse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Range-normalized RMSE.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.scale_to_unit_covariance">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">scale_to_unit_covariance</tt><big>(</big><em>array</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#scale_to_unit_covariance"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.scale_to_unit_covariance" title="Permalink to this definition">¶</a></dt>
+<dd><p>Transform the array so that all columns have the same covariance.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.uniform_noise">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">uniform_noise</tt><big>(</big><em>X</em>, <em>p</em>, <em>theano_rng</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#uniform_noise"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.uniform_noise" title="Permalink to this definition">¶</a></dt>
+<dd><p>Adds uniform noise to the given X.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="safire.utils.matutils.zero_masking">
+<tt class="descclassname">safire.utils.matutils.</tt><tt class="descname">zero_masking</tt><big>(</big><em>X</em>, <em>p</em>, <em>theano_rng</em><big>)</big><a class="reference internal" href="_modules/safire/utils/matutils.html#zero_masking"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.matutils.zero_masking" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>X</strong> &#8211; theano.tensor.var.TensorVariable</li>
+<li><strong>p</strong> &#8211; </li>
+<li><strong>theano_rng</strong> (<em>theano.</em>) &#8211; </li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.utils.matutils.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

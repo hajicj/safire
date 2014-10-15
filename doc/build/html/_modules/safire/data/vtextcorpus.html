@@ -1,0 +1,582 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.vtextcorpus &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.data.vtextcorpus</h1><div class="highlight"><pre>
+<span class="c"># !/usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="c">#</span>
+<span class="c">#</span>
+
+<span class="kn">import</span> <span class="nn">codecs</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">gzip</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="c">#import cPickle</span>
+
+<span class="c">#from gensim import interfaces, utils</span>
+<span class="kn">from</span> <span class="nn">gensim.corpora.textcorpus</span> <span class="kn">import</span> <span class="n">TextCorpus</span>
+<span class="kn">from</span> <span class="nn">gensim.corpora.dictionary</span> <span class="kn">import</span> <span class="n">Dictionary</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">from</span> <span class="nn">gensim.models</span> <span class="kn">import</span> <span class="n">TfidfModel</span>
+
+<span class="kn">import</span> <span class="nn">filters.positional_filters</span> <span class="kn">as</span> <span class="nn">pfilters</span>
+<span class="kn">import</span> <span class="nn">safire.utils</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">_strip_UFAL</span><span class="p">(</span><span class="n">token</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    &gt;&gt;&gt; _strip_ufal(&#39;blah_:W_some_suffix&#39;)</span>
+<span class="sd">    &#39;blah&#39;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="s">&#39;_&#39;</span> <span class="ow">in</span> <span class="n">token</span><span class="p">:</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">token</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="s">&#39;_&#39;</span><span class="p">)</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">token</span><span class="p">[:</span><span class="n">idx</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">token</span>
+
+<span class="c"># Various functions for filtering out sentences (positional filter).</span>
+<span class="c"># The first argument of each is the ``sentences`` list of lists.</span>
+
+
+<div class="viewcode-block" id="VTextCorpus"><a class="viewcode-back" href="../../../safire.data.vtextcorpus.html#safire.data.vtextcorpus.VTextCorpus">[docs]</a><span class="k">class</span> <span class="nc">VTextCorpus</span><span class="p">(</span><span class="n">TextCorpus</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;A text corpus that works on files in Vertical Text format.</span>
+<span class="sd">    The vtext format has one token per line, with various columns.</span>
+<span class="sd">    The column names are defined on initialization.</span>
+
+<span class="sd">    Which columns should be returned is also specified on init.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">input</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">colnames</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;form&#39;</span><span class="p">,</span> <span class="s">&#39;lemma&#39;</span><span class="p">,</span> <span class="s">&#39;tag&#39;</span><span class="p">],</span>
+                 <span class="n">retcol</span><span class="o">=</span><span class="s">&#39;lemma&#39;</span><span class="p">,</span> <span class="n">input_root</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">,</span> <span class="n">gzipped</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                 <span class="n">sentences</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">dictionary</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">allow_dict_updates</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                 <span class="n">doc2id</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">id2doc</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">token_filter</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">token_transformer</span><span class="o">=</span><span class="s">&#39;strip_UFAL&#39;</span><span class="p">,</span>
+                 <span class="n">pfilter</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">pfilter_full_freqs</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">filter_capital</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="c">#tfidf=None,</span>
+                 <span class="n">label</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the text corpus.</span>
+
+<span class="sd">        :param input: The input for a VTextCorpus is a handle</span>
+<span class="sd">            with one document file name per line or a file that can be</span>
+<span class="sd">            opened as such.</span>
+
+<span class="sd">        :param colnames: A list of VText column names. The column names should</span>
+<span class="sd">            be unique.</span>
+
+<span class="sd">        :param retcol: The name of the column to return. (Has to be in</span>
+<span class="sd">            colnames.)</span>
+
+<span class="sd">        :param input_root: The path to prepend to each entry in input.</span>
+
+<span class="sd">        :param delimiter: The character that delimits columns in the VText</span>
+<span class="sd">            input (should usually be &#39;\t&#39;, which is default).</span>
+
+<span class="sd">        :param gzipped: Set to True if the vtext files are gzipped.</span>
+
+<span class="sd">        :param sentences: Set to True if docs should not be entire files</span>
+<span class="sd">            but rather sentences.</span>
+
+<span class="sd">        :param dictionary: If specified, the corpus will share a dictionary.</span>
+<span class="sd">            Useful for multiple VTextCorpus instances running on a single</span>
+<span class="sd">            dataset.</span>
+
+<span class="sd">        :param allow_dict_updates: If True, the supplied dictionary will not be</span>
+<span class="sd">            updated with new items.</span>
+
+<span class="sd">        :param id2doc: If specified, the corpus will use the given map</span>
+<span class="sd">            from document IDs to their names, as given in input vtlist.</span>
+
+<span class="sd">        :param doc2id: If specified, the corpus will use the given map</span>
+<span class="sd">            from document names to their IDs.</span>
+
+<span class="sd">            .. warn:</span>
+
+<span class="sd">              There is no check that `id2doc` and `doc2id` contain inverse</span>
+<span class="sd">              mappings!</span>
+
+<span class="sd">        :param token_filter: A callable that returns bool on the vtext fields</span>
+<span class="sd">            (the argument to token_filter will be a split line of the vtext,</span>
+<span class="sd">            with members corresponding to the columns as defined by the</span>
+<span class="sd">            ``colnames`` parameter.</span>
+
+<span class="sd">        :param token_transformer: A callable that transforms a token before</span>
+<span class="sd">            recording it into the corpus. For example, it may strip some</span>
+<span class="sd">            common suffix, etc. If ``None``, leaves the token as-is.</span>
+
+<span class="sd">            A shortcut is ``strip_UFAL``, which strips everything to</span>
+<span class="sd">            the right of the first underscore found in the token (incl. the</span>
+<span class="sd">            underscore). This strips unnecessary information from the lemmas</span>
+<span class="sd">            obtained from MorphoDiTa, from the MorphLex lemma dictionary</span>
+<span class="sd">            at UFAL. **This is currently the default behavior.**</span>
+
+<span class="sd">        :param pfilter: A number, either an integer or a float. If</span>
+<span class="sd">            an integer (K) is given, will only take the first K sentences from</span>
+<span class="sd">            the beginning of a document. If a float is given, will use the given</span>
+<span class="sd">            fraction of sentences from the beginning of a document</span>
+
+<span class="sd">        :param pfilter_full_freqs: Used in conjunction with</span>
+<span class="sd">            ``positional_filter``. If set, will use word frequencies from the</span>
+<span class="sd">            entire document, but but only for the words that appear at positions</span>
+<span class="sd">            that pass the positional filter.</span>
+
+<span class="sd">        :param filter_capital: If set, will remove all words that start with</span>
+<span class="sd">            a capital letter in their retfield. This serves to remove named</span>
+<span class="sd">            entities.</span>
+
+<span class="sd">        :param label: A &quot;name&quot; the corpus carries with it for identification.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">label</span> <span class="o">=</span> <span class="n">label</span>
+
+        <span class="k">if</span> <span class="n">colnames</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Cannot initialize VTextCorpus without colnames.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">retcol</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Cannot initialize VTextCorpus without recol.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">retcol</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">colnames</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Retcol name (</span><span class="si">%s</span><span class="s">) is not in colnames: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="n">retcol</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">colnames</span><span class="p">)))</span>
+
+        <span class="c"># Input properties</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__do_cleanup</span> <span class="o">=</span> <span class="bp">False</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">input</span> <span class="o">=</span> <span class="nb">input</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gzipped</span> <span class="o">=</span> <span class="n">gzipped</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">input_root</span> <span class="o">=</span> <span class="n">input_root</span>
+
+        <span class="c"># Initialize dictionary</span>
+        <span class="k">if</span> <span class="n">dictionary</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">dictionary</span> <span class="o">=</span> <span class="n">Dictionary</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dictionary</span> <span class="o">=</span> <span class="n">dictionary</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">allow_dict_updates</span> <span class="o">=</span> <span class="n">allow_dict_updates</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">locked</span> <span class="o">=</span> <span class="bp">False</span>
+
+        <span class="c"># Initialize document ID tracking</span>
+        <span class="k">if</span> <span class="n">doc2id</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">doc2id</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">id2doc</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">id2doc</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">doc2id</span> <span class="o">=</span> <span class="n">doc2id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">id2doc</span> <span class="o">=</span> <span class="n">id2doc</span>
+
+        <span class="c"># Initialize filters</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">token_filter</span> <span class="o">=</span> <span class="n">token_filter</span>
+
+        <span class="k">if</span> <span class="n">token_transformer</span> <span class="o">==</span> <span class="s">&#39;strip_UFAL&#39;</span><span class="p">:</span>
+            <span class="n">token_transformer</span> <span class="o">=</span> <span class="n">_strip_UFAL</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">token_transformer</span> <span class="o">=</span> <span class="n">token_transformer</span>
+
+        <span class="c"># Initialize column parsing</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">delimiter</span> <span class="o">=</span> <span class="n">delimiter</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">colnames</span> <span class="o">=</span> <span class="n">colnames</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">retcol</span> <span class="o">=</span> <span class="n">retcol</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">retidx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">colnames</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">retcol</span><span class="p">)</span>  <span class="c"># Already checked that</span>
+                                                        <span class="c"># retcol is in colnames</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_capital</span> <span class="o">=</span> <span class="n">filter_capital</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filter_capital_regex_str</span> <span class="o">=</span> <span class="s">u&#39;[A-Z&#39;</span> <span class="o">+</span> <span class="s">u&#39;ÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ&#39;</span> <span class="o">+</span> <span class="s">u&#39;]&#39;</span>
+
+        <span class="c"># Output behavior properties</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sentences</span> <span class="o">=</span> <span class="n">sentences</span>
+
+        <span class="c"># Initializes the positional filter</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">positional_filter</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">positional_filter_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_positional_filter</span><span class="p">(</span><span class="n">pfilter</span><span class="p">,</span> <span class="n">pfilter_full_freqs</span><span class="p">)</span>
+
+        <span class="c"># Processing stats</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_processed</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_words_processed</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">tfidf</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="c">#if isinstance(tfidf, bool) and tfidf:</span>
+        <span class="c">#    self.tfidf = self.setup_tfidf()</span>
+        <span class="c">#elif isinstance(tfidf, TfidfModel):</span>
+        <span class="c">#    self.tfidf = tfidf</span>
+
+<div class="viewcode-block" id="VTextCorpus.setup_tfidf"><a class="viewcode-back" href="../../../safire.data.vtextcorpus.html#safire.data.vtextcorpus.VTextCorpus.setup_tfidf">[docs]</a>    <span class="k">def</span> <span class="nf">setup_tfidf</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Prepare the TfidfModel that should transform the corpus outputs.</span>
+<span class="sd">        Runs through the corpus, so it may be slow.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing TF-IDF model from self...&#39;</span><span class="p">)</span>
+        <span class="n">tfidf</span> <span class="o">=</span> <span class="n">TfidfModel</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">tfidf</span>
+</div>
+    <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        The function that defines a corpus.</span>
+
+<span class="sd">        Iterating over the corpus must yield sparse vectors, one for each</span>
+<span class="sd">        document.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">text</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_texts</span><span class="p">():</span>
+            <span class="c">#logging.debug(&#39;__iter__ Yielding text: %s&#39; % str(text))</span>
+            <span class="k">yield</span> <span class="bp">self</span><span class="o">.</span><span class="n">doc2bow</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+
+<div class="viewcode-block" id="VTextCorpus.doc2bow"><a class="viewcode-back" href="../../../safire.data.vtextcorpus.html#safire.data.vtextcorpus.VTextCorpus.doc2bow">[docs]</a>    <span class="k">def</span> <span class="nf">doc2bow</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="n">allow_update</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Mini-method for generating BOW representation of text.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">allow_update</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">allow_update</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">allow_dict_updates</span>
+        <span class="n">bow</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dictionary</span><span class="o">.</span><span class="n">doc2bow</span><span class="p">(</span><span class="n">text</span><span class="p">,</span>
+                                      <span class="n">allow_update</span><span class="o">=</span><span class="n">allow_update</span><span class="p">)</span>
+        <span class="c">#if self.tfidf:</span>
+        <span class="c">#    bow = self.tfidf[bow]</span>
+
+        <span class="k">return</span> <span class="n">bow</span>
+</div>
+<div class="viewcode-block" id="VTextCorpus.get_texts"><a class="viewcode-back" href="../../../safire.data.vtextcorpus.html#safire.data.vtextcorpus.VTextCorpus.get_texts">[docs]</a>    <span class="k">def</span> <span class="nf">get_texts</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        One iteration of get_texts() should yield one document, which means</span>
+<span class="sd">        one file.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">batch_no</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">timed_batch_size</span> <span class="o">=</span> <span class="mi">1000</span>
+        <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>  <span class="c"># Logging time</span>
+        <span class="n">batch_start_time</span> <span class="o">=</span> <span class="n">start_time</span>
+
+        <span class="n">total_yielded</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="c"># Should re-set counters on each new iter() call..?</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_processed</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_words_processed</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="n">input_handle</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">input</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">input_handle</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">docno</span><span class="p">,</span> <span class="n">doc</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">input_handle</span><span class="p">):</span>
+            <span class="c">#logger.debug(&#39;Processing doc no. %d: %s&#39; % (docno, doc.strip()))</span>
+
+            <span class="n">doc</span> <span class="o">=</span> <span class="n">doc</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+
+            <span class="c"># NOTE: doc_short_name is the document name *before*</span>
+            <span class="c"># self.input_root is applied - it&#39;s the path to the file</span>
+            <span class="c"># from the corpus root. This is the preferred ID of documents.</span>
+            <span class="n">doc_short_name</span> <span class="o">=</span> <span class="n">doc</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_root</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">doc</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input_root</span><span class="p">,</span> <span class="n">doc</span><span class="p">)</span>
+                <span class="c">#logger.debug(</span>
+                <span class="c">#    &#39;Doc name after prepending with input root: %s&#39; % doc)</span>
+
+            <span class="c"># This is where the actual parsing happens.</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_doc_handle</span><span class="p">(</span><span class="n">doc</span><span class="p">)</span> <span class="k">as</span> <span class="n">doc_handle</span><span class="p">:</span>
+
+                <span class="n">document</span><span class="p">,</span> <span class="n">sentences</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_document_and_sentences</span><span class="p">(</span>
+                    <span class="n">doc_handle</span><span class="p">)</span>
+
+            <span class="c"># This will probably get deprecated.</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">sentences</span><span class="p">:</span>
+
+                <span class="n">docid</span> <span class="o">=</span> <span class="n">doc_short_name</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">doc2id</span><span class="p">[</span><span class="n">docid</span><span class="p">]</span> <span class="o">=</span> <span class="n">total_yielded</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">id2doc</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">docid</span><span class="p">)</span>
+
+                <span class="n">total_yielded</span> <span class="o">+=</span> <span class="mi">1</span>
+
+                <span class="k">yield</span> <span class="n">document</span>
+
+            <span class="k">else</span><span class="p">:</span>
+
+                <span class="k">for</span> <span class="n">sentno</span><span class="p">,</span> <span class="n">sentence</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">sentences</span><span class="p">):</span>
+                    <span class="n">docid</span> <span class="o">=</span> <span class="n">doc_short_name</span> <span class="o">+</span> <span class="s">&#39;.&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">sentno</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">doc2id</span><span class="p">[</span><span class="n">docid</span><span class="p">]</span> <span class="o">=</span> <span class="n">total_yielded</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">id2doc</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">docid</span><span class="p">)</span>
+
+                    <span class="c">#logger.debug(&#39;get_texts: Yielding sentence: %s&#39; % str(</span>
+                    <span class="c">#    [tok for tok in sentence]))</span>
+                    <span class="n">total_yielded</span> <span class="o">+=</span> <span class="mi">1</span>
+
+                    <span class="k">yield</span> <span class="n">sentence</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">n_processed</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_processed</span> <span class="o">%</span> <span class="n">timed_batch_size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">batch_end_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+                <span class="n">batch_time</span> <span class="o">=</span> <span class="n">batch_end_time</span> <span class="o">-</span> <span class="n">batch_start_time</span>
+                <span class="n">batch_total_time</span> <span class="o">=</span> <span class="n">batch_end_time</span> <span class="o">-</span> <span class="n">start_time</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s">&#39;Done batch no. </span><span class="si">%d</span><span class="s">, total docs </span><span class="si">%d</span><span class="s">. Batch time </span><span class="si">%f</span><span class="s"> s (</span><span class="si">%f</span><span class="s"> s / doc), total time </span><span class="si">%f</span><span class="s"> s (</span><span class="si">%f</span><span class="s"> s / doc)&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="n">batch_no</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_processed</span><span class="p">,</span> <span class="n">batch_time</span><span class="p">,</span>
+                        <span class="n">batch_time</span> <span class="o">/</span> <span class="n">timed_batch_size</span><span class="p">,</span> <span class="n">batch_total_time</span><span class="p">,</span>
+                        <span class="n">batch_total_time</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_processed</span><span class="p">))</span>
+                <span class="n">batch_no</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">batch_start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">input_handle</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+        <span class="n">end_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+        <span class="n">total_time</span> <span class="o">=</span> <span class="n">end_time</span> <span class="o">-</span> <span class="n">start_time</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Processing corpus took </span><span class="si">%f</span><span class="s"> s (</span><span class="si">%f</span><span class="s"> s per document).&#39;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">total_time</span><span class="p">,</span> <span class="n">total_time</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_processed</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="VTextCorpus.parse_document_and_sentences"><a class="viewcode-back" href="../../../safire.data.vtextcorpus.html#safire.data.vtextcorpus.VTextCorpus.parse_document_and_sentences">[docs]</a>    <span class="k">def</span> <span class="nf">parse_document_and_sentences</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">doc_handle</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Parses the whole document. Returns both the sentences and the</span>
+<span class="sd">        whole document, filtered by pfilter.&quot;&quot;&quot;</span>
+        <span class="c"># Pre-parse entire document</span>
+        <span class="n">sentences</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_sentences</span><span class="p">(</span><span class="n">doc_handle</span><span class="p">)</span>
+
+        <span class="c"># Process sentences and prepare document to return</span>
+        <span class="n">flt_sentences</span> <span class="o">=</span> <span class="n">sentences</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">positional_filter</span><span class="p">:</span>
+            <span class="n">flt_sentences</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_positional_filter</span><span class="p">(</span><span class="n">sentences</span><span class="p">)</span>
+
+        <span class="n">document</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span><span class="o">*</span><span class="n">flt_sentences</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">document</span><span class="p">,</span> <span class="n">sentences</span>
+</div>
+<div class="viewcode-block" id="VTextCorpus.parse_sentences"><a class="viewcode-back" href="../../../safire.data.vtextcorpus.html#safire.data.vtextcorpus.VTextCorpus.parse_sentences">[docs]</a>    <span class="k">def</span> <span class="nf">parse_sentences</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">doc_handle</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parses one vtext document into sentences, based on self.colnames and</span>
+<span class="sd">        self.retcol. Interprets blank lines as sentence breaks.</span>
+
+<span class="sd">        If a sentence filter is specified, applies the sentence filter.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Parsing sentences from handle </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">doc_handle</span><span class="p">))</span>
+
+        <span class="n">filter_capital_regex</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_capital</span><span class="p">:</span>
+            <span class="n">filter_capital_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filter_capital_regex_str</span><span class="p">)</span>
+
+        <span class="n">sentences</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">current_buffer</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">line_no</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">doc_handle</span><span class="p">):</span>
+            <span class="c"># Quick fix?</span>
+            <span class="c">#if self.gzipped:</span>
+            <span class="c">#    line = line.decode(&#39;utf-8&#39;)</span>
+
+            <span class="c">#logging.debug(&#39;Line: %s&#39; % line.strip())</span>
+            <span class="c">#safire.utils.check_malformed_unicode(line.strip())</span>
+
+            <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="o">==</span> <span class="s">&#39;&#39;</span><span class="p">:</span>
+                <span class="c">#logger.debug(&#39;parse_sentences: Adding sentence at %d: %s&#39; % (</span>
+                <span class="c">#    line_no, str(current_buffer)))</span>
+                <span class="n">sentences</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">current_buffer</span><span class="p">)</span>
+                <span class="n">current_buffer</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">continue</span>
+
+            <span class="n">fields</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delimiter</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">token_filter</span><span class="p">:</span>
+
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">token_filter</span><span class="p">(</span><span class="n">fields</span><span class="p">):</span>
+                    <span class="n">ret_field</span> <span class="o">=</span> <span class="n">fields</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">retidx</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">token_transformer</span><span class="p">:</span>
+                        <span class="n">ret_field</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">token_transformer</span><span class="p">(</span><span class="n">ret_field</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_capital</span> <span class="ow">and</span> <span class="n">filter_capital_regex</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">ret_field</span><span class="p">):</span>
+                        <span class="k">continue</span>
+                    <span class="n">current_buffer</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ret_field</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">ret_field</span> <span class="o">=</span> <span class="n">fields</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">retidx</span><span class="p">]</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">token_transformer</span><span class="p">:</span>
+                    <span class="n">ret_field</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">token_transformer</span><span class="p">(</span><span class="n">ret_field</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">filter_capital</span> <span class="ow">and</span> <span class="n">filter_capital_regex</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">ret_field</span><span class="p">):</span>
+                    <span class="k">continue</span>
+                <span class="n">current_buffer</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ret_field</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">sentences</span>
+</div>
+<div class="viewcode-block" id="VTextCorpus.dry_run"><a class="viewcode-back" href="../../../safire.data.vtextcorpus.html#safire.data.vtextcorpus.VTextCorpus.dry_run">[docs]</a>    <span class="k">def</span> <span class="nf">dry_run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Loops through the entire corpus without outputting the documents</span>
+<span class="sd">        themselves, to generate the corpus infrastructure: document ID mapping,</span>
+<span class="sd">        dictionary, etc.&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
+            <span class="k">pass</span>
+</div>
+<div class="viewcode-block" id="VTextCorpus.lock"><a class="viewcode-back" href="../../../safire.data.vtextcorpus.html#safire.data.vtextcorpus.VTextCorpus.lock">[docs]</a>    <span class="k">def</span> <span class="nf">lock</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;In order to use the corpus as a transformer, it has to be locked: it</span>
+<span class="sd">        only reads texts and doesn&#39;t update anything.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">allow_dict_updates</span> <span class="o">=</span> <span class="bp">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">locked</span> <span class="o">=</span> <span class="bp">True</span>
+</div>
+<div class="viewcode-block" id="VTextCorpus.locked"><a class="viewcode-back" href="../../../safire.data.vtextcorpus.html#safire.data.vtextcorpus.VTextCorpus.locked">[docs]</a>    <span class="k">def</span> <span class="nf">locked</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Checks whether the corpus is locked.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">locked</span> <span class="ow">and</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">allow_dict_updates</span> <span class="o">==</span> <span class="bp">False</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="VTextCorpus.unlock"><a class="viewcode-back" href="../../../safire.data.vtextcorpus.html#safire.data.vtextcorpus.VTextCorpus.unlock">[docs]</a>    <span class="k">def</span> <span class="nf">unlock</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">allow_dict_updates</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">locked</span> <span class="o">=</span> <span class="bp">False</span>
+</div>
+<div class="viewcode-block" id="VTextCorpus.reset_input"><a class="viewcode-back" href="../../../safire.data.vtextcorpus.html#safire.data.vtextcorpus.VTextCorpus.reset_input">[docs]</a>    <span class="k">def</span> <span class="nf">reset_input</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vtlist_filename</span><span class="p">,</span> <span class="n">input_root</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">lock</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Used to re-direct the VTextCorpus to a different *.vtlist input</span>
+<span class="sd">        file. By default:</span>
+
+<span class="sd">        * The input root is the same,</span>
+<span class="sd">        * The corpus will be *locked*: the dictionary will not be updated.</span>
+<span class="sd">          This is to reflect the usage: to load a VTextCorpus that was used</span>
+<span class="sd">          for training and use it to correctly feed data to the higher-level</span>
+<span class="sd">          corpora.</span>
+
+<span class="sd">        :type vtlist_filename: str</span>
+<span class="sd">        :param vtlist_filename: The new vtlist filename. To be consistent, this</span>
+<span class="sd">            is only the raw filename without the path (more precisely, with only</span>
+<span class="sd">            the path relative to ``self.input_root``, if the ``input_root``</span>
+<span class="sd">            parameter is ``None``, or relative to the ``input_root`` path</span>
+<span class="sd">            parameter).</span>
+
+<span class="sd">        :type input_root: str</span>
+<span class="sd">        :param input_root: If the corpus input root relative to which the</span>
+<span class="sd">            *.vt.txt files in the new vtlist ``vtlist_filename`` are stored</span>
+<span class="sd">            differs from the current input root, re-set it using this parameter.</span>
+
+<span class="sd">        :type lock: bool</span>
+<span class="sd">        :param lock: If the corpus should be locked, i.e. in read-only mode</span>
+<span class="sd">            (no modifications to the dictionary/other behavior), set this.</span>
+<span class="sd">            By default, lock is set.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">input_root</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">input_root</span> <span class="o">=</span> <span class="n">input_root</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">input</span> <span class="o">=</span> <span class="n">vtlist_filename</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">doc2id</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">id2doc</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">lock</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lock</span><span class="p">()</span>
+</div>
+    <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>  <span class="c"># Number of documents processed</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_processed</span>
+
+    <span class="k">def</span> <span class="nf">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__do_cleanup</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vthandle</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Item is a *.vt file handle. Returns the document representation.&quot;&quot;&quot;</span>
+        <span class="n">document</span><span class="p">,</span> <span class="n">sentences</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_document_and_sentences</span><span class="p">(</span><span class="n">vthandle</span><span class="p">)</span>
+        <span class="c">#print &#39;%d sentences, document: %s&#39; % (len(sentences), str(document))</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">doc2bow</span><span class="p">(</span><span class="n">document</span><span class="p">,</span> <span class="n">allow_update</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+        <span class="c">#print &#39;Out: %s&#39; % out</span>
+        <span class="k">return</span> <span class="n">out</span>
+
+    <span class="k">def</span> <span class="nf">_init_positional_filter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">positional_filter</span><span class="p">,</span> <span class="n">positional_full_freqs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes position-based filtering.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">positional_filter</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">positional_full_freqs</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">positional_filter</span> <span class="o">=</span> <span class="n">pfilters</span><span class="o">.</span><span class="n">words_from_first_k</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">positional_filter</span> <span class="o">=</span> <span class="n">pfilters</span><span class="o">.</span><span class="n">first_k</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">positional_filter_kwargs</span><span class="p">[</span><span class="s">&#39;k&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">positional_filter</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">positional_filter</span><span class="p">,</span> <span class="nb">float</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">positional_full_freqs</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">positional_filter</span> <span class="o">=</span> <span class="n">pfilters</span><span class="o">.</span><span class="n">words_from_first_p</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">positional_filter</span> <span class="o">=</span> <span class="n">pfilters</span><span class="o">.</span><span class="n">first_p</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">positional_filter_kwargs</span><span class="p">[</span><span class="s">&#39;p&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">positional_filter</span>
+
+    <span class="k">def</span> <span class="nf">_apply_positional_filter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sentences</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Based on the settings of ``positional_filter`` and ``positional_freqs``,</span>
+<span class="sd">        filters the ordered sentences.</span>
+
+<span class="sd">        If the positional filter is an integer N, will use the first N</span>
+<span class="sd">        sentences. If the positional filter is a floating-point number, will</span>
+<span class="sd">        use</span>
+
+<span class="sd">        :param sentences: The words that will be passed to the dicitonary&#39;s</span>
+<span class="sd">            doc2bow method.</span>
+
+<span class="sd">        :return: The filtered document.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">positional_filter</span><span class="p">(</span><span class="n">sentences</span><span class="p">,</span> <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">positional_filter_kwargs</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_doc_handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">doc</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">gzipped</span><span class="p">:</span>
+            <span class="n">gz_fh</span> <span class="o">=</span> <span class="n">gzip</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">doc</span><span class="p">)</span>
+            <span class="n">doc_reader</span> <span class="o">=</span> <span class="n">codecs</span><span class="o">.</span><span class="n">getreader</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">doc_reader</span><span class="p">(</span><span class="n">gz_fh</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">codecs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="s">&#39;r&#39;</span><span class="p">,</span> <span class="s">&#39;utf-8&#39;</span><span class="p">)</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

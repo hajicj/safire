@@ -1,0 +1,704 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.dataset_stats &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for scripts.dataset_stats</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">``dataset_stats.py`` is a script that collects statistics about datasets. It</span>
+<span class="sd">computes:</span>
+
+<span class="sd">* Mean, variance</span>
+
+<span class="sd">* Number of zero elements, nonzero elements, sparsity</span>
+
+<span class="sd">* Histogram of feature values, in steps of 0.01 (or specified by argument)</span>
+
+<span class="sd">* Histogram of average feature values, in steps of 0.01</span>
+
+<span class="sd">* Visualization of feature averages</span>
+
+<span class="sd">* Average feature correlation? Weighed by feature sums?</span>
+
+<span class="sd">* Direct visualization of a part of the dataset</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">cPickle</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">gensim</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">safire</span>
+<span class="kn">from</span> <span class="nn">safire.utils.matutils</span> <span class="kn">import</span> <span class="n">scale_to_unit_covariance</span><span class="p">,</span> <span class="n">generate_grid</span><span class="p">,</span> \
+    <span class="n">grid2sym_matrix</span>
+<span class="kn">from</span> <span class="nn">safire.data.loaders</span> <span class="kn">import</span> <span class="n">MultimodalShardedDatasetLoader</span>
+<span class="kn">from</span> <span class="nn">safire.utils.transcorp</span> <span class="kn">import</span> <span class="n">dimension</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+<div class="viewcode-block" id="DatasetStats"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.DatasetStats">[docs]</a><span class="k">class</span> <span class="nc">DatasetStats</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;A simple container for various statistics about a dataset.&quot;&quot;&quot;</span>
+
+    <span class="c">## @profile</span>
+    <span class="c"># def _slice_dataset(self, dataset, indexes):</span>
+    <span class="c">#     &quot;&quot;&quot;Workaround because of some weird memory leak.&quot;&quot;&quot;</span>
+    <span class="c">#     loading_interval = 20</span>
+    <span class="c">#     d = None</span>
+    <span class="c">#     for group in gensim.utils.grouper(indexes, loading_interval):</span>
+    <span class="c">#         dg = numpy.array([dataset[idx] for idx in group])</span>
+    <span class="c">#         if d is None:</span>
+    <span class="c">#             d = dg</span>
+    <span class="c">#         else:</span>
+    <span class="c">#             d = numpy.vstack((d, dg))</span>
+    <span class="c">#     return d</span>
+
+    <span class="k">def</span> <span class="nf">_nnz_cell_tracking</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">item_nnz</span><span class="p">):</span>
+        <span class="c"># Non-zero cells tracking</span>
+        <span class="k">if</span> <span class="n">cell</span> <span class="o">!=</span> <span class="mf">0.0</span><span class="p">:</span>
+            <span class="n">item_nnz</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">item_nnz</span>
+
+    <span class="k">def</span> <span class="nf">_feature_totals_update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="n">f</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">feature_totals</span><span class="p">[</span><span class="n">f</span><span class="p">]</span> <span class="o">+=</span> <span class="n">cell</span>
+
+    <span class="k">def</span> <span class="nf">_nnz_item_tracking</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item_nnz</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_nnz</span> <span class="o">+=</span> <span class="n">item_nnz</span>
+        <span class="n">nnz_hist_key</span> <span class="o">=</span> <span class="n">item_nnz</span> <span class="o">-</span> <span class="p">(</span><span class="n">item_nnz</span> <span class="o">%</span> <span class="mi">10</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nnz_histogram_bins</span><span class="p">[</span><span class="n">nnz_hist_key</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="k">def</span> <span class="nf">_hist_cells_from_item</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cell</span><span class="p">):</span>
+        <span class="c"># Cell histogram update</span>
+        <span class="n">hist_key</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="n">numpy</span><span class="o">.</span><span class="n">around</span><span class="p">(</span><span class="n">cell</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+        <span class="c"># Generate 0&#39;s if current cell highest in histogram</span>
+        <span class="k">if</span> <span class="n">hist_key</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_hist_bin</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Increasing max hist key from </span><span class="si">%f</span><span class="s"> to </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">max_hist_bin</span><span class="p">,</span> <span class="n">hist_key</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">hk</span> <span class="ow">in</span> <span class="n">numpy</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_hist_bin</span><span class="p">,</span> <span class="n">hist_key</span> <span class="o">+</span> <span class="mi">99</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">histogram_bins</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">hk</span><span class="p">)]</span> <span class="o">=</span> <span class="mf">0.0</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">max_hist_bin</span> <span class="o">=</span> <span class="n">hist_key</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">histogram_bins</span><span class="p">[</span><span class="n">hist_key</span><span class="p">]</span> <span class="o">+=</span> <span class="mf">1.0</span>
+
+    <span class="k">def</span> <span class="nf">_init_process_item</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">feature_totals</span><span class="p">,</span> <span class="n">item</span><span class="p">,</span> <span class="n">item_nnz</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">f</span><span class="p">,</span> <span class="n">cell</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">item</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_feature_totals_update</span><span class="p">(</span><span class="n">cell</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+
+            <span class="n">item_nnz</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_nnz_cell_tracking</span><span class="p">(</span><span class="n">cell</span><span class="p">,</span> <span class="n">item_nnz</span><span class="p">)</span>
+
+            <span class="c"># if cell &gt; maximum:</span>
+            <span class="c">#    maximum = cell</span>
+            <span class="c">#if cell &lt; minimum:</span>
+            <span class="c">#    minimum = cell</span>
+
+            <span class="c">#self._hist_cells_from_item(cell)</span>
+
+        <span class="c"># self.maximum = max(self.maximum, maximum)</span>
+        <span class="c">#self.minimum = min(self.minimum, minimum)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_nnz_item_tracking</span><span class="p">(</span><span class="n">item_nnz</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">sample_n</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Collects statistics on a dataset. Tries to do so efficiently, i.e. all in</span>
+<span class="sd">        one pass.</span>
+
+<span class="sd">        Computes:</span>
+
+<span class="sd">        * Average per cell (when the dataset is viewed as a matrix, a cell is the</span>
+<span class="sd">          value of a feature in an item)</span>
+
+<span class="sd">        * Average per cell per feature</span>
+
+<span class="sd">        :type dataset: safire.data.sharded_dataset.ShardedDataset</span>
+<span class="sd">        :param dataset: A dataset to compute statistics on.</span>
+
+<span class="sd">        :type sample_n: int</span>
+<span class="sd">        :param sample_n: Instead of running through the whole corpus, only</span>
+<span class="sd">            run through a sample of this many items.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">sample_n</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_idxs</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">([</span> <span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">dataset</span><span class="p">)),</span>
+                                                            <span class="n">replace</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+                      <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">sample_n</span><span class="p">)</span> <span class="p">])</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Completed sampling.&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">d_idxs</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">dataset</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Dataset total: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">dataset</span><span class="p">))</span>
+
+        <span class="n">start</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">())</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">item_totals</span> <span class="o">=</span> <span class="p">[</span><span class="nb">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_idxs</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dataset_total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">item_totals</span><span class="p">)</span>
+
+        <span class="n">current_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Dataset total complete in </span><span class="si">%d</span><span class="s"> s&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">current_time</span> <span class="o">-</span> <span class="n">start</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dataset_dim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_items_processed</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">d_idxs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_cells_processed</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">d_idxs</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset_dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">average_cell</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset_total</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_cells_processed</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_nnz</span> <span class="o">=</span> <span class="mf">0.0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">maximum</span> <span class="o">=</span> <span class="nb">max</span><span class="p">([</span><span class="nb">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_idxs</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">minimum</span> <span class="o">=</span> <span class="nb">min</span><span class="p">([</span><span class="nb">min</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_idxs</span><span class="p">])</span>
+
+        <span class="n">current_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Maxima and minima complete in </span><span class="si">%d</span><span class="s"> s&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">current_time</span> <span class="o">-</span> <span class="n">start</span><span class="p">))</span>
+
+        <span class="c"># For each non-zero cell value range of 0.01: how many cells in this range?</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">histogram_bins</span> <span class="o">=</span> <span class="p">{</span> <span class="mi">0</span> <span class="p">:</span> <span class="mf">0.0</span> <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_hist_bin</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="c"># For each integer range of 10: how many items with this many nnz cells?</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nnz_histogram_bins</span> <span class="o">=</span> <span class="p">{</span><span class="nb">int</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="p">:</span> <span class="mf">0.0</span>
+                                   <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">numpy</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset_dim</span> <span class="o">+</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">10</span><span class="p">)}</span>
+
+
+        <span class="c"># The sum of cells in each column</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">feature_totals</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset_dim</span><span class="p">,</span>
+                                          <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span>
+
+        <span class="n">iterating_start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">n_th</span><span class="p">,</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">d_idxs</span><span class="p">):</span>
+            <span class="n">item</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="n">idx</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">feature_totals</span> <span class="o">+=</span> <span class="n">item</span>
+            <span class="c">#self.n_items_processed += 1.0</span>
+            <span class="c">#self.n_cells_processed += dataset.dim</span>
+            <span class="c">#maximum = self.minimum</span>
+            <span class="c">#minimum = self.maximum</span>
+            <span class="n">item_nnz</span> <span class="o">=</span> <span class="mf">0.0</span>
+            <span class="c">#self._init_process_item(self.feature_totals, item, item_nnz)</span>
+
+            <span class="c">#</span>
+            <span class="c"># if (n_th + 1) % 50 == 0:</span>
+            <span class="c">#     logging.info(&#39;Processed %d items in %d s&#39; % (n_th+1,</span>
+            <span class="c">#     time.clock() - iterating_start_time))</span>
+
+        <span class="c">#self.percentage_nnz = self.num_nnz / self.n_cells_processed</span>
+
+<div class="viewcode-block" id="DatasetStats.report"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.DatasetStats.report">[docs]</a>    <span class="k">def</span> <span class="nf">report</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Prints out the stats, with appropriate formatting.&quot;&quot;&quot;</span>
+        <span class="k">print</span> <span class="s">&#39;Dataset:&#39;</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">Length:</span><span class="se">\t</span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_items_processed</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">Dimension:</span><span class="se">\t</span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">Average:</span><span class="se">\t</span><span class="si">%.5f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">average_cell</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">Minimum:</span><span class="se">\t</span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">minimum</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">Maximum:</span><span class="se">\t</span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">maximum</span>
+        <span class="c">#print &#39;\tNonzero:\t%f&#39; % self.num_nnz</span>
+        <span class="c">#print &#39;\tPerc. Nonzero:\t%.3f&#39; % self.percentage_nnz</span>
+</div>
+<div class="viewcode-block" id="DatasetStats.cell_histogram"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.DatasetStats.cell_histogram">[docs]</a>    <span class="k">def</span> <span class="nf">cell_histogram</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Plots the cell value density.&quot;&quot;&quot;</span>
+        <span class="c"># Discard the 0 key, since it would dominate too much</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">histogram_bins</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="mi">1</span><span class="p">:]</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="p">[</span> <span class="bp">self</span><span class="o">.</span><span class="n">histogram_bins</span><span class="p">[</span><span class="n">hk</span><span class="p">]</span> <span class="k">for</span> <span class="n">hk</span> <span class="ow">in</span> <span class="n">keys</span> <span class="p">]</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="p">[</span> <span class="n">hk</span> <span class="o">/</span> <span class="mf">100.0</span> <span class="k">for</span> <span class="n">hk</span> <span class="ow">in</span> <span class="n">keys</span> <span class="p">]</span> <span class="c"># Scale back</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">keys</span><span class="p">,</span> <span class="n">values</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="DatasetStats.raw_cell_histogram"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.DatasetStats.raw_cell_histogram">[docs]</a>    <span class="k">def</span> <span class="nf">raw_cell_histogram</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">n_bins</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Plots the cell value histogram directly from the dataset,</span>
+<span class="sd">        taking the first N items.&quot;&quot;&quot;</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">n</span><span class="p">]</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">ravel</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="s">&#39;K&#39;</span><span class="p">)</span> <span class="c"># Faster?</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="p">[</span> <span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">data</span> <span class="k">if</span> <span class="n">d</span> <span class="o">!=</span> <span class="mf">0.0</span> <span class="p">]</span> <span class="c"># Remove zeros</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">n_bins</span><span class="p">,</span> <span class="n">histtype</span><span class="o">=</span><span class="s">&#39;step&#39;</span><span class="p">,</span> <span class="n">normed</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="DatasetStats.cell_mass_histogram"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.DatasetStats.cell_mass_histogram">[docs]</a>    <span class="k">def</span> <span class="nf">cell_mass_histogram</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">n_bins</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Plots the mass in each histogram cell.&quot;&quot;&quot;</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="p">[</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_idxs</span><span class="p">[</span><span class="mi">0</span><span class="p">:(</span><span class="nb">max</span><span class="p">([</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_items_processed</span><span class="p">]))]</span> <span class="p">]</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">ravel</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="s">&#39;K&#39;</span><span class="p">)</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="p">[</span> <span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">data</span> <span class="k">if</span> <span class="n">d</span> <span class="o">!=</span> <span class="mf">0.0</span> <span class="p">]</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+        <span class="n">n</span><span class="p">,</span> <span class="n">bins</span><span class="p">,</span> <span class="n">patches</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">n_bins</span><span class="p">,</span> <span class="n">histtype</span><span class="o">=</span><span class="s">&#39;step&#39;</span><span class="p">,</span> <span class="n">normed</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">mass</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">array</span><span class="p">([</span> <span class="n">nn</span> <span class="o">*</span> <span class="n">b</span> <span class="k">for</span> <span class="n">nn</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">bins</span><span class="p">)])</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">bins</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">mass</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;r&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="DatasetStats.cell_cumulative_mass"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.DatasetStats.cell_cumulative_mass">[docs]</a>    <span class="k">def</span> <span class="nf">cell_cumulative_mass</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">n_bins</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="p">[</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_idxs</span><span class="p">[</span><span class="mi">0</span><span class="p">:(</span><span class="nb">max</span><span class="p">([</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_items_processed</span><span class="p">]))]</span> <span class="p">]</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">ravel</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="s">&#39;K&#39;</span><span class="p">)</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="p">[</span> <span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">data</span> <span class="k">if</span> <span class="n">d</span> <span class="o">!=</span> <span class="mf">0.0</span> <span class="p">]</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+        <span class="n">n</span><span class="p">,</span> <span class="n">bins</span><span class="p">,</span> <span class="n">patches</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">n_bins</span><span class="p">,</span> <span class="n">histtype</span><span class="o">=</span><span class="s">&#39;step&#39;</span><span class="p">,</span> <span class="n">normed</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">clf</span><span class="p">()</span> <span class="c"># Histogram shouldn&#39;t show up</span>
+        <span class="n">mass</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">array</span><span class="p">([</span> <span class="n">nn</span> <span class="o">*</span> <span class="n">b</span> <span class="k">for</span> <span class="n">nn</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">bins</span><span class="p">)])</span>
+
+        <span class="n">cumulative_mass</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">mass</span><span class="p">)</span>
+        <span class="c"># Normalize</span>
+        <span class="n">cumulative_mass</span> <span class="o">=</span> <span class="n">cumulative_mass</span> <span class="o">/</span> <span class="n">cumulative_mass</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+        <span class="c"># Find 0.9 and 0.95 quantiles</span>
+        <span class="n">mass90</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="n">mass95</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">cumulative_mass</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">c</span> <span class="o">&gt;</span> <span class="mf">0.9</span> <span class="o">*</span> <span class="n">cumulative_mass</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="ow">and</span> <span class="n">mass90</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">mass90</span> <span class="o">=</span> <span class="n">i</span>
+            <span class="k">if</span> <span class="n">c</span> <span class="o">&gt;</span> <span class="mf">0.95</span> <span class="o">*</span> <span class="n">cumulative_mass</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="ow">and</span> <span class="n">mass95</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">mass95</span> <span class="o">=</span> <span class="n">i</span>
+
+        <span class="c">#fn = lambda p: (p + p**2) / (p + p**2 + 1.7)</span>
+        <span class="n">fn</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="n">p</span><span class="o">**</span><span class="mf">1.4</span> <span class="o">/</span> <span class="p">(</span><span class="n">p</span><span class="o">**</span><span class="mf">1.4</span><span class="o">+</span><span class="mf">1.0</span><span class="p">)</span>
+        <span class="n">approx</span> <span class="o">=</span> <span class="p">[</span> <span class="n">fn</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">bins</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]]</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span><span class="n">bins</span><span class="p">[</span><span class="n">mass95</span><span class="p">]])</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">bins</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">cumulative_mass</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;g&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">bins</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">approx</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;b&#39;</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">scatter</span><span class="p">([</span><span class="n">bins</span><span class="p">[</span><span class="n">mass90</span><span class="p">]],</span> <span class="p">[</span><span class="n">cumulative_mass</span><span class="p">[</span><span class="n">mass90</span><span class="p">]],</span> <span class="n">c</span><span class="o">=</span><span class="s">&#39;g&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">scatter</span><span class="p">([</span><span class="n">bins</span><span class="p">[</span><span class="n">mass95</span><span class="p">]],</span> <span class="p">[</span><span class="n">cumulative_mass</span><span class="p">[</span><span class="n">mass95</span><span class="p">]],</span> <span class="n">c</span><span class="o">=</span><span class="s">&#39;g&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">vlines</span><span class="p">([</span><span class="n">bins</span><span class="p">[</span><span class="n">mass90</span><span class="p">],</span> <span class="n">bins</span><span class="p">[</span><span class="n">mass95</span><span class="p">]],</span>
+                   <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">],</span>
+                   <span class="p">[</span><span class="n">cumulative_mass</span><span class="p">[</span><span class="n">mass90</span><span class="p">],</span> <span class="n">cumulative_mass</span><span class="p">[</span><span class="n">mass95</span><span class="p">]],</span>
+                   <span class="n">linestyles</span><span class="o">=</span><span class="s">&#39;dashed&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+</div>
+<div class="viewcode-block" id="DatasetStats.nnz_histogram"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.DatasetStats.nnz_histogram">[docs]</a>    <span class="k">def</span> <span class="nf">nnz_histogram</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Plots the distribution of nonzero counts.&quot;&quot;&quot;</span>
+        <span class="c"># Discard the 0 key, since it would dominate too much</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nnz_histogram_bins</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="mi">1</span><span class="p">:]</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="p">[</span> <span class="bp">self</span><span class="o">.</span><span class="n">nnz_histogram_bins</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">keys</span> <span class="p">]</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">keys</span><span class="p">,</span> <span class="n">values</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="DatasetStats.plot_feature"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.DatasetStats.plot_feature">[docs]</a>    <span class="k">def</span> <span class="nf">plot_feature</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">feature</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Plots the counts for a feature.&quot;&quot;&quot;</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="p">[</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">feature</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_idxs</span> <span class="p">]</span>
+        <span class="n">sorted_values</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">sorted_values</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;r&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="DatasetStats.rich_histogram"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.DatasetStats.rich_histogram">[docs]</a>    <span class="k">def</span> <span class="nf">rich_histogram</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">n_bins</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">with_zero</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="n">values</span><span class="o">.</span><span class="n">ravel</span><span class="p">(</span><span class="n">order</span><span class="o">=</span><span class="s">&#39;K&#39;</span><span class="p">)</span> <span class="c"># For multi-dimensional data</span>
+        <span class="n">nonzero_values</span> <span class="o">=</span> <span class="p">[</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">values</span> <span class="k">if</span> <span class="n">v</span> <span class="o">!=</span> <span class="mf">0.0</span><span class="p">]</span>
+        <span class="n">num_zero</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">nonzero_values</span><span class="p">)</span>
+        <span class="n">p_zero</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">num_zero</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">with_zero</span><span class="p">:</span>
+            <span class="n">nonzero_values</span> <span class="o">=</span> <span class="n">values</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+        <span class="n">n</span><span class="p">,</span> <span class="n">bins</span><span class="p">,</span> <span class="n">patches</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">nonzero_values</span><span class="p">,</span>
+                                    <span class="n">bins</span><span class="o">=</span><span class="n">n_bins</span><span class="p">,</span> <span class="n">histtype</span><span class="o">=</span><span class="s">&#39;step&#39;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;b&#39;</span><span class="p">)</span>
+        <span class="n">mass</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">nn</span> <span class="o">*</span> <span class="n">b</span> <span class="k">for</span> <span class="n">nn</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">bins</span><span class="p">)])</span>
+        <span class="n">nz_mean</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">nonzero_values</span><span class="p">)</span>
+        <span class="n">mean</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+        <span class="n">n_saturated</span> <span class="o">=</span> <span class="n">n</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">p_saturated</span> <span class="o">=</span> <span class="n">n_saturated</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">))</span>
+
+        <span class="n">saturation_threshold</span> <span class="o">=</span> <span class="n">bins</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span>
+        <span class="n">saturated</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">array</span><span class="p">([</span> <span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">nonzero_values</span>
+                                  <span class="k">if</span> <span class="n">v</span> <span class="o">&gt;</span> <span class="n">saturation_threshold</span> <span class="p">])</span>
+        <span class="n">saturation_avg</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">saturated</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="o">*</span><span class="mf">1.1</span><span class="p">])</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">vlines</span><span class="p">([</span><span class="n">mean</span><span class="p">],</span> <span class="mi">0</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">,</span> <span class="n">linestyles</span><span class="o">=</span><span class="s">&#39;dashed&#39;</span><span class="p">,</span> <span class="n">colors</span><span class="o">=</span><span class="s">&#39;r&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">mean</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">+</span> <span class="mf">0.4</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">mean</span><span class="p">),</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;r&#39;</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">vlines</span><span class="p">([</span><span class="n">nz_mean</span><span class="p">],</span> <span class="mi">0</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">/</span> <span class="mi">4</span><span class="p">,</span> <span class="n">linestyles</span><span class="o">=</span><span class="s">&#39;dashed&#39;</span><span class="p">,</span> <span class="n">colors</span><span class="o">=</span><span class="s">&#39;g&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">nz_mean</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">/</span> <span class="mi">4</span> <span class="o">+</span> <span class="mf">0.4</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">nz_mean</span><span class="p">),</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;g&#39;</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">mean</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">/</span> <span class="mf">1.2</span><span class="p">,</span> <span class="s">&#39;P(0) = </span><span class="si">%.5f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">p_zero</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="n">mean</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">/</span> <span class="mf">1.3</span><span class="p">,</span> <span class="s">&#39;P(sat.) = </span><span class="si">%.5f</span><span class="s">, avg(sat.) = </span><span class="si">%.5f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">p_saturated</span><span class="p">,</span> <span class="n">saturation_avg</span><span class="p">))</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">bins</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">mass</span><span class="p">,</span> <span class="s">&#39;r&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">title</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="n">title</span><span class="p">)</span>
+        <span class="c"># plt.annotate(str(mean), xy=(mean, max(n) / 2), xytext=(mean, max(n)/2 + 0.4),</span>
+        <span class="c"># arrowprops=dict(facecolor=&#39;white&#39;), color=&#39;r&#39;)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="DatasetStats.feature_histogram"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.DatasetStats.feature_histogram">[docs]</a>    <span class="k">def</span> <span class="nf">feature_histogram</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">feature</span><span class="p">,</span> <span class="n">n_bins</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">whole_dataset</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Plots the histogram of feature values and the mean. Does not include</span>
+<span class="sd">        zero values, only gives their proportion.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">whole_dataset</span><span class="p">:</span>
+            <span class="n">idxs</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">idxs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_idxs</span>
+
+        <span class="n">values</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">feature</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">idxs</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">n_bins</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">n_bins</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">/</span> <span class="mi">10</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rich_histogram</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">n_bins</span><span class="o">=</span><span class="n">n_bins</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&#39;Feature </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">feature</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="DatasetStats.item_histogram"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.DatasetStats.item_histogram">[docs]</a>    <span class="k">def</span> <span class="nf">item_histogram</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">,</span> <span class="n">n_bins</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">n_bins</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">n_bins</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">dim</span> <span class="o">/</span> <span class="mi">33</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rich_histogram</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span> <span class="n">n_bins</span><span class="o">=</span><span class="n">n_bins</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&#39;Item </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">idx</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="DatasetStats.feature_grid"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.DatasetStats.feature_grid">[docs]</a>    <span class="k">def</span> <span class="nf">feature_grid</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">fn</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Evaluates given function ``fn`` average over all pairs of given features.</span>
+
+<span class="sd">        :param features:</span>
+<span class="sd">        :param fn:</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">array</span><span class="p">([</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">features</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">d_idxs</span> <span class="p">])</span>
+        <span class="c"># If there are two features: return their MSE</span>
+        <span class="c">#if (len(features) == 2):</span>
+        <span class="c">#    return fn(values[:, 0], values[:, 1])</span>
+        <span class="c">#else:</span>
+        <span class="k">return</span> <span class="n">generate_grid</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">fn</span><span class="p">)</span>
+
+    <span class="c">#def plot_feature_mses(self, features):</span>
+</div>
+<div class="viewcode-block" id="DatasetStats.feature_lecunn_covariances"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.DatasetStats.feature_lecunn_covariances">[docs]</a>    <span class="k">def</span> <span class="nf">feature_lecunn_covariances</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n_items</span><span class="o">=</span><span class="mi">1000</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes and plots feature covariances, according to Y. LeCunn&#39;s</span>
+<span class="sd">        1998 paper on efficient backprop.</span>
+
+<span class="sd">        Uses the first ``n_items`` data points.&quot;&quot;&quot;</span>
+        <span class="n">covariances</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">n_items</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="n">n_items</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">covariances</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="DatasetStats.pairwise_feature_matrix"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.DatasetStats.pairwise_feature_matrix">[docs]</a>    <span class="k">def</span> <span class="nf">pairwise_feature_matrix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">fn</span><span class="p">):</span>
+        <span class="n">pairwise_grid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">feature_grid</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">fn</span><span class="p">)</span>
+        <span class="n">pairwise_matrix</span> <span class="o">=</span> <span class="n">grid2sym_matrix</span><span class="p">(</span><span class="n">pairwise_grid</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">pairwise_matrix</span>
+
+
+
+
+
+
+
+<span class="c">##############################################################################</span>
+
+
+</div></div>
+<div class="viewcode-block" id="do_stats_init"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.do_stats_init">[docs]</a><span class="k">def</span> <span class="nf">do_stats_init</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">dataset</span><span class="p">):</span>
+    <span class="n">stats</span> <span class="o">=</span> <span class="n">DatasetStats</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">sample_n</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">sample</span><span class="p">)</span>  <span class="c"># Takes LONG.</span>
+    <span class="k">return</span> <span class="n">stats</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Executing dataset_stats.py...&#39;</span><span class="p">)</span>
+
+    <span class="n">loader</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="c"># Loading and/or computing</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">load</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">text</span><span class="p">:</span>
+            <span class="n">wrapper_dataset</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load_text</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">dataset</span><span class="p">)</span>
+            <span class="n">dataset</span> <span class="o">=</span> <span class="n">wrapper_dataset</span><span class="o">.</span><span class="n">data</span>
+            <span class="n">vtcorp</span> <span class="o">=</span> <span class="n">wrapper_dataset</span><span class="o">.</span><span class="n">vtcorp</span>
+            <span class="k">print</span> <span class="s">&#39;Dimension of underlying text data: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">dimension</span><span class="p">(</span><span class="n">vtcorp</span><span class="p">)</span>
+            <span class="k">print</span> <span class="s">&#39;Dimension of dataset: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">dataset</span><span class="o">.</span><span class="n">dim</span>
+            <span class="c"># The ShardedDataset, not the text-modality wrapper</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">dataset</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load_img</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">dataset</span><span class="p">)</span><span class="o">.</span><span class="n">data</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Loaded dataset: </span><span class="si">%d</span><span class="s"> items, dimension </span><span class="si">%d</span><span class="s">, shardsize </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">dataset</span><span class="p">),</span> <span class="n">dataset</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span> <span class="n">dataset</span><span class="o">.</span><span class="n">shardsize</span><span class="p">))</span>
+        <span class="n">report</span><span class="p">,</span> <span class="n">stats</span> <span class="o">=</span> <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">profile_run</span><span class="p">(</span><span class="n">do_stats_init</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">dataset</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">load</span><span class="p">)</span> <span class="k">as</span> <span class="n">input_handle</span><span class="p">:</span>
+            <span class="n">stats</span> <span class="o">=</span> <span class="n">cPickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">input_handle</span><span class="p">)</span>
+
+    <span class="n">stats</span><span class="o">.</span><span class="n">report</span><span class="p">()</span>
+    <span class="c">#stats.raw_cell_histogram()</span>
+    <span class="c">#stats.cell_mass_histogram(n=100)</span>
+    <span class="c">#stats.cell_cumulative_mass(n=100)</span>
+
+    <span class="n">max_feature</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">stats</span><span class="o">.</span><span class="n">feature_totals</span><span class="p">)</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">stats</span><span class="o">.</span><span class="n">feature_totals</span><span class="p">))</span>
+    <span class="c">#stats.feature_histogram(0, stats.n_items_processed, whole_dataset=True)</span>
+    <span class="c">#stats.feature_histogram(max_feature,</span>
+    <span class="c">#                       stats.n_items_processed, whole_dataset=True)</span>
+
+    <span class="c">#stats.item_histogram(0)</span>
+    <span class="c">#stats.item_histogram(3)</span>
+    <span class="c">#stats.item_histogram(117)</span>
+    <span class="c">#stats.feature_lecunn_covariances()</span>
+
+    <span class="c">#stats.nnz_histogram()</span>
+
+
+    <span class="n">inspected_features</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">([</span> <span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">stats</span><span class="o">.</span><span class="n">dataset_dim</span><span class="p">,</span>
+                                                      <span class="n">replace</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+                                  <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">)])</span>
+    <span class="c">#inspection_matrix = stats.pairwise_feature_matrix(inspected_features,</span>
+    <span class="c">#                                       safire.utils.matutils.maxn_sparse_rmse)</span>
+    <span class="c">#safire.utils.heatmap_matrix(inspection_matrix, &#39;MaxNormalized dataset RMSE&#39;)</span>
+    <span class="c">#pairwise_avg = numpy.average(inspection_matrix)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Sampling raw matrix...&#39;</span><span class="p">)</span>
+
+    <span class="n">n_raw_samples</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">dataset</span><span class="p">),</span> <span class="mi">1000</span><span class="p">)</span>
+    <span class="n">raw_matrix</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">stats</span><span class="o">.</span><span class="n">dataset</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">n_raw_samples</span><span class="p">])</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">activation_histogram</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Computing histogram of activations...&#39;</span><span class="p">)</span>
+        <span class="n">stats</span><span class="o">.</span><span class="n">rich_histogram</span><span class="p">(</span><span class="n">raw_matrix</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">n_bins</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+                             <span class="n">with_zero</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                             <span class="n">title</span><span class="o">=</span><span class="s">&#39;Feature activation histogram&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">average_activations</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Computing average activations...&#39;</span><span class="p">)</span>
+        <span class="n">feature_totals</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">stats</span><span class="o">.</span><span class="n">feature_totals</span><span class="p">)</span>
+        <span class="n">avg_feature_totals</span> <span class="o">=</span> <span class="n">feature_totals</span> <span class="o">/</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">feature_totals</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">avg_feature_totals</span><span class="p">))</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">avg_feature_totals</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;red&#39;</span><span class="p">,</span> <span class="n">histtype</span><span class="o">=</span><span class="s">&#39;step&#39;</span><span class="p">,</span>
+                 <span class="n">orientation</span><span class="o">=</span><span class="s">&#39;horizontal&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&#39;Sorted feature means&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">normalize_covariance</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Normalizing covariance...&#39;</span><span class="p">)</span>
+        <span class="n">covariances</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">raw_matrix</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="n">raw_matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="c">#print covariances[:10]</span>
+        <span class="n">scaled_raw_matrix</span> <span class="o">=</span> <span class="n">scale_to_unit_covariance</span><span class="p">(</span><span class="n">raw_matrix</span><span class="p">)</span>
+        <span class="n">scaled_covariances</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">scaled_raw_matrix</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="n">scaled_raw_matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">covariances</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;b&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">scaled_covariances</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;r&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+        <span class="c">#stats.feature_histogram(max_feature, n_bins=100, whole_dataset=True)</span>
+        <span class="c">#stats.rich_histogram(raw_matrix[:,max_feature], n_bins=100)</span>
+        <span class="c">#stats.rich_histogram(scaled_raw_matrix[:,max_feature], n_bins=100)</span>
+
+        <span class="c">#stats.rich_histogram(raw_matrix[:,0], n_bins=100)</span>
+        <span class="c">#stats.rich_histogram(scaled_raw_matrix[:,0], n_bins=100)</span>
+
+        <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">heatmap_matrix</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">absolute</span><span class="p">(</span><span class="n">scaled_raw_matrix</span><span class="p">),</span>
+                                    <span class="n">title</span><span class="o">=</span><span class="s">&#39;UCov. dataset heatmap&#39;</span><span class="p">,</span>
+                                    <span class="n">with_average</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                                    <span class="n">colormap</span><span class="o">=</span><span class="s">&#39;afmhot&#39;</span><span class="p">,</span>
+                                    <span class="n">vmin</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="n">stats</span><span class="o">.</span><span class="n">maximum</span><span class="p">)</span>
+
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">raw</span><span class="p">:</span>
+        <span class="n">safire</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">heatmap_matrix</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">absolute</span><span class="p">(</span><span class="n">raw_matrix</span><span class="p">),</span>
+                                    <span class="n">title</span><span class="o">=</span><span class="s">&#39;Dataset heatmap&#39;</span><span class="p">,</span>
+                                    <span class="n">with_average</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                                    <span class="n">colormap</span><span class="o">=</span><span class="s">&#39;afmhot&#39;</span><span class="p">,</span>
+                                    <span class="n">vmin</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="n">stats</span><span class="o">.</span><span class="n">maximum</span><span class="p">)</span>
+
+        <span class="n">stats</span><span class="o">.</span><span class="n">rich_histogram</span><span class="p">(</span><span class="n">raw_matrix</span><span class="o">.</span><span class="n">ravel</span><span class="p">())</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">correlation</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Computing correlation...&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">normalize_covariance</span><span class="p">:</span>
+            <span class="n">corrcoef_matrix</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">corrcoef</span><span class="p">(</span><span class="n">scaled_raw_matrix</span><span class="p">,</span> <span class="n">rowvar</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">corrcoef_matrix</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">corrcoef</span><span class="p">(</span><span class="n">raw_matrix</span><span class="p">,</span> <span class="n">rowvar</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="k">print</span> <span class="s">&#39;Average correlation: </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">numpy</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">corrcoef_matrix</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">facecolor</span><span class="o">=</span><span class="s">&#39;white&#39;</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="mi">6</span><span class="p">))</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">pcolormesh</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">absolute</span><span class="p">(</span><span class="n">corrcoef_matrix</span><span class="p">),</span>
+                       <span class="c">#title=&#39;Pearson C.Coef. heatmap&#39;,</span>
+                       <span class="n">cmap</span><span class="o">=</span><span class="s">&#39;afmhot&#39;</span><span class="p">,</span>
+                       <span class="n">vmin</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">()</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span><span class="n">corrcoef_matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]])</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span><span class="n">corrcoef_matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">tanh</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Plotting tanh transformation...&#39;</span><span class="p">)</span>
+        <span class="n">tanh_matrix</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">raw_matrix</span> <span class="o">/</span> <span class="n">args</span><span class="o">.</span><span class="n">tanh</span><span class="p">)</span>
+        <span class="n">stats</span><span class="o">.</span><span class="n">rich_histogram</span><span class="p">(</span><span class="n">tanh_matrix</span><span class="p">,</span> <span class="n">n_bins</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&#39;Tanh matrix histogram.&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">hyper</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Plotting hyperbolic transformation...&#39;</span><span class="p">)</span>
+        <span class="n">hyp_matrix</span> <span class="o">=</span> <span class="n">raw_matrix</span> <span class="o">/</span> <span class="p">(</span><span class="n">raw_matrix</span> <span class="o">+</span> <span class="n">args</span><span class="o">.</span><span class="n">hyper</span><span class="p">)</span>
+        <span class="n">stats</span><span class="o">.</span><span class="n">rich_histogram</span><span class="p">(</span><span class="n">hyp_matrix</span><span class="p">,</span> <span class="n">n_bins</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&#39;x/(1+x) matrix histogram.&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">sparsity</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Computing sparsity...&#39;</span><span class="p">)</span>
+        <span class="c"># One entry per feature, counts how many non-zero elements are there</span>
+        <span class="c"># in each column of the raw matrix.</span>
+        <span class="n">num_nnz</span>  <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">array</span><span class="p">([</span> <span class="nb">len</span><span class="p">([</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">raw_matrix</span><span class="p">[:,</span><span class="n">f</span><span class="p">]</span> <span class="k">if</span> <span class="n">f</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">])</span>
+                                  <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">raw_matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="p">],</span>
+                               <span class="n">dtype</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+        <span class="n">p_nnz</span> <span class="o">=</span> <span class="n">num_nnz</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">raw_matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">p_nnz</span><span class="p">))</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">p_nnz</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">histtype</span><span class="o">=</span><span class="s">&#39;stepped&#39;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&#39;r&#39;</span><span class="p">,</span>
+                 <span class="n">orientation</span><span class="o">=</span><span class="s">&#39;horizontal&#39;</span><span class="p">)</span>
+
+
+    <span class="c">#print &#39;Pairwise average for %d random features: %f&#39; % (len(inspected_features),</span>
+    <span class="c">#                                                       pairwise_avg)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">save</span><span class="p">:</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">save</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">output_handle</span><span class="p">:</span>
+            <span class="n">cPickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">stats</span><span class="p">,</span> <span class="n">output_handle</span><span class="p">,</span> <span class="n">protocol</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Exiting dataset_stats.py.&#39;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="build_argument_parser"><a class="viewcode-back" href="../../scripts.dataset_stats.html#scripts.dataset_stats.build_argument_parser">[docs]</a><span class="k">def</span> <span class="nf">build_argument_parser</span><span class="p">():</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="n">__doc__</span><span class="p">,</span> <span class="n">add_help</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                    <span class="n">formatter_class</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">RawDescriptionHelpFormatter</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-r&#39;</span><span class="p">,</span> <span class="s">&#39;--root&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The root dataset directory, passed to Loader.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-n&#39;</span><span class="p">,</span> <span class="s">&#39;--name&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The name passed to Loader.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-d&#39;</span><span class="p">,</span> <span class="s">&#39;--dataset&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The dataset infix.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--text&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Is the dataset a text dataset? If not set, &#39;</span>
+                             <span class="s">&#39;assumes image dataset.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--sample&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If the dataset is large, we may just take a &#39;</span>
+                             <span class="s">&#39;sample of this size from it.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--average_activations&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Plot sorted average activations of neurons &#39;</span>
+                             <span class="s">&#39;&amp; histogram.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--activation_histogram&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Plot a rich histogram of activations.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--raw&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Plot a heatmap of the raw dataset.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--correlation&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Plot a heatmap of feature correlation.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--normalize_covariance&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If true, normalizes sample LeCunn covariance and&#39;</span>
+                             <span class="s">&#39; plots a the 0th and max-mean &#39;</span>
+                             <span class="s">&#39;feature hitograms before and after scaling..&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--tanh&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Squish sample through tanh, plot histogram.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--hyper&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Squish sample through x/(1+x), plot histogram.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--sparsity&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Computes average number of non-zero elements per&#39;</span>
+                             <span class="s">&#39; feature.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-s&#39;</span><span class="p">,</span> <span class="s">&#39;--save&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Pickle the stats object to this file.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-l&#39;</span><span class="p">,</span> <span class="s">&#39;--load&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Unpickle the stats object from this file instead&#39;</span>
+                             <span class="s">&#39; of computing the stats from the dataset.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-v&#39;</span><span class="p">,</span> <span class="s">&#39;--verbose&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on INFO logging messages.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--debug&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on DEBUG logging messages. (May get very &#39;</span>
+                             <span class="s">&#39;verbose.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">parser</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">build_argument_parser</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+    <span class="n">main</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

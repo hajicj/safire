@@ -1,0 +1,691 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.multimodal_dataset &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.data.multimodal_dataset</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+<span class="kn">import</span> <span class="nn">operator</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">gensim.corpora</span> <span class="kn">import</span> <span class="n">MmCorpus</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+
+<span class="kn">import</span> <span class="nn">theano</span>
+
+<span class="kn">from</span> <span class="nn">gensim</span> <span class="kn">import</span> <span class="n">matutils</span>
+<span class="c">#from gensim.corpora.indexedcorpus import IndexedCorpus</span>
+
+<span class="kn">import</span> <span class="nn">utils</span> <span class="kn">as</span> <span class="nn">safutils</span>
+<span class="c">#from .dataset import Dataset</span>
+<span class="kn">from</span> <span class="nn">.supervised_dataset</span> <span class="kn">import</span> <span class="n">SupervisedDataset</span>
+<span class="c">#from vtextcorpus import VTextCorpus</span>
+<span class="c">#from .corpus_dataset import UnsupervisedCorpusDataset</span>
+<span class="kn">from</span> <span class="nn">.corpus_dataset</span> <span class="kn">import</span> <span class="n">UnsupervisedVTextCorpusDataset</span>
+<span class="kn">from</span> <span class="nn">.corpus_dataset</span> <span class="kn">import</span> <span class="n">UnsupervisedImagenetCorpusDataset</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="MultimodalDataset"><a class="viewcode-back" href="../../../safire.data.multimodal_dataset.html#safire.data.multimodal_dataset.MultimodalDataset">[docs]</a><span class="k">class</span> <span class="nc">MultimodalDataset</span><span class="p">(</span><span class="n">SupervisedDataset</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;The MultimodalCorpus is capable of reading both text and image data.</span>
+<span class="sd">    The image data is assumed to be the output of ImageetCorpus: 4096-dim</span>
+<span class="sd">    vectors of 32-bit floats. The text data is assumed to be a combined</span>
+<span class="sd">    VTextCorpus and MmCorpus - see :class:`UnsupervisedVTextCorpusDataset`.</span>
+
+<span class="sd">    The dataset will assume that the text and image corpora are aligned - that</span>
+<span class="sd">    the ``i``-th item in the text corpus corresponds to the ``i``-th item in</span>
+<span class="sd">    the image corpus, unless a textdoc2imdoc mapping is given. !!!This</span>
+<span class="sd">    default behavior is soon to be deprecated!!!</span>
+
+<span class="sd">    If the textdoc2imdoc mapping is given, the corpus will simulate being</span>
+<span class="sd">    aligned. **The indexing of the MultimodalDataset is based on the text</span>
+<span class="sd">    modality:** all images belonging to the same text will be retrieved</span>
+<span class="sd">    consecutively.</span>
+
+<span class="sd">    Because the text2im mapping means that the datasets will not be loaded in</span>
+<span class="sd">    order, potentially a **lot** of shard-switching may happen on iterating.</span>
+<span class="sd">    This is severly debillitating to performance. Therefore, two measures are</span>
+<span class="sd">    taken:</span>
+
+<span class="sd">    * On initialization, the text and images are sorted by shard index (texts</span>
+<span class="sd">      first, images second).</span>
+<span class="sd">    * When batches are retrieved, they are cached. The cache currently assumes</span>
+<span class="sd">      the texts fit into memory - there is no limit on cache size. On each mode</span>
+<span class="sd">      change, the cache is cleared. Only batches that correspond to the current</span>
+<span class="sd">      *input* mode are cached. (The necessity to cache is currently only felt</span>
+<span class="sd">      with the multimodal mode, as that is where shard-jumping can happen.)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text_mm_filename</span><span class="p">,</span> <span class="n">text_vt_filename</span><span class="p">,</span>
+                 <span class="n">img_mm_filename</span><span class="p">,</span> <span class="n">img_ic_filename</span><span class="p">,</span> <span class="n">dim_text</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">dim_img</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">aligned</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">textdoc2imdoc</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">test_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">devel_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">shared</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                 <span class="n">text_serializer</span><span class="o">=</span><span class="n">MmCorpus</span><span class="p">,</span> <span class="n">img_serializer</span><span class="o">=</span><span class="n">MmCorpus</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the dataset - loads corpora, sets devel and test offset.</span>
+<span class="sd">        Retrieving a batch from the dataset means reading the batch from the</span>
+<span class="sd">        corpus and converting it to a dense representation.</span>
+
+<span class="sd">        Also loads the specified VTextCorpus and uses it to determine the</span>
+<span class="sd">        output dimension (as the Dictionary size).</span>
+
+<span class="sd">        :type text_mm_filename: str</span>
+<span class="sd">        :param mm_corpus_filename: Where to find the *.mmcorp file previously</span>
+<span class="sd">            created by ``gensim.corpora.MmCorpus.serialize(fname, corpus)``</span>
+<span class="sd">            called on a VTextCorpus.</span>
+
+<span class="sd">        :type text_vt_filename: str</span>
+<span class="sd">        :param text_vt_filename: Where to find the *.vtcorp file previously</span>
+<span class="sd">            created by ``corpus.save(text_vt_filename)`` where ``corpus`` is</span>
+<span class="sd">            the VTextCorpus serialized to ``text_mm_filename``.</span>
+
+<span class="sd">        :type img_mm_filename: str</span>
+<span class="sd">        :param img_mm_filename: Where to find the *.mmcorp file previously</span>
+<span class="sd">            created by ``gensim.corpora.MmCorpus.serialize(fname, corpus)``</span>
+<span class="sd">            called on an ImagenetCorpus.</span>
+
+<span class="sd">        :type img_ic_filename: str</span>
+<span class="sd">        :param img_ic_filename: Where to find the *.iccorp file previously</span>
+<span class="sd">            created by ``corpus.save(img_ic_filename)`` where ``corpus`` is</span>
+<span class="sd">            the ImagenetCorpus serialized to ``img_mm_filename``.</span>
+
+<span class="sd">        :type dim_text: int</span>
+<span class="sd">        :param dim: The desired output *y* dimension of the text mode: the size</span>
+<span class="sd">            of the word vector; number of output columns. This should fit with</span>
+<span class="sd">            the dimension of the corpus dictionary. (Future plan: implement</span>
+<span class="sd">            option to truncate to first ``dim`` words.)</span>
+
+<span class="sd">        :type dim_img: int</span>
+<span class="sd">        :param dim_img: Analogous for images: number of image vector output</span>
+<span class="sd">            dimensions.</span>
+
+<span class="sd">        :type aligned: bool</span>
+<span class="sd">        :param aligned: Should we assume that the corpora are aligned? If set</span>
+<span class="sd">            to True (default), will disregard the ``textdoc2imdoc`` parameter</span>
+<span class="sd">            and assume that the text and image corpus are aligned one-to-one:</span>
+<span class="sd">            the ``i``-th item in one corresponds to the ``i``-th item in the</span>
+<span class="sd">            other.</span>
+
+<span class="sd">        :type textdoc2imdoc: str</span>
+<span class="sd">        :param textdoc2imdoc: The filename for the map of text document IDs</span>
+<span class="sd">            to image document IDs. If not supplied, aligned corpora are</span>
+<span class="sd">            assumed (i.e. 1st text corresponds to 1st image).</span>
+
+<span class="sd">        :type test_p: float</span>
+<span class="sd">        :param test_p: The proportion of documents in the corpus</span>
+<span class="sd">            used for the test set. The documents will be taken from the end</span>
+<span class="sd">            of the corpus.</span>
+
+<span class="sd">        :type devel_p: float</span>
+<span class="sd">        :param devel_p: The proportion of documents in the corpus</span>
+<span class="sd">            used for the development set. The documents will be taken</span>
+<span class="sd">            from between the training and test sets.</span>
+
+<span class="sd">        :type mode: int</span>
+<span class="sd">        :param mode: Set what kind of dataset the dataset should act like. One</span>
+<span class="sd">            of ``0``, ``1`` or ``2``.</span>
+
+<span class="sd">            * &#39;0&#39; for unsupervised action (returns combined batches of both</span>
+<span class="sd">              text and image features),</span>
+
+<span class="sd">            * ``1`` for text as ``X`` (input), images as ``y`` (response),</span>
+
+<span class="sd">            * ``2`` for images as ``X`` (input) and text as ``y`` (response).</span>
+
+<span class="sd">            Default setting is ``0``. Note that when mode is ``0``, it is</span>
+<span class="sd">            assumed that the model is run in a completely unsupervised</span>
+<span class="sd">            setting, so that the n_out parameter will be supplied to a setup</span>
+<span class="sd">            function of a model class separately.</span>
+
+<span class="sd">        :type shared: False</span>
+<span class="sd">        :param shared: If set to ``True``, will output batches as Theano shared</span>
+<span class="sd">            variables. (Default: ``True``)</span>
+
+<span class="sd">        :type text_serializer: class froom gensim.interfaces.CorpusABC</span>
+<span class="sd">        :param text_serializer: The corpus class that should be used to</span>
+<span class="sd">            de-serialize the text corpus data. Has to be the same as the one</span>
+<span class="sd">            used to build the data.</span>
+
+<span class="sd">        :type img_serializer: class froom gensim.interfaces.CorpusABC</span>
+<span class="sd">        :param img_serializer: The corpus class that should be used to</span>
+<span class="sd">            de-serialize the image corpus data. Has to be the same as the one</span>
+<span class="sd">            used to build the data.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text</span> <span class="o">=</span> <span class="n">UnsupervisedVTextCorpusDataset</span><span class="p">(</span><span class="n">text_mm_filename</span><span class="p">,</span>
+                                                   <span class="n">text_vt_filename</span><span class="p">,</span>
+                                                   <span class="n">dim_text</span><span class="p">,</span> <span class="n">test_p</span><span class="p">,</span> <span class="n">devel_p</span><span class="p">,</span>
+                                                   <span class="n">serializer</span><span class="o">=</span><span class="n">text_serializer</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">dim</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">img</span> <span class="o">=</span> <span class="n">UnsupervisedImagenetCorpusDataset</span><span class="p">(</span><span class="n">img_mm_filename</span><span class="p">,</span>
+                                                   <span class="n">img_ic_filename</span><span class="p">,</span>
+                                                   <span class="n">dim_img</span><span class="p">,</span> <span class="n">test_p</span><span class="p">,</span> <span class="n">devel_p</span><span class="p">,</span>
+                                                   <span class="n">serializer</span><span class="o">=</span><span class="n">img_serializer</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim_img</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">dim</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_mode</span><span class="p">(</span><span class="n">mode</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aligned</span> <span class="o">=</span> <span class="n">aligned</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">aligned</span><span class="p">:</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Text and image corpora are not of the same &#39;</span><span class="o">+</span>
+                                 <span class="s">&#39;length (text: </span><span class="si">%d</span><span class="s">, images: </span><span class="si">%d</span><span class="s">)&#39;</span>
+                                 <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="p">)))</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">_devel_doc_offset</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Text and image _devel_doc_offsets do not&#39;</span><span class="o">+</span>
+                             <span class="s">&#39; match! Are the corpora of the same length? &#39;</span>
+                             <span class="s">&#39;(text: </span><span class="si">%d</span><span class="s">, image: </span><span class="si">%d</span><span class="s">).&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">,</span>
+                                               <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">))</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">_devel_doc_offset</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">_test_doc_offset</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Text and image _devel_doc_offsets do not&#39;</span><span class="o">+</span>
+                             <span class="s">&#39; match! Are the corpora of the same length? &#39;</span>
+                             <span class="s">&#39;(text: </span><span class="si">%d</span><span class="s">, image: </span><span class="si">%d</span><span class="s">).&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">_test_doc_offset</span><span class="p">,</span>
+                                               <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">_test_doc_offset</span><span class="p">))</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_text2im_list</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="p">)),</span>
+                                      <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="p">)))</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">text2im</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_textdoc2imdoc_map</span><span class="p">(</span><span class="n">textdoc2imdoc</span><span class="p">)</span>
+            <span class="n">text2im_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_generate_text2im_list</span><span class="p">(</span><span class="n">text2im</span><span class="p">))</span>
+            <span class="c">#opt_t2i_list = self._optimalize_ordering_by_shardidx(text2im_list)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_text2im_list</span> <span class="o">=</span> <span class="n">text2im_list</span>
+
+            <span class="c"># set devel and test offsets</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+                                                    <span class="o">-</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">*</span> <span class="n">test_p</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span>
+                                                     <span class="o">-</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+                                                               <span class="o">*</span> <span class="n">devel_p</span><span class="p">)))</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">text2im_map</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_text2im_list</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">text2im_map</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">text2im_map</span><span class="p">[</span><span class="n">t</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">text2im_map</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="c"># Should we return shared variables?</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">shared</span> <span class="o">=</span> <span class="n">shared</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">cache</span> <span class="o">=</span> <span class="p">{}</span> <span class="c"># Caches some requested batches. Assumes the dataset</span>
+                        <span class="c"># will be iterated over, so when the cache is full,</span>
+                        <span class="c"># simply doesn&#39;t throw away anything.</span>
+                        <span class="c"># Cache keys are tuples (b_index, b_size).</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cache_size</span> <span class="o">=</span> <span class="mi">0</span>
+
+
+<div class="viewcode-block" id="MultimodalDataset.n_train_batches"><a class="viewcode-back" href="../../../safire.data.multimodal_dataset.html#safire.data.multimodal_dataset.MultimodalDataset.n_train_batches">[docs]</a>    <span class="k">def</span> <span class="nf">n_train_batches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the number of training batches of the given batch size.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span> <span class="o">/</span> <span class="n">batch_size</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="MultimodalDataset.n_devel_batches"><a class="viewcode-back" href="../../../safire.data.multimodal_dataset.html#safire.data.multimodal_dataset.MultimodalDataset.n_devel_batches">[docs]</a>    <span class="k">def</span> <span class="nf">n_devel_batches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the number of devel batches of the given batch size.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">floor</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">)</span>
+                           <span class="o">/</span> <span class="n">batch_size</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="MultimodalDataset.n_test_batches"><a class="viewcode-back" href="../../../safire.data.multimodal_dataset.html#safire.data.multimodal_dataset.MultimodalDataset.n_test_batches">[docs]</a>    <span class="k">def</span> <span class="nf">n_test_batches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the number of devel batches of the given batch size.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">floor</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span><span class="p">)</span>
+                           <span class="o">/</span> <span class="n">batch_size</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="MultimodalDataset.set_mode"><a class="viewcode-back" href="../../../safire.data.multimodal_dataset.html#safire.data.multimodal_dataset.MultimodalDataset.set_mode">[docs]</a>    <span class="k">def</span> <span class="nf">set_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mode</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Controls dataset behavior - what kind of dataset the dataset should</span>
+<span class="sd">        act like on batch requests. Sets n_in and n_out accordingly.</span>
+
+<span class="sd">        :type mode: int</span>
+<span class="sd">        :param mode: Set what kind of dataset the dataset should act like. One</span>
+<span class="sd">            of ``0``, ``1`` or ``2``.</span>
+
+<span class="sd">            * &#39;0&#39; for unsupervised action (returns combined batches of both</span>
+<span class="sd">              text and image features),</span>
+
+<span class="sd">            * ``1`` for text as ``X`` (input), images as ``y`` (response),</span>
+
+<span class="sd">            * ``2`` for images as ``X`` (input) and text as ``y`` (response).</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">mode</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid mode set: </span><span class="si">%s</span><span class="s"> (use one of 0, 1, 2)&#39;</span> <span class="o">%</span> <span class="n">mode</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">dim</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">dim</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span> <span class="o">=</span> <span class="bp">None</span>    <span class="c"># This reflects the situation that the model</span>
+                                 <span class="c"># is fully unsupervised - the output dimension</span>
+                                 <span class="c"># is left to the model initialization.</span>
+                                 <span class="c"># The unsupervised model setup class method</span>
+                                 <span class="c"># takes care of it.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache_text</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache_img</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache_multimodal</span> <span class="o">=</span> <span class="bp">True</span>
+
+        <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">dim</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">dim</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache_text</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache_img</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache_multimodal</span> <span class="o">=</span> <span class="bp">False</span>
+
+        <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">dim</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">dim</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache_text</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache_img</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache_multimodal</span> <span class="o">=</span> <span class="bp">False</span>
+
+        <span class="c"># Invalidates cache.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cache</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">=</span> <span class="n">mode</span>
+</div>
+<div class="viewcode-block" id="MultimodalDataset.textno2imno"><a class="viewcode-back" href="../../../safire.data.multimodal_dataset.html#safire.data.multimodal_dataset.MultimodalDataset.textno2imno">[docs]</a>    <span class="k">def</span> <span class="nf">textno2imno</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">textno</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Finds the appropriate image numbers for the given text number.</span>
+<span class="sd">        Returns a list.&quot;&quot;&quot;</span>
+        <span class="n">tid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">textno</span><span class="p">]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">iids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text2im_map</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span>
+            <span class="n">imnos</span> <span class="o">=</span> <span class="p">[</span> <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">icorp</span><span class="o">.</span><span class="n">doc2id</span><span class="p">[</span><span class="n">iid</span><span class="p">]</span> <span class="k">for</span> <span class="n">iid</span> <span class="ow">in</span> <span class="n">iids</span> <span class="p">]</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Missed key in textno2imno.&#39;</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Some available keys in t2i map:</span><span class="se">\n</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">text2im_map</span><span class="o">.</span><span class="n">keys</span><span class="p">()[:</span><span class="mi">10</span><span class="p">]))</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Total available keys in t2i map: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">text2im_map</span><span class="p">))</span>
+            <span class="k">raise</span>
+
+        <span class="k">return</span> <span class="n">imnos</span>
+</div>
+    <span class="k">def</span> <span class="nf">_build_text_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Given the first index of a batch and batch size, builds the batch</span>
+<span class="sd">        from the text corpus.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_text</span> <span class="ow">and</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Retrieving from text cache: (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">[(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)]</span>
+
+        <span class="n">result</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">dim</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Building text batch with lbound </span><span class="si">%i</span><span class="s">, size </span><span class="si">%i</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span>
+                                                                   <span class="n">batch_size</span><span class="p">))</span>
+        
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">docno</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">xrange</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">lbound</span> <span class="o">+</span> <span class="n">batch_size</span><span class="p">)):</span>
+            <span class="n">text_doc</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_text2im_list</span><span class="p">[</span><span class="n">docno</span><span class="p">]</span>
+            <span class="n">text_idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">doc2id</span><span class="p">[</span><span class="n">text_doc</span><span class="p">]</span>
+
+            <span class="c">#doc = self.text[text_idx]</span>
+            <span class="c"># Rewritten corpus_dataset classes to dense __getitem__ retval</span>
+            <span class="n">result</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="p">[</span><span class="n">text_idx</span><span class="p">]</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Built text batch: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">result</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_text</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_full</span><span class="p">()</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Adding to text cache: (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache_size</span> <span class="o">+=</span> <span class="n">result</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">result</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">[(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)]</span> <span class="o">=</span> <span class="n">result</span>
+
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="nf">_build_image_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Given the first index of a batch and batch size, builds the batch</span>
+<span class="sd">        from the image corpus.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_img</span> <span class="ow">and</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Retrieving from img. cache: (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">[(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)]</span>
+
+        <span class="n">result</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">dim</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">docno</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">xrange</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">lbound</span> <span class="o">+</span> <span class="n">batch_size</span><span class="p">)):</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">img_doc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_text2im_list</span><span class="p">[</span><span class="n">docno</span><span class="p">]</span>
+            <span class="n">img_idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">icorp</span><span class="o">.</span><span class="n">doc2id</span><span class="p">[</span><span class="n">img_doc</span><span class="p">]</span>
+
+            <span class="c">#doc = self.img[img_idx]</span>
+            <span class="c"># Rewrote corpus_dataset.py classes do dense __getitem__ retval.</span>
+            <span class="n">result</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="p">[</span><span class="n">img_idx</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_img</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_full</span><span class="p">()</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache_size</span> <span class="o">+=</span> <span class="n">result</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">result</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Adding to img. cache: (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">[(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)]</span> <span class="o">=</span> <span class="n">result</span>
+
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="nf">_build_multimodal_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span>
+                                <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">,</span>
+                                <span class="n">text_first</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Given the first index of a batch and batch size, builds the batch</span>
+<span class="sd">        combined from both the text and image corpora.</span>
+
+<span class="sd">        :type text_first: bool</span>
+<span class="sd">        :param text_first: If set to True, the text dimensions will come before</span>
+<span class="sd">            the image dimensions in the ordering of the output columns. If set</span>
+<span class="sd">            to False, the image dimensions will come first. This needs to be</span>
+<span class="sd">            kept consistent throughout the existence of the dataset! Otherwise,</span>
+<span class="sd">            results will be garbage.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_multimodal</span> <span class="ow">and</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Retrieving from mm. cache: (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">))</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">[(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)]</span>
+
+        <span class="n">result</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">dim</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">dim</span><span class="p">),</span>
+                             <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+
+        <span class="n">text_batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_text_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+        <span class="n">img_batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_image_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">text_first</span><span class="p">:</span>
+            <span class="n">result</span><span class="p">[:,:</span><span class="n">text_batch</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="n">text_batch</span>
+            <span class="n">result</span><span class="p">[:,</span><span class="n">text_batch</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:]</span> <span class="o">=</span> <span class="n">img_batch</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">result</span><span class="p">[:,:</span><span class="n">img_batch</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="o">=</span> <span class="n">img_batch</span>
+            <span class="n">result</span><span class="p">[:,</span><span class="n">img_batch</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]:]</span> <span class="o">=</span> <span class="n">text_batch</span>
+
+        <span class="c"># for idx, docno in enumerate(xrange(lbound, lbound + batch_size)):</span>
+        <span class="c">#     # Retrieve corresponding documents from the indexed corpus</span>
+        <span class="c">#     text_doc, img_doc = self.__text2im_list[docno]</span>
+        <span class="c">#</span>
+        <span class="c">#     text_idx = self.text.vtcorp.doc2id[text_doc]</span>
+        <span class="c">#     text = self.text[text_idx]</span>
+        <span class="c">#</span>
+        <span class="c">#     img_idx = self.img.icorp.doc2id[img_doc]</span>
+        <span class="c">#     img = self.img[img_idx]</span>
+        <span class="c">#</span>
+        <span class="c">#     doc = None</span>
+        <span class="c">#     if text_first:</span>
+        <span class="c">#         doc = safutils.concat_sparse(text, img, self.text.dim,</span>
+        <span class="c">#                                      self.img.dim)</span>
+        <span class="c">#     else:</span>
+        <span class="c">#         doc = safutils.concat_sparse(img, text, self.img.dim,</span>
+        <span class="c">#                                      self.text.dim)</span>
+        <span class="c">#</span>
+        <span class="c">#     result[idx, :] = matutils.sparse2full(doc,</span>
+        <span class="c">#                                           self.text.dim + self.img.dim)</span>
+
+        <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_multimodal</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_full</span><span class="p">()</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache_size</span> <span class="o">+=</span> <span class="n">result</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">result</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Adding to mm. cache: (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">[(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)]</span> <span class="o">=</span> <span class="n">result</span>
+
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="nf">_build_input_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Builds a batch of text or images based on the ``mode`` attribute.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Building text batch as input batch.&#39;</span><span class="p">)</span>
+            <span class="n">output_batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_text_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Built text batch as input batch: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">output_batch</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">output_batch</span>
+        
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_image_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+        
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="c">#logging.warn(&#39;Should not use _build_input_batch when unsupervised&#39;+</span>
+            <span class="c">#             &#39; mode (0) is set.&#39;)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_multimodal_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid mode set (</span><span class="si">%s</span><span class="s">)!&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_build_response_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span>
+                              <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Builds a batch of text or images based on the ``mode`` attribute.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_text_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_image_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Should not use _build_response_batch when unsuper&#39;</span><span class="o">+</span>
+                         <span class="s">&#39;vised mode (0) is set.&#39;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_multimodal_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid mode set (</span><span class="si">%s</span><span class="s">)!&#39;</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">subset</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span>
+                   <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieves a segment of the data, specified by the arguments.</span>
+<span class="sd">        The available batch kinds are governed by the ``mode`` attribute.</span>
+
+<span class="sd">        :type subset: str</span>
+<span class="sd">        :param subset: One of ``&#39;train&#39;``, ``&#39;devel&#39;`` or ``&#39;test&#39;``.</span>
+<span class="sd">            Specifies which subset of the dataset should be used.</span>
+
+<span class="sd">        :type kind: str</span>
+<span class="sd">        :param kind: One of ``&#39;X&#39;`` or ``&#39;y&#39;``. Specifies whether we want</span>
+<span class="sd">            the inputs or the response.</span>
+
+<span class="sd">        :type b_index: int</span>
+<span class="sd">        :param b_index: The order of the batch in the dataset (0 for first,</span>
+<span class="sd">            1 for second, etc.)</span>
+
+<span class="sd">        :type b_size: int</span>
+<span class="sd">        :param b_size: Size of one batch.</span>
+
+<span class="sd">        :raises: ValueError</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c"># When running in a model, b_index will be a Theano tensor.</span>
+        <span class="n">lbound</span> <span class="o">=</span> <span class="n">b_index</span> <span class="o">*</span> <span class="n">b_size</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Types: lbound </span><span class="si">%s</span><span class="s">, b_index </span><span class="si">%s</span><span class="s">, b_size </span><span class="si">%s</span><span class="s">, doff </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="nb">type</span><span class="p">(</span><span class="n">lbound</span><span class="p">),</span> <span class="nb">type</span><span class="p">(</span><span class="n">b_index</span><span class="p">),</span> <span class="nb">type</span><span class="p">(</span><span class="n">b_size</span><span class="p">),</span>
+            <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">)</span>
+        <span class="p">))</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Batch dtype: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">dtype</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Batch subset: </span><span class="si">%s</span><span class="s">, kind: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">subset</span><span class="p">,</span> <span class="n">kind</span><span class="p">))</span>
+
+        <span class="c"># To make the sanity checks run even when b_index is a Theano var,</span>
+        <span class="c"># we need to make some type adjustments...</span>
+
+        <span class="c"># The theano.tensor.var name is overriden as a function, so we cannot</span>
+        <span class="c"># check it using isinstance(lbound, theano.tensor.var.TensorVariable)</span>
+
+        <span class="c">#theano.config.compute_test_value = &#39;warn&#39;</span>
+        <span class="c">#lbound.tag.test_value(0.0)</span>
+
+        <span class="c">#logging.debug(&#39;Lbound value: %s&#39; % str(lbound.get_value()))</span>
+        <span class="n">output_batch</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="k">if</span> <span class="n">subset</span> <span class="o">==</span> <span class="s">&#39;train&#39;</span><span class="p">:</span>            
+            <span class="k">if</span> <span class="n">lbound</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Too high batch index and/or batch size; training dataset has only </span><span class="si">%d</span><span class="s"> documents.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">))</span>
+
+            <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;X&#39;</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Outputtting training X-batch.&#39;</span><span class="p">)</span>
+                <span class="n">output_batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_input_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Built training X-batch: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">output_batch</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;y&#39;</span><span class="p">:</span>
+                <span class="n">output_batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_response_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch kind specified: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">kind</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">subset</span> <span class="o">==</span> <span class="s">&#39;devel&#39;</span><span class="p">:</span>
+            <span class="n">lbound</span> <span class="o">=</span> <span class="n">lbound</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span>
+            <span class="k">if</span> <span class="n">lbound</span> <span class="o">+</span> <span class="n">b_size</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Too high batch index and/or batch size (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">); devel dataset has only </span><span class="si">%d</span><span class="s"> documents.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">))</span>
+
+            <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;X&#39;</span><span class="p">:</span>
+                <span class="n">output_batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_input_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;y&#39;</span><span class="p">:</span>
+                <span class="n">output_batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_response_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch kind specified: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">kind</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">subset</span> <span class="o">==</span> <span class="s">&#39;test&#39;</span><span class="p">:</span>
+            <span class="n">lbound</span> <span class="o">=</span> <span class="n">lbound</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span>
+            <span class="k">if</span> <span class="n">lbound</span> <span class="o">+</span> <span class="n">b_size</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Too high batch index and/or batch size (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">); testing dataset has only </span><span class="si">%d</span><span class="s"> documents.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span><span class="p">))</span>
+
+            <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;X&#39;</span><span class="p">:</span>
+                <span class="n">output_batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_input_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;y&#39;</span><span class="p">:</span>
+                <span class="n">output_batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_response_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch kind specified: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">kind</span><span class="p">)</span>
+
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch subset specified: </span><span class="si">%s</span><span class="s"> (datasets only supports </span><span class="se">\&#39;</span><span class="s">train</span><span class="se">\&#39;</span><span class="s">, </span><span class="se">\&#39;</span><span class="s">devel</span><span class="se">\&#39;</span><span class="s">, </span><span class="se">\&#39;</span><span class="s">test</span><span class="se">\&#39;</span><span class="s">).&#39;</span> <span class="o">%</span> <span class="n">subset</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">shared</span><span class="p">:</span>
+            <span class="n">output_batch</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">shared</span><span class="p">(</span><span class="n">output_batch</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">output_batch</span>
+
+    <span class="k">def</span> <span class="nf">_shared_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Given a numpy array, returns it as a Theano shared variable.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">theano</span><span class="o">.</span><span class="n">shared</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">,</span> <span class="n">borrow</span><span class="o">=</span><span class="n">borrow</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_parse_textdoc2imdoc_map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">textdoc2imdoc</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Given a file with tab-separated docname/imagename pairs, returns</span>
+<span class="sd">        a dict with docname keys and list of imagenames values.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">textdoc2imdoc</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+
+        <span class="n">t2i_map</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">textdoc2imdoc</span><span class="p">)</span> <span class="k">as</span> <span class="n">t2i_handle</span><span class="p">:</span>
+
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">t2i_handle</span><span class="p">):</span>
+                <span class="n">text</span><span class="p">,</span> <span class="n">img</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">text</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">t2i_map</span><span class="p">:</span>
+                    <span class="n">t2i_map</span><span class="p">[</span><span class="n">text</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">img</span><span class="p">]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">t2i_map</span><span class="p">[</span><span class="n">text</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">img</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">t2i_map</span>
+
+    <span class="k">def</span> <span class="nf">_generate_text2im_list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text2im</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Builds a list of text name / image name pairs that covers all</span>
+<span class="sd">        text-image pairs in the corpus. Expects the self.text2im attribute</span>
+<span class="sd">        to be filled by output of ``_parse_textdoc2imdoc_map()``.&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">text</span> <span class="ow">in</span> <span class="n">text2im</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">text2im</span><span class="p">[</span><span class="n">text</span><span class="p">]:</span>
+                <span class="k">yield</span> <span class="n">text</span><span class="p">,</span> <span class="n">image</span>
+
+    <span class="k">def</span> <span class="nf">_optimalize_ordering_by_shardidx</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text2im</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Sorts the text2im list so that it minimizes the number of calls</span>
+<span class="sd">        to load_shard.&quot;&quot;&quot;</span>
+        <span class="n">indexed_text2im</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">t_doc2id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">doc2id</span>
+        <span class="n">tdata</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">data</span>
+
+        <span class="n">i_doc2id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">icorp</span><span class="o">.</span><span class="n">doc2id</span>
+        <span class="n">idata</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">img</span><span class="o">.</span><span class="n">data</span>
+
+        <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">text2im</span><span class="p">:</span>
+            <span class="n">t_idx</span> <span class="o">=</span> <span class="n">t_doc2id</span><span class="p">[</span><span class="n">t</span><span class="p">]</span>
+            <span class="n">t_shidx</span> <span class="o">=</span> <span class="n">tdata</span><span class="o">.</span><span class="n">shard_by_offset</span><span class="p">(</span><span class="n">t_idx</span><span class="p">)</span>
+            <span class="n">i_idx</span> <span class="o">=</span> <span class="n">i_doc2id</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">i_shidx</span> <span class="o">=</span> <span class="n">idata</span><span class="o">.</span><span class="n">shard_by_offset</span><span class="p">(</span><span class="n">i_idx</span><span class="p">)</span>
+            <span class="n">indexed_text2im</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">t</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">t_idx</span><span class="p">,</span> <span class="n">i_idx</span><span class="p">))</span>
+
+        <span class="n">sorted_indexed_text2im</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">indexed_text2im</span><span class="p">,</span>
+                                        <span class="n">key</span><span class="o">=</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="n">sorted_text2im</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="n">sorted_indexed_text2im</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sorted_text2im</span>
+
+<div class="viewcode-block" id="MultimodalDataset.cache_full"><a class="viewcode-back" href="../../../safire.data.multimodal_dataset.html#safire.data.multimodal_dataset.MultimodalDataset.cache_full">[docs]</a>    <span class="k">def</span> <span class="nf">cache_full</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">False</span> <span class="c"># Currently assumes that everything fits into the cache.</span>
+</div>
+    <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_text2im_list</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

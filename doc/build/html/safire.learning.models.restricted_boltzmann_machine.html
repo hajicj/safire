@@ -1,0 +1,384 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.restricted_boltzmann_machine module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.learning.models.restricted_boltzmann_machine">
+<span id="safire-learning-models-restricted-boltzmann-machine-module"></span><h1>safire.learning.models.restricted_boltzmann_machine module<a class="headerlink" href="#module-safire.learning.models.restricted_boltzmann_machine" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine">
+<em class="property">class </em><tt class="descclassname">safire.learning.models.restricted_boltzmann_machine.</tt><tt class="descname">RestrictedBoltzmannMachine</tt><big>(</big><em>inputs</em>, <em>n_in</em>, <em>n_out=100</em>, <em>activation=&lt;theano.tensor.elemwise.Elemwise object at 0x000000000ACAB4A8&gt;</em>, <em>backward_activation=&lt;theano.tensor.elemwise.Elemwise object at 0x000000000ACAB4A8&gt;</em>, <em>W=None</em>, <em>b=None</em>, <em>b_hidden=None</em>, <em>b_visible=None</em>, <em>persistent=None</em>, <em>CD_k=1</em>, <em>CD_use_mean=True</em>, <em>sparsity_target=None</em>, <em>output_sparsity_target=None</em>, <em>numpy_rng=&lt;mtrand.RandomState object at 0x000000000BE2DAF8&gt;</em>, <em>L1_norm=0.0</em>, <em>L2_norm=0.0</em>, <em>bias_decay=0.0</em>, <em>entropy_loss=0.0</em>, <em>centering=False</em>, <em>prefer_extremes=None</em>, <em>noisy_input=None</em>, <em>theano_rng=None</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/restricted_boltzmann_machine.html#RestrictedBoltzmannMachine"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="safire.learning.models.base_unsupervised_model.html#safire.learning.models.base_unsupervised_model.BaseUnsupervisedModel" title="safire.learning.models.base_unsupervised_model.BaseUnsupervisedModel"><tt class="xref py py-class docutils literal"><span class="pre">safire.learning.models.base_unsupervised_model.BaseUnsupervisedModel</span></tt></a></p>
+<p>This class implements the Restricted Boltzmann Machine model.</p>
+<p>The RBM-derived models support <em>sampling</em>, both forward and backward.
+This is accompolished using the following methods:</p>
+<ul>
+<li><p class="first"><a class="reference internal" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_h_given_v" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_h_given_v"><tt class="xref py py-meth docutils literal"><span class="pre">sample_h_given_v()</span></tt></a> for forward sampling,</p>
+</li>
+<li><p class="first"><a class="reference internal" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_v_given_h" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_v_given_h"><tt class="xref py py-meth docutils literal"><span class="pre">sample_v_given_h()</span></tt></a> for backward sampling,</p>
+</li>
+<li><p class="first"><a class="reference internal" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_vhv" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_vhv"><tt class="xref py py-meth docutils literal"><span class="pre">sample_vhv()</span></tt></a> for getting an input sample for the given input,</p>
+</li>
+<li><dl class="first docutils">
+<dt><a class="reference internal" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_hvh" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_hvh"><tt class="xref py py-meth docutils literal"><span class="pre">sample_hvh()</span></tt></a> for getting a hidden sample for the given hidden</dt>
+<dd><p class="first last">state,</p>
+</dd>
+</dl>
+</li>
+<li><p class="first"><a class="reference internal" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.mean_h_given_v" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.mean_h_given_v"><tt class="xref py py-meth docutils literal"><span class="pre">mean_h_given_v()</span></tt></a> for forward expectation,</p>
+</li>
+<li><p class="first"><a class="reference internal" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.mean_v_given_h" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.mean_v_given_h"><tt class="xref py py-meth docutils literal"><span class="pre">mean_v_given_h()</span></tt></a> for backward expectation.</p>
+</li>
+</ul>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>Methods <tt class="docutils literal"><span class="pre">sample_vhv()</span></tt> and <tt class="docutils literal"><span class="pre">sample_hvh()</span></tt> implement sampling both ways:
+both the non-input layer (hidden for <tt class="docutils literal"><span class="pre">vhv</span></tt>, visible for <tt class="docutils literal"><span class="pre">hvh</span></tt>) and then
+the input layer is sampled. If you wish to combine means and samples, use
+a composition of the <tt class="docutils literal"><span class="pre">sample_</span></tt> and <tt class="docutils literal"><span class="pre">mean_</span></tt> methods:</p>
+<div class="last highlight-python"><div class="highlight"><pre><span class="n">v_mean_from_h_sample</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">mean_v_given_h</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">sample_h_given_v</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<p>However, for computing gradients and such, the naive implementation of these
+methods has problems with numerical stability. Theano can perform
+optimizations to remedy the problem, but in order to do that, it has to
+have access to some intermediate steps. Therefore, this suite of sampling
+methods has a protected counterpart: <tt class="docutils literal"><span class="pre">_sample_h_given_v()</span></tt>, etc., which
+should NOT be called from the outside, but is used in building the
+expression graph for training with (P)CD.</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p>There&#8217;s some downwright ugly hacks here that have to do with how
+Theano works. Specifically, the training updates cost definition
+have to be in the same method. Other way round: the _cost() cannot
+be computed without the gradient descent updates.</p>
+<p class="last">This, unfortunately, currently does affect how <tt class="docutils literal"><span class="pre">setup()</span></tt> needs to be
+written. So, RBMs have their own setup.</p>
+</div>
+<dl class="method">
+<dt id="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.error">
+<tt class="descname">error</tt><big>(</big><em>X</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/restricted_boltzmann_machine.html#RestrictedBoltzmannMachine.error"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.error" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.free_energy">
+<tt class="descname">free_energy</tt><big>(</big><em>visible</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/restricted_boltzmann_machine.html#RestrictedBoltzmannMachine.free_energy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.free_energy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the free energy of the model.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>visible</strong> (<em>theano.tensor.TensorType</em>) &#8211; The state of the visible units (either 1/0, or mean -
+not important).</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">theano.tensor.var.TensorVariable</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The free energy of the model, given the visible activation.
+Computed as<span class="target" id="equation-free_energy"></span><div class="math">
+<p><span class="eqno">(1)</span><img src="_images/math/167fa46166c790e615711e4641b993a568e95cb6.png" alt="\mathcal{F}(x) = - \log \sum_h e^{-E(x,h)}"/></p>
+</div></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.gibbs_step_hvh">
+<tt class="descname">gibbs_step_hvh</tt><big>(</big><em>hidden</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/restricted_boltzmann_machine.html#RestrictedBoltzmannMachine.gibbs_step_hvh"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.gibbs_step_hvh" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given the activation of the hidden units (mean or sample, doesn&#8217;t
+matter), perform one step of Gibbs sampling and return all partial results.</p>
+<p>Re-samples the hidden layer from the visible layer <em>sample</em>, not mean.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>hidden</strong> (<em>theano.tensor.var.TensorVariable</em>) &#8211; The state of the hidden units (either 1/0, or mean -
+not important).</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">list[theano.tensor.var.TensorVariable x 6]</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A list of Gibbs sampling results and partial resuls. See
+documentation on <a class="reference internal" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.mean_h_given_v" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.mean_h_given_v"><tt class="xref py py-func docutils literal"><span class="pre">mean_h_given_v()</span></tt></a> for why pre-nonlinearity
+activation is also returned. The returned values are:<div class="highlight-python"><div class="highlight"><pre><span class="p">[</span><span class="n">pre_activation_mean_v</span><span class="p">,</span> <span class="n">mean_v</span><span class="p">,</span> <span class="n">sample_v</span><span class="p">,</span> 
+<span class="n">pre_activation_mean_h</span><span class="p">,</span> <span class="n">mean_h</span><span class="p">,</span> <span class="n">sample_h</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>(See documentation of <a class="reference internal" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_v_given_h" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_v_given_h"><tt class="xref py py-func docutils literal"><span class="pre">sample_v_given_h()</span></tt></a> and 
+<a class="reference internal" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_h_given_v" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_h_given_v"><tt class="xref py py-func docutils literal"><span class="pre">sample_h_given_v()</span></tt></a> on what they are.)</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.gibbs_step_vhv">
+<tt class="descname">gibbs_step_vhv</tt><big>(</big><em>visible</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/restricted_boltzmann_machine.html#RestrictedBoltzmannMachine.gibbs_step_vhv"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.gibbs_step_vhv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given the activation of the visible units (mean or sample, doesn&#8217;t
+matter), perform one step of Gibbs sampling and return all partial results.</p>
+<p>Re-samples the visible layer from the hidden layer <em>sample</em>, not mean.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>visible</strong> (<em>theano.tensor.var.TensorVariable</em>) &#8211; The state of the visible units (either 1/0, or mean -
+not important).</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">list[theano.tensor.var.TensorVariable x 6]</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A list of Gibbs sampling results and partial resuls. See
+documentation on <a class="reference internal" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.mean_h_given_v" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.mean_h_given_v"><tt class="xref py py-func docutils literal"><span class="pre">mean_h_given_v()</span></tt></a> for why pre-nonlinearity
+activation is also returned. The returned values are:<div class="highlight-python"><div class="highlight"><pre><span class="p">[</span><span class="n">pre_activation_mean_h</span><span class="p">,</span> <span class="n">mean_h</span><span class="p">,</span> <span class="n">sample_h</span><span class="p">,</span> 
+<span class="n">pre_activation_mean_v</span><span class="p">,</span> <span class="n">mean_v</span><span class="p">,</span> <span class="n">sample_v</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>(See documentation of <a class="reference internal" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_v_given_h" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_v_given_h"><tt class="xref py py-func docutils literal"><span class="pre">sample_v_given_h()</span></tt></a> and 
+<a class="reference internal" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_h_given_v" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_h_given_v"><tt class="xref py py-func docutils literal"><span class="pre">sample_h_given_v()</span></tt></a> on what they are.)</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.mean_h_given_v">
+<tt class="descname">mean_h_given_v</tt><big>(</big><em>visible</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/restricted_boltzmann_machine.html#RestrictedBoltzmannMachine.mean_h_given_v"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.mean_h_given_v" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes expected activation on hidden units.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.mean_v_given_h">
+<tt class="descname">mean_v_given_h</tt><big>(</big><em>hidden</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/restricted_boltzmann_machine.html#RestrictedBoltzmannMachine.mean_v_given_h"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.mean_v_given_h" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the expected visible layer activation the hidden layer.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_h_given_v">
+<tt class="descname">sample_h_given_v</tt><big>(</big><em>visible</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/restricted_boltzmann_machine.html#RestrictedBoltzmannMachine.sample_h_given_v"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_h_given_v" title="Permalink to this definition">¶</a></dt>
+<dd><p>Samples the hidden layer given the visible layer.</p>
+<p>As opposed to the protected <tt class="docutils literal"><span class="pre">_sample_h_given_v()</span></tt> method, only returns
+the sample.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_hvh">
+<tt class="descname">sample_hvh</tt><big>(</big><em>hidden</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/restricted_boltzmann_machine.html#RestrictedBoltzmannMachine.sample_hvh"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_hvh" title="Permalink to this definition">¶</a></dt>
+<dd><p>Performs one Gibbs sampling step from hidden to hidden layer.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_v_given_h">
+<tt class="descname">sample_v_given_h</tt><big>(</big><em>hidden</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/restricted_boltzmann_machine.html#RestrictedBoltzmannMachine.sample_v_given_h"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_v_given_h" title="Permalink to this definition">¶</a></dt>
+<dd><p>Samples the visible layer given the hidden layer.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_vhv">
+<tt class="descname">sample_vhv</tt><big>(</big><em>visible</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/restricted_boltzmann_machine.html#RestrictedBoltzmannMachine.sample_vhv"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.sample_vhv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Performs one Gibbs sampling step from visible to visible layer.</p>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.setup">
+<em class="property">classmethod </em><tt class="descname">setup</tt><big>(</big><em>data</em>, <em>model=None</em>, <em>batch_size=500</em>, <em>learning_rate=0.13</em>, <em>heavy_debug=False</em>, <em>**model_init_kwargs</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/restricted_boltzmann_machine.html#RestrictedBoltzmannMachine.setup"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.setup" title="Permalink to this definition">¶</a></dt>
+<dd><p>Prepares the train_model, validate_model and test_model methods
+on the given dataset and with the given parameters.</p>
+<p>It is a CLASS METHOD, which during its run actually creates
+an instance of the model. It is called as</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">model_handle</span> <span class="o">=</span> <span class="n">ModelClass</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">params</span><span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>data</strong> (<em>Dataset</em>) &#8211; The dataset on which the model will be run.</li>
+<li><strong>model</strong> (<em>BaseUnsupervisedModel</em>) &#8211; A model instance that the setup should use.</li>
+<li><strong>batch_size</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; how many data items will be in one minibatch</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>(the data is split to minibatches for training,
+validation and testing)</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>learning_rate</strong> (<em>theano.config.floatX</em>) &#8211; How fast will the model move in the direction</td>
+</tr>
+</tbody>
+</table>
+<p>of the gradient.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>model_init_kwargs</strong> (<em>kwargs</em>) &#8211; Various keyword arguments that get passed</td>
+</tr>
+</tbody>
+</table>
+<p>to the model constructor. See constructor
+argument documentation.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">ModelHandle</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><tt class="docutils literal"><span class="pre">ModelHandle(model,</span> <span class="pre">train_f,</span> <span class="pre">validate_f,</span> <span class="pre">test_f)</span></tt></td>
+</tr>
+</tbody>
+</table>
+<p>where <tt class="docutils literal"><span class="pre">model</span></tt> is the Model instance initialized during
+<a class="reference internal" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.setup" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.setup"><tt class="xref py py-func docutils literal"><span class="pre">setup()</span></tt></a> and the <tt class="docutils literal"><span class="pre">_func</span></tt> variables are compiled
+theano.functions to use in a learner.</p>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.setup_as_pretraining">
+<em class="property">classmethod </em><tt class="descname">setup_as_pretraining</tt><big>(</big><em>data</em>, <em>supervised_model_instance</em>, <em>linked_layer_index</em>, <em>batch_size=500</em>, <em>learning_rate=0.13</em>, <em>**model_init_args</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/restricted_boltzmann_machine.html#RestrictedBoltzmannMachine.setup_as_pretraining"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine.setup_as_pretraining" title="Permalink to this definition">¶</a></dt>
+<dd><p>Links a model instance to the <tt class="docutils literal"><span class="pre">link_layer_index</span></tt>-th layer
+of <tt class="docutils literal"><span class="pre">supervised_model_instance</span></tt> for pre-training and generates
+the pretraining function. Returns a <tt class="docutils literal"><span class="pre">PretrainingModelHandle</span></tt>
+that contains the pretraining model instance and the pretraining
+function.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>data</strong> (<em>Dataset</em>) &#8211; The dataset on which pre-training should work.</li>
+<li><strong>model</strong> &#8211; The model instance which should be pre-trained.</li>
+<li><strong>linked_layer_index</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; Which layer of <tt class="docutils literal"><span class="pre">model_instance</span></tt> to</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p>link to. Starting with 0, the output layer of the model would be 
+index <tt class="docutils literal"><span class="pre">model_instance.n_layers</span> <span class="pre">-</span> <span class="pre">1</span></tt>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>batch_size</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; how many data items will be in one minibatch</td>
+</tr>
+</tbody>
+</table>
+<p>(the data is split to minibatches for training,
+validation and testing)</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>learning_rate</strong> (<em>theano.config.floatX</em>) &#8211; How fast will the model move in the direction</td>
+</tr>
+</tbody>
+</table>
+<p>of the gradient.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>model_init_args</strong> (<em>kwargs</em>) &#8211; Various keyword arguments passed to</td>
+</tr>
+</tbody>
+</table>
+<p>pretraining model constructor.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.learning.models.restricted_boltzmann_machine.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

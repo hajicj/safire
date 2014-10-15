@@ -1,0 +1,448 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.layouts &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.data.layouts</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;Layouts are used by Loaders to discover data files.</span>
+
+<span class="sd">The layout class describes where each file is in some dataset directory. **The</span>
+<span class="sd">items that have to be in the Layout are given inside the Loader,** Layouts</span>
+<span class="sd">cannot be swapped for each other without breaking the Loader. The Layout is</span>
+<span class="sd">essentially just a description of the data directory that a particular Loader</span>
+<span class="sd">expects.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DataDirLayout"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout">[docs]</a><span class="k">class</span> <span class="nc">DataDirLayout</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;A static class that holds constants that define the layout of a</span>
+<span class="sd">    multimodal dataset root dir. (Layouts are used by Loaders to discover data</span>
+<span class="sd">    files.)</span>
+
+<span class="sd">    The expected layout is::</span>
+
+<span class="sd">        root/</span>
+<span class="sd">        +----- text/</span>
+<span class="sd">        |    +------ text1.vt.txt.gz</span>
+<span class="sd">        |    +------ text2.vt.txt.gz</span>
+<span class="sd">        |    +------ text3.vt.txt.gz</span>
+<span class="sd">        |    +------ text4.vt.txt.gz</span>
+<span class="sd">        |            etc.</span>
+<span class="sd">        +----- img/</span>
+<span class="sd">        |    +------ image1.jpg</span>
+<span class="sd">        |    +------ image2.jpg</span>
+<span class="sd">        |    +------ image3.jpg</span>
+<span class="sd">        |    +------ image4.jpg</span>
+<span class="sd">        +----- corpora/</span>
+<span class="sd">        +----- datasets/</span>
+<span class="sd">        +----- models/</span>
+<span class="sd">        +----- indexes/</span>
+<span class="sd">        +----- name.vtlist</span>
+<span class="sd">        +----- im.ftrs.csv</span>
+<span class="sd">        +----- vtext-image-map.csv</span>
+
+<span class="sd">    The expected ``name.vtlist`` entries are a list of vtext filenames relative</span>
+<span class="sd">    to the root::</span>
+
+<span class="sd">        text/text1.vt.txt.gz</span>
+<span class="sd">        text/text2.vt.txt.gz</span>
+<span class="sd">        text/text3.vt.txt.gz</span>
+<span class="sd">        text/text4.vt.txt.gz</span>
+
+<span class="sd">    This file is expected to be given to :class:`VTextCorpus` as an input file.</span>
+
+<span class="sd">    The expected ``im.ftrs.csv`` file format is::</span>
+
+<span class="sd">        image1.jpg  0;0;0.2232;0.345;0;0;1.93833;0.84;0 .... ;0.012</span>
+<span class="sd">        image2.jpg  0;1.607;0.637;0;0;1.2;0.2001;0.14;0 .... ;0.214</span>
+<span class="sd">        image3.jpg  0.018;0;0;0.1345;0;0;0.39;1.084;0.2 .... ;1.09</span>
+<span class="sd">        image4.jpg  0;1.607;0.637;0;0;1.2;0.2001;0.14;0 .... ;0</span>
+
+<span class="sd">    with tab-separated image ID and feature value columns and 4096</span>
+<span class="sd">    semicolon-separated entries in the second column. This file is expected to</span>
+<span class="sd">    be given to :class:`ImagenetCorpus` as an input file.</span>
+
+<span class="sd">    And the expected format of ``vtext-image-map.csv`` is::</span>
+
+<span class="sd">        text/text1.vt.txt.gz    image1</span>
+<span class="sd">        text/text1.vt.txt.gz    image3</span>
+<span class="sd">        text/text2.vt.txt.gz    image2</span>
+<span class="sd">        text/text3.vt.txt.gz    image3</span>
+<span class="sd">        text/text3.vt.txt.gz    image4</span>
+<span class="sd">        text/text3.vt.txt.gz    image1</span>
+
+<span class="sd">    This file is given to the output :class:`MultimodalDataset` as the</span>
+<span class="sd">    text-image mapping (parameter ``textdoc2imdoc2``. Note that the relationship</span>
+<span class="sd">    between texts and images is M:N - a text can have any number of associated</span>
+<span class="sd">    images, and an image can be used by any number of texts.</span>
+
+<span class="sd">    The ``corpora/`` directory contains the saved corpora of various shapes and</span>
+<span class="sd">    sizes. The corpus name format is::</span>
+
+<span class="sd">        name.infix.type.suffix</span>
+
+<span class="sd">    where:</span>
+
+<span class="sd">    * ``name`` is the same as ``name.vtlist``,</span>
+
+<span class="sd">    * ``infix`` is some string that describes the corpus,</span>
+
+<span class="sd">    * ``type`` reflects whether the corpus has text or image data,</span>
+
+<span class="sd">    * ``suffix`` is a string describing the corpus file type. The current</span>
+<span class="sd">      suffixes are ``mmcorp`` for MmCorpus-serialized data, ``mmcorp.index`` for</span>
+<span class="sd">      the MmCorpus index that went along with the ``name.infix.type``</span>
+<span class="sd">      combination, ``vtcorp`` for the :class:`VTextCorpus` object used to read</span>
+<span class="sd">      the given text corpus and ``icorp`` for the :class:`ImagenetCorpus` used</span>
+<span class="sd">      to read the given image corpus.</span>
+
+<span class="sd">    The ``models/`` directory contains saved models, with the suffix ``.sfm``,</span>
+<span class="sd">    and saved model handles, with the suffix ``.mhandle``.</span>
+
+<span class="sd">    The ``indexes/`` directory contains saved similarity indexes, built from</span>
+<span class="sd">    various image corpora.</span>
+
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes a layout object.</span>
+
+<span class="sd">        :type name: str</span>
+<span class="sd">        :param name: The dataset name. Currently expected to appear in two</span>
+<span class="sd">            roles in the data directory:</span>
+
+
+<span class="sd">            * The ``vtlist`` file passed to VTextCorpus to operate on has the name</span>
+<span class="sd">              ``name.vtlist``</span>
+
+<span class="sd">            * The corpus file names start with ``name``</span>
+
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">img_dir</span> <span class="o">=</span> <span class="s">&#39;img&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text_dir</span> <span class="o">=</span> <span class="s">&#39;text&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">corpus_dir</span> <span class="o">=</span> <span class="s">&#39;corpora&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dataset_dir</span> <span class="o">=</span> <span class="s">&#39;datasets&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_dir</span> <span class="o">=</span> <span class="s">&#39;models&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">index_dir</span> <span class="o">=</span> <span class="s">&#39;indexes&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">learner_dir</span> <span class="o">=</span> <span class="s">&#39;learners&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">temp_dir</span> <span class="o">=</span> <span class="s">&#39;tmp&#39;</span>
+
+        <span class="c"># Master files.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vtlist</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&#39;.vtlist&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">image_vectors</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&#39;.&#39;</span> <span class="s">&#39;im.ftrs.csv&#39;</span>
+        <span class="c"># self.image_vectors used to be without the self.name; may cause</span>
+        <span class="c"># somewhere yet...</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">textdoc2imdoc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&#39;.&#39;</span> <span class="o">+</span> <span class="s">&#39;vtext-image-map.csv&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">imgid2imgfile</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&#39;.&#39;</span> <span class="o">+</span> <span class="s">&#39;img.ids2files.csv&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">annotation_inputs</span> <span class="o">=</span> <span class="s">&#39;annotation_inputs.csv&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">annotation_outputs</span> <span class="o">=</span> <span class="s">&#39;annotation_outputs.csv&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">=</span> <span class="s">&#39;.img&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">=</span> <span class="s">&#39;.vt&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">mm_corp_suffix</span> <span class="o">=</span> <span class="s">&#39;.mmcorp&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mm_index_suffix</span> <span class="o">=</span> <span class="s">&#39;.mmcorp.index&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text_corp_suffix</span> <span class="o">=</span> <span class="s">&#39;.vtcorp&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">img_corp_suffix</span> <span class="o">=</span> <span class="s">&#39;.icorp&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dataset_suffix</span> <span class="o">=</span> <span class="s">&#39;.shdat&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_suffix</span> <span class="o">=</span> <span class="s">&#39;.sfm&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">handle_suffix</span> <span class="o">=</span> <span class="s">&#39;.mhandle&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">transformer_suffix</span> <span class="o">=</span> <span class="s">&#39;.sftrans&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">index_suffix</span> <span class="o">=</span> <span class="s">&#39;.iidx&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">learner_suffix</span> <span class="o">=</span> <span class="s">&#39;.lrn&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">tcorp_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_corp_suffix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tcorp_obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corp_suffix</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">icorp_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_corp_suffix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">icorp_obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img_corp_suffix</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">required_suffixes</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_corp_suffix</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_index_suffix</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corp_suffix</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_corp_suffix</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_index_suffix</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img_corp_suffix</span>
+        <span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">required_text_suffixes</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_corp_suffix</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_index_suffix</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corp_suffix</span><span class="p">,</span>
+        <span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">required_image_suffixes</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_corp_suffix</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_index_suffix</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img_corp_suffix</span>
+        <span class="p">]</span>
+
+<div class="viewcode-block" id="DataDirLayout.required_corpus_names"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.required_corpus_names">[docs]</a>    <span class="k">def</span> <span class="nf">required_corpus_names</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">update_separator</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Generates the required corpora for a given corpus infix. These are::</span>
+
+<span class="sd">            [ &#39;.&#39;.join(self.name, infix, suffix)</span>
+<span class="sd">               for suffix in self.required_suffixes ]</span>
+
+<span class="sd">        Coming out as ``safire.infix.mmcorp``, ``safire.infix.mmcorp.index``,</span>
+<span class="sd">        etc.</span>
+
+<span class="sd">        :param infix: The corpus infix. This is either given manually, or</span>
+<span class="sd">            generated from corpus/transformation parameters automatically in</span>
+<span class="sd">            the corresponding class.</span>
+
+<span class="sd">        :rtype: list(str)</span>
+<span class="sd">        :returns: A list of the required corpus names for the given infix.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c"># If infix is given without separator</span>
+        <span class="n">infix_separator</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">infix</span> <span class="ow">and</span> <span class="n">update_separator</span> <span class="ow">and</span> <span class="n">infix</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&#39;.&#39;</span><span class="p">:</span>
+            <span class="n">infix_separator</span> <span class="o">=</span> <span class="s">&#39;.&#39;</span>
+
+        <span class="k">elif</span> <span class="n">infix</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">infix</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+
+        <span class="n">updated_infix</span> <span class="o">=</span> <span class="n">infix_separator</span> <span class="o">+</span> <span class="n">infix</span>
+
+        <span class="k">return</span> <span class="p">[</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">updated_infix</span> <span class="o">+</span> <span class="n">suffix</span>
+                 <span class="k">for</span> <span class="n">suffix</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">required_suffixes</span> <span class="p">]</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.required_text_corpus_names"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.required_text_corpus_names">[docs]</a>    <span class="k">def</span> <span class="nf">required_text_corpus_names</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">update_separator</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Generates the required text corpus names for a given corpus infix.</span>
+<span class="sd">        These are::</span>
+
+<span class="sd">            [ &#39;.&#39;.join(self.name, infix, suffix)</span>
+<span class="sd">               for suffix in self.required_text_suffixes ]</span>
+
+<span class="sd">        Coming out as ``safire.infix.vt.mmcorp``,</span>
+<span class="sd">        ``safire.infix.vt.mmcorp.index``, etc.</span>
+
+<span class="sd">        :param infix: The corpus infix. This is either given manually, or</span>
+<span class="sd">            generated from corpus/transformation parameters automatically in</span>
+<span class="sd">            the corresponding class.</span>
+
+<span class="sd">        :rtype: list(str)</span>
+<span class="sd">        :returns: A list of the required corpus names for the given infix.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c"># If infix is given without separator</span>
+        <span class="n">infix_separator</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">infix</span> <span class="ow">and</span> <span class="n">update_separator</span> <span class="ow">and</span> <span class="n">infix</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&#39;.&#39;</span><span class="p">:</span>
+            <span class="n">infix_separator</span> <span class="o">=</span> <span class="s">&#39;.&#39;</span>
+
+        <span class="k">elif</span> <span class="n">infix</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">infix</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+
+        <span class="n">updated_infix</span> <span class="o">=</span> <span class="n">infix_separator</span> <span class="o">+</span> <span class="n">infix</span>
+
+        <span class="k">return</span> <span class="p">[</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">updated_infix</span> <span class="o">+</span> <span class="n">suffix</span>
+                 <span class="k">for</span> <span class="n">suffix</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">required_text_suffixes</span> <span class="p">]</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.required_img_corpus_names"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.required_img_corpus_names">[docs]</a>    <span class="k">def</span> <span class="nf">required_img_corpus_names</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">update_separator</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Generates the required image corpora for a given corpus infix.</span>
+<span class="sd">        These are::</span>
+
+<span class="sd">            [ &#39;.&#39;.join(self.name, infix, suffix)</span>
+<span class="sd">               for suffix in self.required_img_suffixes ]</span>
+
+<span class="sd">        Coming out as ``safire.infix.img.mmcorp``,</span>
+<span class="sd">        ``safire.infix.img.mmcorp.index``, etc.</span>
+
+<span class="sd">        :param infix: The corpus infix. This is either given manually, or</span>
+<span class="sd">            generated from corpus/transformation parameters automatically in</span>
+<span class="sd">            the corresponding class.</span>
+
+<span class="sd">        :rtype: list(str)</span>
+<span class="sd">        :returns: A list of the required corpus names for the given infix.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c"># If infix is given without separator</span>
+        <span class="n">infix_separator</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+        <span class="k">if</span> <span class="n">infix</span> <span class="ow">and</span> <span class="n">update_separator</span> <span class="ow">and</span> <span class="n">infix</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="s">&#39;.&#39;</span><span class="p">:</span>
+            <span class="n">infix_separator</span> <span class="o">=</span> <span class="s">&#39;.&#39;</span>
+
+        <span class="k">elif</span> <span class="n">infix</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">infix</span> <span class="o">=</span> <span class="s">&#39;&#39;</span>
+
+        <span class="n">updated_infix</span> <span class="o">=</span> <span class="n">infix_separator</span> <span class="o">+</span> <span class="n">infix</span>
+
+        <span class="k">return</span> <span class="p">[</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">updated_infix</span> <span class="o">+</span> <span class="n">suffix</span>
+                 <span class="k">for</span> <span class="n">suffix</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">required_image_suffixes</span> <span class="p">]</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_text_corpus_name"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_text_corpus_name">[docs]</a>    <span class="k">def</span> <span class="nf">get_text_corpus_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the text corpus name for the given infix.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">infix</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corp_suffix</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_text_corpus_file"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_text_corpus_file">[docs]</a>    <span class="k">def</span> <span class="nf">get_text_corpus_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the text corpus file relative to data dir root.&quot;&quot;&quot;</span>
+        <span class="n">corpname</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_text_corpus_name</span><span class="p">(</span><span class="n">infix</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">corpus_dir</span><span class="p">,</span> <span class="n">corpname</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_image_corpus_name"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_image_corpus_name">[docs]</a>    <span class="k">def</span> <span class="nf">get_image_corpus_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the text corpus name for the given infix.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">infix</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img_corp_suffix</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_image_corpus_file"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_image_corpus_file">[docs]</a>    <span class="k">def</span> <span class="nf">get_image_corpus_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the text corpus file relative to data dir root.&quot;&quot;&quot;</span>
+        <span class="n">corpname</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_image_corpus_name</span><span class="p">(</span><span class="n">infix</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">corpus_dir</span><span class="p">,</span> <span class="n">corpname</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_model_name"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_model_name">[docs]</a>    <span class="k">def</span> <span class="nf">get_model_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the model name for the given infix.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">infix</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_suffix</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_model_file"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_model_file">[docs]</a>    <span class="k">def</span> <span class="nf">get_model_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the path to model file with given infix from layout</span>
+<span class="sd">         root.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_model_name</span><span class="p">(</span><span class="n">infix</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_handle_name"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_handle_name">[docs]</a>    <span class="k">def</span> <span class="nf">get_handle_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the model handle name for the given infix.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">infix</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">handle_suffix</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_handle_file"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_handle_file">[docs]</a>    <span class="k">def</span> <span class="nf">get_handle_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the path to model handle file with given infix from layout</span>
+<span class="sd">         root.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_handle_name</span><span class="p">(</span><span class="n">infix</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_transformer_name"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_transformer_name">[docs]</a>    <span class="k">def</span> <span class="nf">get_transformer_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the transformer name for the given infix.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">infix</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">transformer_suffix</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_transformer_file"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_transformer_file">[docs]</a>    <span class="k">def</span> <span class="nf">get_transformer_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the path to transformer file with given infix from layout</span>
+<span class="sd">         root.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_transformer_name</span><span class="p">(</span><span class="n">infix</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_index_name"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_index_name">[docs]</a>    <span class="k">def</span> <span class="nf">get_index_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the index name for the given infix.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">infix</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">index_suffix</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_index_file"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_index_file">[docs]</a>    <span class="k">def</span> <span class="nf">get_index_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the path to index file with given infix from layout root.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_index_name</span><span class="p">(</span><span class="n">infix</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_text_index_name"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_text_index_name">[docs]</a>    <span class="k">def</span> <span class="nf">get_text_index_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the index name for the given infix.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">infix</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">index_suffix</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_text_index_file"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_text_index_file">[docs]</a>    <span class="k">def</span> <span class="nf">get_text_index_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the path to index file with given infix from layout root.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_text_index_name</span><span class="p">(</span><span class="n">infix</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_dataset_name"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_dataset_name">[docs]</a>    <span class="k">def</span> <span class="nf">get_dataset_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the index name for the given infix.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">infix</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">dataset_suffix</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_dataset_file"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_dataset_file">[docs]</a>    <span class="k">def</span> <span class="nf">get_dataset_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the path to index file with given infix from layout root.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_dataset_name</span><span class="p">(</span><span class="n">infix</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_learner_name"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_learner_name">[docs]</a>    <span class="k">def</span> <span class="nf">get_learner_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the index name for the given infix.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">infix</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">learner_suffix</span>
+</div>
+<div class="viewcode-block" id="DataDirLayout.get_learner_file"><a class="viewcode-back" href="../../../safire.data.layouts.html#safire.data.layouts.DataDirLayout.get_learner_file">[docs]</a>    <span class="k">def</span> <span class="nf">get_learner_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">infix</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the path to index file with given infix from layout root.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">learner_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_learner_name</span><span class="p">(</span><span class="n">infix</span><span class="p">))</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

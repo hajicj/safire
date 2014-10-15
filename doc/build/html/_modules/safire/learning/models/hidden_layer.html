@@ -1,0 +1,286 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.hidden_layer &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.learning.models.hidden_layer</h1><div class="highlight"><pre>
+<span class="kn">import</span> <span class="nn">cPickle</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">theano.tensor</span> <span class="kn">as</span> <span class="nn">TT</span>
+
+<span class="kn">from</span> <span class="nn">base_supervised_model</span> <span class="kn">import</span> <span class="n">BaseSupervisedModel</span>
+
+<div class="viewcode-block" id="HiddenLayer"><a class="viewcode-back" href="../../../../safire.learning.models.hidden_layer.html#safire.learning.models.hidden_layer.HiddenLayer">[docs]</a><span class="k">class</span> <span class="nc">HiddenLayer</span><span class="p">(</span><span class="n">BaseSupervisedModel</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> 
+                 <span class="n">activation</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">tanh</span><span class="p">,</span> <span class="n">rng</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">()):</span>
+        <span class="sd">&quot;&quot;&quot;Typical hidden layer of a MLP: units are fully-connected</span>
+<span class="sd">        and have sigmoidal activation function. Weight matrix W is</span>
+<span class="sd">        of shape (n_in, n_out) and the bias vector b is of shape (n_out,).</span>
+
+<span class="sd">        .. note::</span>
+<span class="sd">            </span>
+<span class="sd">          The nonlinearity used here by default is tanh (because </span>
+<span class="sd">          it is supposed to converge faster)</span>
+
+<span class="sd">        Hidden unit activation is given by :math:`tanh(dot(input,W) + b)`.</span>
+
+<span class="sd">        :type rng: numpy.random.RandomState</span>
+<span class="sd">        :param rng: a random number generator used to initialize weights</span>
+
+<span class="sd">        :type inputs: theano.tensor.dmatrix</span>
+<span class="sd">        :param inputs: a symbolic tensor of shape (n_examples, n_in)</span>
+
+<span class="sd">        :type n_in: int</span>
+<span class="sd">        :param n_in: dimensionality of input</span>
+
+<span class="sd">        :type n_out: int</span>
+<span class="sd">        :param n_out: number of hidden units</span>
+
+<span class="sd">        :type activation: theano.Op or function</span>
+<span class="sd">        :param activation: Non-linearity to be applied in the hidden layer</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">HiddenLayer</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">activation</span> <span class="o">=</span> <span class="n">activation</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">W</span><span class="p">:</span>
+            <span class="n">W</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_weights</span><span class="p">(</span><span class="s">&#39;W&#39;</span><span class="p">,</span> <span class="p">(</span><span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">),</span> <span class="n">rng</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_init_param_consistency_check</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="p">(</span><span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">W</span> <span class="o">=</span> <span class="n">W</span>
+
+        <span class="c"># Initialize bias</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">b</span><span class="p">:</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_bias</span><span class="p">(</span><span class="s">&#39;b&#39;</span><span class="p">,</span> <span class="n">n_out</span><span class="p">,</span> <span class="n">rng</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_init_param_consistency_check</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="p">(</span><span class="n">n_out</span><span class="p">,</span> <span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="n">b</span>
+
+        <span class="c"># The layer_shapes member has already been initialized in super.init,</span>
+        <span class="c"># but we&#39;re doing it here explicitly anyway</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_layers</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_shapes</span> <span class="o">=</span> <span class="p">[(</span><span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">)]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layers</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">outputs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">inputs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)</span>
+
+        <span class="c"># Parameters of the model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">_get_hidden_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the activation of the hidden units.</span>
+
+<span class="sd">        :type inputs: theano.tensor.TensorType</span>
+<span class="sd">        :param inputs: Values of the visible units (i.e. rows of data).</span>
+
+<span class="sd">        :returns: The activation on hidden units, as symbolic expression</span>
+<span class="sd">        bound to ``inputs``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">inputs</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">inputs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)</span>
+
+<div class="viewcode-block" id="HiddenLayer.mean_squared_error"><a class="viewcode-back" href="../../../../safire.learning.models.hidden_layer.html#safire.learning.models.hidden_layer.HiddenLayer.mean_squared_error">[docs]</a>    <span class="k">def</span> <span class="nf">mean_squared_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Compute the mean of the negative log-likelihood of the prediction</span>
+<span class="sd">        of this model under a given target distribution.</span>
+
+<span class="sd">        .. math::</span>
+
+<span class="sd">          \frac{1}{|\mathcal{D}|} \mathcal{L} (\theta=\{W,b\}, \mathcal{D}) =</span>
+<span class="sd">          \frac{1}{|\mathcal{D}|} \sum_{i=0}^{|\mathcal{D}|} \log(P(Y=y^{(i)}|x^{(i)}, W,b)) \\</span>
+<span class="sd">             \ell (\theta=\{W,b\}, \mathcal{D})</span>
+
+<span class="sd">        .. note::</span>
+
+<span class="sd">          We use the mean instead of the sum so that the learning rate</span>
+<span class="sd">          is less dependent on the batch size.</span>
+
+<span class="sd">        :type y: theano.tensor.TensorType</span>
+<span class="sd">        :param y: Corresponds to a matrix of the desired output vectors.</span>
+
+<span class="sd">        :returns: The mean of the squared error of the prediction against the</span>
+<span class="sd">            true values.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_hidden_values</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">inputs</span><span class="p">)</span> <span class="o">-</span> <span class="n">y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_cost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the proportion of incorrectly classified instances.</span>
+<span class="sd">        </span>
+<span class="sd">        .. warn::</span>
+<span class="sd">        </span>
+<span class="sd">          The hidden layer is not intended to supply error to a model. It is</span>
+<span class="sd">          an internal layer; error is computed at the output layer.</span>
+<span class="sd">        </span>
+<span class="sd">        :type y: theano.tensor.TensorType</span>
+<span class="sd">        :param y: A response vector.</span>
+<span class="sd">        </span>
+<span class="sd">        :raises: NotImplementedError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean_squared_error</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_init_args_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Saves the model in the form of an init kwarg dict, since not all</span>
+<span class="sd">        attributes of the instance can be pickled. Upon loading, the saved</span>
+<span class="sd">        model kwarg dict will be used as ``**kwargs`` (the ``load`` method</span>
+<span class="sd">        is a classmethod) for an initialization of the model.&quot;&quot;&quot;</span>
+
+        <span class="n">init_arg_dict</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;W&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">,</span>
+            <span class="s">&#39;b&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span>
+            <span class="s">&#39;n_in&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span><span class="p">,</span>
+            <span class="s">&#39;n_out&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span><span class="p">,</span>
+            <span class="s">&#39;activation&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span>
+            <span class="s">&#39;inputs&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">inputs</span>
+            <span class="c"># Random number generators are ignored?</span>
+        <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">init_arg_dict</span>
+
+<div class="viewcode-block" id="HiddenLayer.error"><a class="viewcode-back" href="../../../../safire.learning.models.hidden_layer.html#safire.learning.models.hidden_layer.HiddenLayer.error">[docs]</a>    <span class="k">def</span> <span class="nf">error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the proportion of incorrectly classified instances.</span>
+<span class="sd">        </span>
+<span class="sd">        .. warn::</span>
+<span class="sd">        </span>
+<span class="sd">          The hidden layer is not intended to supply error to a model. It is</span>
+<span class="sd">          an internal layer; error is computed at the output layer.</span>
+<span class="sd">        </span>
+<span class="sd">        :type y: theano.tensor.TensorType</span>
+<span class="sd">        :param y: A response vector.</span>
+<span class="sd">        </span>
+<span class="sd">        :raises: NotImplementedError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">y</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">outputs</span><span class="o">.</span><span class="n">ndim</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&#39;y should have the same shape as self.outputs&#39;</span><span class="p">,</span> <span class="p">(</span><span class="s">&#39;y&#39;</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="s">&#39;/ outputs&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">outputs</span><span class="o">.</span><span class="n">type</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean_squared_error</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+</div>
+    <span class="k">def</span> <span class="nf">_training_updates</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the update expression for updating the model parameters</span>
+<span class="sd">        during training. The formula for updating an argument is</span>
+<span class="sd">            </span>
+<span class="sd">        .. math:</span>
+<span class="sd">            </span>
+<span class="sd">          \theta^{(k+1)} = \theta^{(k)} - learning\_rate * \frac{\partial cost}{\partial \theta} </span>
+
+<span class="sd">        Expects a &#39;learning_rate&#39; and &#39;cost&#39; kwarg.</span>
+<span class="sd">            </span>
+<span class="sd">        :type learning_rate: theano.config.floatX</span>
+<span class="sd">        :param learning_rate: The learning rate for parameter updates.</span>
+<span class="sd">                              Scaling of the step in the direction of the</span>
+<span class="sd">                              gradient.</span>
+<span class="sd">                                  </span>
+<span class="sd">        :type cost: theano.tensor.TensorType</span>
+<span class="sd">        :param cost: The cost function of which we are computing</span>
+<span class="sd">                         the gradient.</span>
+<span class="sd">                         </span>
+<span class="sd">        :raises: NotImplementedError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s">&#39;Hidden layer of a perceptron by itself cannot train (only output layers can train).&#39;</span><span class="p">)</span>
+
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_init_args</span><span class="p">(</span><span class="n">cls</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns a list of the required kwargs the class needs to be</span>
+<span class="sd">        successfully initialized.</span>
+
+<span class="sd">        Only returns args that are OVER the minimum defined in the</span>
+<span class="sd">        BaseModel.__init__() function definition.</span>
+<span class="sd"> </span>
+<span class="sd">        .. warn::</span>
+<span class="sd">        </span>
+<span class="sd">          This method and its role is subject to change; it may also</span>
+<span class="sd">          be removed entirely.</span>
+<span class="sd">                        </span>
+<span class="sd">        :returns: A list of strings.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[</span><span class="s">&#39;rng&#39;</span><span class="p">,</span> <span class="s">&#39;activation&#39;</span><span class="p">]</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,145 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.sharded_multimodal_dataset module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.data.sharded_multimodal_dataset">
+<span id="safire-data-sharded-multimodal-dataset-module"></span><h1>safire.data.sharded_multimodal_dataset module<a class="headerlink" href="#module-safire.data.sharded_multimodal_dataset" title="Permalink to this headline">¶</a></h1>
+<p>Provides MultimodalDataset functionality with underlying ShardedDatasets for
+both text and images.</p>
+<dl class="class">
+<dt id="safire.data.sharded_multimodal_dataset.ShardedMultimodalDataset">
+<em class="property">class </em><tt class="descclassname">safire.data.sharded_multimodal_dataset.</tt><tt class="descname">ShardedMultimodalDataset</tt><big>(</big><em>text_output_prefix</em>, <em>text_vt_filename</em>, <em>img_output_prefix</em>, <em>img_ic_filename</em>, <em>dim_text=None</em>, <em>dim_img=None</em>, <em>textdoc2imdoc=None</em>, <em>test_p=0.1</em>, <em>devel_p=0.1</em>, <em>mode=0</em>, <em>shared=False</em>, <em>text_serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em>, <em>img_serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em>, <em>text_mm_filename=None</em>, <em>img_mm_filename=None</em>, <em>shardsize=4096</em>, <em>overwrite=False</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_multimodal_dataset.html#ShardedMultimodalDataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_multimodal_dataset.ShardedMultimodalDataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="safire.data.multimodal_dataset.html#safire.data.multimodal_dataset.MultimodalDataset" title="safire.data.multimodal_dataset.MultimodalDataset"><tt class="xref py py-class docutils literal"><span class="pre">safire.data.multimodal_dataset.MultimodalDataset</span></tt></a></p>
+<p>Implements the MultimodalDataset functionality on top of ShardedDataset-like
+objects for both text and image modality.</p>
+<p>Doesn&#8217;t re-implement anything but initialization from MultimodalDataset.</p>
+<p>Should be always called using a loader.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.data.sharded_multimodal_dataset.UnsupervisedShardedCorpusDataset">
+<em class="property">class </em><tt class="descclassname">safire.data.sharded_multimodal_dataset.</tt><tt class="descname">UnsupervisedShardedCorpusDataset</tt><big>(</big><em>output_prefix</em>, <em>dim</em>, <em>test_p=0.1</em>, <em>devel_p=0.1</em>, <em>serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em>, <em>mm_corpus_filename=None</em>, <em>shardsize=4096</em>, <em>overwrite=False</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_multimodal_dataset.html#UnsupervisedShardedCorpusDataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_multimodal_dataset.UnsupervisedShardedCorpusDataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="safire.data.corpus_dataset.html#safire.data.corpus_dataset.UnsupervisedCorpusDataset" title="safire.data.corpus_dataset.UnsupervisedCorpusDataset"><tt class="xref py py-class docutils literal"><span class="pre">safire.data.corpus_dataset.UnsupervisedCorpusDataset</span></tt></a></p>
+<p>A version of UnsupervisedCorpusDataset built around a ShardedDataset
+instead of an IndexedCorpus.</p>
+<dl class="method">
+<dt id="safire.data.sharded_multimodal_dataset.UnsupervisedShardedCorpusDataset.get_sparse">
+<tt class="descname">get_sparse</tt><big>(</big><em>idx</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_multimodal_dataset.html#UnsupervisedShardedCorpusDataset.get_sparse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_multimodal_dataset.UnsupervisedShardedCorpusDataset.get_sparse" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.data.sharded_multimodal_dataset.UnsupervisedShardedImagenetCorpusDataset">
+<em class="property">class </em><tt class="descclassname">safire.data.sharded_multimodal_dataset.</tt><tt class="descname">UnsupervisedShardedImagenetCorpusDataset</tt><big>(</big><em>output_prefix</em>, <em>ic_corpus_filename</em>, <em>dim=None</em>, <em>test_p=0.1</em>, <em>devel_p=0.1</em>, <em>serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em>, <em>mm_corpus_filename=None</em>, <em>shardsize=4096</em>, <em>overwrite=False</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_multimodal_dataset.html#UnsupervisedShardedImagenetCorpusDataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_multimodal_dataset.UnsupervisedShardedImagenetCorpusDataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#safire.data.sharded_multimodal_dataset.UnsupervisedShardedCorpusDataset" title="safire.data.sharded_multimodal_dataset.UnsupervisedShardedCorpusDataset"><tt class="xref py py-class docutils literal"><span class="pre">safire.data.sharded_multimodal_dataset.UnsupervisedShardedCorpusDataset</span></tt></a></p>
+<p>Adds VTextCorpus capabilities to UnsupervisedShardedCorpusDataset:
+in addition to loading a ShardedDatasest and optionally a serialized
+MmCorpus, it will load a VTextCorpus used to
+build the MmCorpus-serialized data (and by extension the ShardedDataset).
+The VTextCorpus is then made available as the <tt class="docutils literal"><span class="pre">vtcorp</span></tt> member
+of the object.</p>
+</dd></dl>
+
+<dl class="class">
+<dt id="safire.data.sharded_multimodal_dataset.UnsupervisedShardedVTextCorpusDataset">
+<em class="property">class </em><tt class="descclassname">safire.data.sharded_multimodal_dataset.</tt><tt class="descname">UnsupervisedShardedVTextCorpusDataset</tt><big>(</big><em>output_prefix</em>, <em>vt_corpus_filename</em>, <em>dim=None</em>, <em>test_p=0.1</em>, <em>devel_p=0.1</em>, <em>serializer=&lt;class 'gensim.corpora.mmcorpus.MmCorpus'&gt;</em>, <em>mm_corpus_filename=None</em>, <em>shardsize=4096</em>, <em>overwrite=False</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_multimodal_dataset.html#UnsupervisedShardedVTextCorpusDataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_multimodal_dataset.UnsupervisedShardedVTextCorpusDataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#safire.data.sharded_multimodal_dataset.UnsupervisedShardedCorpusDataset" title="safire.data.sharded_multimodal_dataset.UnsupervisedShardedCorpusDataset"><tt class="xref py py-class docutils literal"><span class="pre">safire.data.sharded_multimodal_dataset.UnsupervisedShardedCorpusDataset</span></tt></a></p>
+<p>Adds VTextCorpus capabilities to UnsupervisedShardedCorpusDataset:
+in addition to loading a ShardedDatasest and optionally a serialized
+MmCorpus, it will load a VTextCorpus (or a transformation) used to
+build the MmCorpus-serialized data (and by extension the ShardedDataset).
+The VTextCorpus is then made available as the <tt class="docutils literal"><span class="pre">vtcorp</span></tt> member
+of the object.</p>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.data.sharded_multimodal_dataset.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

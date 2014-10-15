@@ -1,0 +1,1345 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.annotation_stats &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for scripts.annotation_stats</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">``annotation_stats.py`` is a script that processes annotation results and</span>
+<span class="sd">compiles statistics about the annotations so far.</span>
+
+<span class="sd">In total:</span>
+<span class="sd">- # annotated items</span>
+<span class="sd">- # annotated appropriate, average</span>
+<span class="sd">- # annotated inappropriate, average</span>
+<span class="sd">- are original images tagged as appropriate?</span>
+
+<span class="sd">For each annotator:</span>
+<span class="sd">- same as in total</span>
+<span class="sd">- agreement with other annotators</span>
+
+<span class="sd">If the ``--t2i`` option is given, will generate a vtext-image map to</span>
+<span class="sd">the given file.</span>
+
+<span class="sd">* By default, it only outputs text-image pairs for appropriate</span>
+<span class="sd">  images on which annotators agreed.</span>
+<span class="sd">* If the ``--relaxed`` option is given, will</span>
+<span class="sd">  output all images that were tagged by at least one annotator (incl. items</span>
+<span class="sd">  which were seen by only one annotator).</span>
+<span class="sd">* If the ``--with_solo`` option is given,</span>
+<span class="sd">  will output the images tagged only by one annotator, but from duplicate items,</span>
+<span class="sd">  will only output images tagged by both.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">operator</span>
+<span class="kn">import</span> <span class="nn">datetime</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">from</span> <span class="nn">matplotlib</span> <span class="kn">import</span> <span class="n">pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="kn">from</span> <span class="nn">safire.utils</span> <span class="kn">import</span> <span class="n">squish_array</span>
+<span class="kn">from</span> <span class="nn">safire.utils.matutils</span> <span class="kn">import</span> <span class="n">avg_pairwise_mutual_precision</span><span class="p">,</span> <span class="n">avg</span><span class="p">,</span> <span class="n">precision</span><span class="p">,</span> \
+    <span class="n">f_score</span><span class="p">,</span> <span class="n">kappa</span><span class="p">,</span> <span class="n">recall</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+<span class="c">#: Annotation outputs column names.</span>
+<span class="n">ao_column_names</span> <span class="o">=</span> <span class="p">[</span> <span class="s">&#39;id&#39;</span><span class="p">,</span>
+                 <span class="s">&#39;user&#39;</span><span class="p">,</span>
+                 <span class="s">&#39;time&#39;</span><span class="p">,</span>
+                 <span class="s">&#39;skipped&#39;</span><span class="p">,</span>
+                 <span class="s">&#39;appropriate&#39;</span><span class="p">,</span>
+                 <span class="s">&#39;inappropriate&#39;</span> <span class="p">]</span>
+
+<span class="n">ao_array_names</span> <span class="o">=</span> <span class="p">[</span> <span class="s">&#39;images&#39;</span><span class="p">,</span> <span class="s">&#39;appropriate&#39;</span><span class="p">,</span> <span class="s">&#39;inappropriate&#39;</span><span class="p">,</span> <span class="s">&#39;unannotated&#39;</span> <span class="p">]</span>
+<span class="n">ao_array_delimiter</span> <span class="o">=</span> <span class="s">&#39;;&#39;</span>
+
+<span class="c">#: Annotation inputs column names.</span>
+<span class="n">ai_column_names</span> <span class="o">=</span> <span class="p">[</span><span class="s">&#39;id&#39;</span><span class="p">,</span>
+                   <span class="s">&#39;label&#39;</span><span class="p">,</span>
+                   <span class="s">&#39;priority&#39;</span><span class="p">,</span>
+                   <span class="s">&#39;prefer_user&#39;</span><span class="p">,</span>
+                   <span class="s">&#39;text&#39;</span><span class="p">,</span>
+                   <span class="s">&#39;images&#39;</span><span class="p">]</span>
+<span class="n">ai_array_names</span> <span class="o">=</span> <span class="p">[</span> <span class="s">&#39;images&#39;</span><span class="p">,</span> <span class="s">&#39;combined&#39;</span> <span class="p">]</span>
+<span class="n">ai_array_delimiter</span> <span class="o">=</span> <span class="s">&#39;;&#39;</span>
+
+<span class="c">#: Combined output column names and ordering</span>
+<span class="n">c_column_names</span> <span class="o">=</span> <span class="p">[</span> <span class="s">&#39;id&#39;</span><span class="p">,</span> <span class="s">&#39;label&#39;</span><span class="p">,</span> <span class="s">&#39;priority&#39;</span><span class="p">,</span>
+                   <span class="s">&#39;prefer_user&#39;</span><span class="p">,</span> <span class="s">&#39;text&#39;</span><span class="p">,</span> <span class="s">&#39;images&#39;</span><span class="p">,</span> <span class="s">&#39;user&#39;</span><span class="p">,</span> <span class="s">&#39;time&#39;</span><span class="p">,</span> <span class="s">&#39;skipped&#39;</span><span class="p">,</span>
+                   <span class="s">&#39;appropriate&#39;</span><span class="p">,</span> <span class="s">&#39;inappropriate&#39;</span><span class="p">,</span> <span class="s">&#39;combined&#39;</span><span class="p">,</span> <span class="s">&#39;unannotated&#39;</span><span class="p">]</span>
+<span class="n">c_array_names</span> <span class="o">=</span> <span class="p">[</span> <span class="s">&#39;images&#39;</span><span class="p">,</span> <span class="s">&#39;appropriate&#39;</span><span class="p">,</span> <span class="s">&#39;inappropriate&#39;</span><span class="p">,</span> <span class="s">&#39;combined&#39;</span><span class="p">,</span>
+                  <span class="s">&#39;unannotated&#39;</span> <span class="p">]</span>
+<span class="n">c_array_delimiter</span> <span class="o">=</span> <span class="s">&#39;;&#39;</span>
+
+<span class="n">report_delimiter</span> <span class="o">=</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span>
+
+<span class="c">##############################################################################</span>
+
+
+<div class="viewcode-block" id="parse_annot_item"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.parse_annot_item">[docs]</a><span class="k">def</span> <span class="nf">parse_annot_item</span><span class="p">(</span><span class="n">line</span><span class="p">,</span> <span class="n">column_names</span><span class="p">,</span> <span class="n">array_names</span><span class="p">,</span> <span class="n">array_delimiter</span><span class="o">=</span><span class="s">&#39;;&#39;</span><span class="p">,</span>
+                     <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Parses one annotation item line into the item dict.</span>
+
+<span class="sd">    :param line:</span>
+
+<span class="sd">    :return: dict with ``column_names`` keys</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">item</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="c"># Prepare item structure</span>
+    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">column_names</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">array_names</span><span class="p">:</span>
+            <span class="n">item</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">item</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">for</span> <span class="n">value</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">delimiter</span><span class="p">),</span> <span class="n">column_names</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">array_names</span><span class="p">:</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">array_delimiter</span><span class="p">)</span>
+            <span class="n">item</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">item</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="k">return</span> <span class="n">item</span>
+
+</div>
+<div class="viewcode-block" id="parse_annotations"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.parse_annotations">[docs]</a><span class="k">def</span> <span class="nf">parse_annotations</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Parses the annotation file and returns the annotations data structure.</span>
+
+<span class="sd">    :param filename: The ``annotation_outputs.csv`` file. The expected format</span>
+<span class="sd">        is tab-separated CSV, with columns ID, Label, Preferred user, etc.</span>
+
+<span class="sd">    :return: An array of dicts.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span> <span class="k">as</span> <span class="n">input_handle</span><span class="p">:</span>
+        <span class="n">annotations</span> <span class="o">=</span> <span class="p">[</span> <span class="n">parse_annot_item</span><span class="p">(</span><span class="n">l</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span> <span class="n">ao_column_names</span><span class="p">,</span>
+                                         <span class="n">ao_array_names</span><span class="p">,</span> <span class="n">ao_array_delimiter</span><span class="p">,</span>
+                                         <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
+                        <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">input_handle</span> <span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">annotations</span>
+</div>
+<div class="viewcode-block" id="parse_annotation_inputs"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.parse_annotation_inputs">[docs]</a><span class="k">def</span> <span class="nf">parse_annotation_inputs</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span> <span class="k">as</span> <span class="n">input_handle</span><span class="p">:</span>
+        <span class="n">annotations</span> <span class="o">=</span> <span class="p">[</span> <span class="n">parse_annot_item</span><span class="p">(</span><span class="n">l</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span> <span class="n">ai_column_names</span><span class="p">,</span>
+                                         <span class="n">ai_array_names</span><span class="p">,</span> <span class="n">ai_array_delimiter</span><span class="p">,</span>
+                                         <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39; &#39;</span><span class="p">)</span>
+                        <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">input_handle</span> <span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">annotations</span>
+
+</div>
+<div class="viewcode-block" id="format_annotations"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.format_annotations">[docs]</a><span class="k">def</span> <span class="nf">format_annotations</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">c_column_names</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">,</span>
+                       <span class="n">array_delimiter</span><span class="o">=</span><span class="n">c_array_delimiter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Generates the string to write to an annotations file.</span>
+<span class="sd">    If the ``columns`` parameter is ``None``, will write all columns.</span>
+
+<span class="sd">    Will follow the column ordering.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">columns</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">None</span> <span class="c"># No output</span>
+
+    <span class="n">output_lines</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">annotations</span><span class="p">:</span>
+        <span class="n">fields</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">c</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">a</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Column </span><span class="si">%s</span><span class="s"> not found in annotations (available: </span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="n">c</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">keys</span><span class="p">())))</span>
+            <span class="k">if</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">c_array_names</span><span class="p">:</span>
+                <span class="n">field</span> <span class="o">=</span> <span class="n">array_delimiter</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">a</span><span class="p">[</span><span class="n">c</span><span class="p">]))</span>
+                <span class="n">fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">c</span><span class="p">]))</span>
+        <span class="n">line</span> <span class="o">=</span> <span class="n">delimiter</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">fields</span><span class="p">)</span>
+        <span class="n">output_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">output_lines</span>
+
+
+<span class="c">###############################################################################</span>
+
+<span class="c"># Database operations on annotations</span>
+
+</div>
+<div class="viewcode-block" id="add_column"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.add_column">[docs]</a><span class="k">def</span> <span class="nf">add_column</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">column</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Adds a column of the given name to the annotations. Non-destructive</span>
+<span class="sd">    (returns a deep copy).&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">annotations</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">annotations</span>
+    <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">annotations</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Trying to duplicate name </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">annotations</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">column</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Annotations and new column length don not match (</span><span class="si">%d</span><span class="s"> vs </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">annotations</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">column</span><span class="p">)))</span>
+
+    <span class="n">new_annots</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">annot</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">column</span><span class="p">):</span>
+        <span class="n">new_annot</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">annot</span><span class="p">)</span>
+        <span class="n">new_annot</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="n">new_annots</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_annot</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">new_annots</span>
+
+</div>
+<div class="viewcode-block" id="do_join_items_by"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.do_join_items_by">[docs]</a><span class="k">def</span> <span class="nf">do_join_items_by</span><span class="p">(</span><span class="n">i1</span><span class="p">,</span> <span class="n">i2</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Joins two dicts by the given member.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">i1</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">!=</span> <span class="n">i2</span><span class="p">[</span><span class="n">name</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Cannot join items by </span><span class="si">%s</span><span class="s">: values not equal! (1: </span><span class="si">%s</span><span class="s">, 2: </span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">i1</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">i2</span><span class="p">[</span><span class="n">name</span><span class="p">]))</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="p">{</span> <span class="n">key</span> <span class="p">:</span> <span class="n">value</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span><span class="n">value</span> <span class="ow">in</span> <span class="n">i1</span><span class="o">.</span><span class="n">items</span> <span class="p">}</span>
+    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">i2</span><span class="o">.</span><span class="n">items</span><span class="p">:</span>
+        <span class="n">output</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="k">return</span> <span class="n">output</span>
+
+</div>
+<div class="viewcode-block" id="inner_join_by"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.inner_join_by">[docs]</a><span class="k">def</span> <span class="nf">inner_join_by</span><span class="p">(</span><span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Inner-joins the given arrays of dicts by the column with the given</span>
+<span class="sd">    name.&quot;&quot;&quot;</span>
+    <span class="n">a1_index</span> <span class="o">=</span> <span class="n">group_by</span><span class="p">(</span><span class="n">a1</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+    <span class="n">a2_index</span> <span class="o">=</span> <span class="n">group_by</span><span class="p">(</span><span class="n">a2</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Available </span><span class="si">%s</span><span class="s"> in a1: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">a1_index</span><span class="o">.</span><span class="n">keys</span><span class="p">())))</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Available </span><span class="si">%s</span><span class="s"> in a2: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">a2_index</span><span class="o">.</span><span class="n">keys</span><span class="p">())))</span>
+
+    <span class="n">storage</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">dict</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">a1</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">item</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="ow">in</span> <span class="n">a2_index</span><span class="p">:</span>
+            <span class="n">storage</span><span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="n">name</span><span class="p">]]</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">a2</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">item</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="ow">in</span> <span class="n">a1_index</span><span class="p">:</span>
+            <span class="n">storage</span><span class="p">[</span><span class="n">item</span><span class="p">[</span><span class="n">name</span><span class="p">]]</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+
+    <span class="n">output</span> <span class="o">=</span> <span class="n">storage</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">output</span>
+
+</div>
+<div class="viewcode-block" id="group_by"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.group_by">[docs]</a><span class="k">def</span> <span class="nf">group_by</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Splits the annotations into item arrays with the same name.</span>
+
+<span class="sd">    :param annotations: The annotations array.</span>
+
+<span class="sd">    :param name: One of the names in ``column_names``.</span>
+
+<span class="sd">    :return: A dict of annotations arrays. The keys are all values that occur</span>
+<span class="sd">        in the ``name`` column, the values are the complete annotation items</span>
+<span class="sd">        (including the ``name`` column!)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># Empty</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">annotations</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">annotations</span>
+    <span class="n">column_names</span> <span class="o">=</span> <span class="n">annotations</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">column_names</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Invalid column name: </span><span class="si">%s</span><span class="s"> (available: </span><span class="si">%s</span><span class="s">)&#39;</span><span class="p">,</span>
+                         <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">column_names</span><span class="p">)))</span>
+
+    <span class="n">output_dict</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">annotations</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">item</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">output_dict</span><span class="p">:</span>
+            <span class="n">output_dict</span><span class="p">[</span><span class="n">value</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">output_dict</span><span class="p">[</span><span class="n">value</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">output_dict</span>
+
+</div>
+<div class="viewcode-block" id="intersect"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.intersect">[docs]</a><span class="k">def</span> <span class="nf">intersect</span><span class="p">(</span><span class="n">a1</span><span class="p">,</span> <span class="n">a2</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">unique_key</span><span class="o">=</span><span class="s">&#39;id&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns two lists of annotations consisting of the items from ``a1`` and</span>
+<span class="sd">    ``a2`` that have the same value in the column ``name``. If there is more</span>
+<span class="sd">    than one item with the same value in the ``name`` column in one of the</span>
+<span class="sd">    annotations, a cartesian product of each from a1 -- each from a2 is</span>
+<span class="sd">    generated.</span>
+
+<span class="sd">    :param unique_key: If a pair of items in a1, a2 share the unique key, they</span>
+<span class="sd">        are considered the same item and not considered in the intersection.</span>
+<span class="sd">        This controls self-intersection behavior, when for instance measuring</span>
+<span class="sd">        self-agreement.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">grouped_a1</span> <span class="o">=</span> <span class="n">group_by</span><span class="p">(</span><span class="n">a1</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+    <span class="n">grouped_a2</span> <span class="o">=</span> <span class="n">group_by</span><span class="p">(</span><span class="n">a2</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+
+    <span class="n">output_a1</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">output_a2</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">grouped_a1</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">grouped_a2</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">item1</span> <span class="ow">in</span> <span class="n">grouped_a1</span><span class="p">[</span><span class="n">value</span><span class="p">]:</span>
+                <span class="k">for</span> <span class="n">item2</span> <span class="ow">in</span> <span class="n">grouped_a2</span><span class="p">[</span><span class="n">value</span><span class="p">]:</span>
+                    <span class="k">if</span> <span class="n">item1</span><span class="p">[</span><span class="n">unique_key</span><span class="p">]</span> <span class="o">!=</span> <span class="n">item2</span><span class="p">[</span><span class="n">unique_key</span><span class="p">]:</span>
+                        <span class="n">output_a1</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item1</span><span class="p">)</span>
+                        <span class="n">output_a2</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item2</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">output_a1</span><span class="p">,</span> <span class="n">output_a2</span>
+
+<span class="c">###############################################################################</span>
+
+<span class="c"># Functional operations</span>
+</div>
+<div class="viewcode-block" id="apply_on_columns"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.apply_on_columns">[docs]</a><span class="k">def</span> <span class="nf">apply_on_columns</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">columns</span><span class="p">,</span> <span class="n">operation</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Creates an array that maps the given operation on the given columns.&quot;&quot;&quot;</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">annot</span> <span class="ow">in</span> <span class="n">annotations</span><span class="p">:</span>
+        <span class="n">cols</span> <span class="o">=</span> <span class="p">[</span> <span class="n">annot</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">columns</span> <span class="p">]</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">operation</span><span class="p">(</span><span class="o">*</span><span class="n">cols</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">output</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">output</span>
+
+</div>
+<div class="viewcode-block" id="apply_on_annotations"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.apply_on_annotations">[docs]</a><span class="k">def</span> <span class="nf">apply_on_annotations</span><span class="p">(</span><span class="n">annotations_array</span><span class="p">,</span> <span class="n">column</span><span class="p">,</span> <span class="n">operation</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Apply an operation on the same column from multiple annotations.&quot;&quot;&quot;</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">items</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">annotations_array</span><span class="p">):</span>
+        <span class="n">cols</span> <span class="o">=</span> <span class="p">[</span> <span class="n">item</span><span class="p">[</span><span class="n">column</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">items</span> <span class="p">]</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">operation</span><span class="p">(</span><span class="o">*</span><span class="n">cols</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="n">output</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">output</span>
+
+</div>
+<div class="viewcode-block" id="grid_on_intersection"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.grid_on_intersection">[docs]</a><span class="k">def</span> <span class="nf">grid_on_intersection</span><span class="p">(</span><span class="n">grouped_annotations</span><span class="p">,</span> <span class="n">intersect_column</span><span class="p">,</span> <span class="n">op_column</span><span class="p">,</span>
+                         <span class="n">operation</span><span class="p">,</span> <span class="n">skip_identical</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">record_counts</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                         <span class="o">**</span><span class="n">op_kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Applies the given operation on each pair of groups in the grouped</span>
+<span class="sd">    annotation (on the given column).</span>
+
+<span class="sd">    :param grouped_annotations: A grouped annotations dict. Grid members will</span>
+<span class="sd">        be pairs of groups.</span>
+
+<span class="sd">    :param intersect_column: The column according to which to compute the</span>
+<span class="sd">        intersect of two annotation groups.</span>
+
+<span class="sd">    :param op_column: The column on which to apply the ``operation``.</span>
+
+<span class="sd">    :param skip_identical: If set (default), will not include the grid</span>
+<span class="sd">        diagonal.</span>
+
+<span class="sd">    :param operation: The operation which will be applied_on_annotations on the</span>
+<span class="sd">        ``op_column`` of the intersecting annotations for each grid member.</span>
+
+<span class="sd">    :param record_counts: If set (default), will assume the ``column`` is an</span>
+<span class="sd">        array column and will also record counts for items in each intersection.</span>
+<span class="sd">        The counts will be recorded in the same structure as the results of</span>
+<span class="sd">        the operation, in tuples ``(count_g1, count_g2)``.</span>
+
+<span class="sd">    :returns: A dictionary of operation results on the given ``column``s of</span>
+<span class="sd">        the intersection of each pair of annotation groups. To find the result</span>
+<span class="sd">        for (g1, g2), go through ``results[g1][g2]``. **The result is a list</span>
+<span class="sd">        of results for all members of the intersect between g1 and g2.**</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">total_intersection_size</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">counts</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">g1</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">grouped_annotations</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+        <span class="n">g1_results</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">g1_counts</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">g2</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">grouped_annotations</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+            <span class="k">if</span> <span class="n">skip_identical</span> <span class="ow">and</span> <span class="n">g1</span> <span class="o">==</span> <span class="n">g2</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">intersection</span> <span class="o">=</span> <span class="n">intersect</span><span class="p">(</span><span class="n">grouped_annotations</span><span class="p">[</span><span class="n">g1</span><span class="p">],</span>
+                                     <span class="n">grouped_annotations</span><span class="p">[</span><span class="n">g2</span><span class="p">],</span>
+                                     <span class="n">intersect_column</span><span class="p">)</span>
+
+            <span class="c"># Update counters</span>
+            <span class="k">if</span> <span class="n">record_counts</span><span class="p">:</span>
+                <span class="n">intersection_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">intersection</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="n">total_intersection_size</span> <span class="o">+=</span> <span class="n">intersection_size</span>
+
+                <span class="n">g1_items_count</span> <span class="o">=</span> <span class="n">count_by_len</span><span class="p">(</span><span class="n">intersection</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">op_column</span><span class="p">)</span>
+                <span class="n">g2_items_count</span> <span class="o">=</span> <span class="n">count_by_len</span><span class="p">(</span><span class="n">intersection</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">op_column</span><span class="p">)</span>
+
+                <span class="n">g1_counts</span><span class="p">[</span><span class="n">g2</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">g1_items_count</span><span class="p">,</span> <span class="n">g2_items_count</span><span class="p">)</span>
+
+            <span class="c"># Apply operation</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">apply_on_annotations</span><span class="p">([</span><span class="n">intersection</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">intersection</span><span class="p">[</span><span class="mi">1</span><span class="p">]],</span>
+                                          <span class="n">op_column</span><span class="p">,</span> <span class="n">operation</span><span class="p">,</span> <span class="o">**</span><span class="n">op_kwargs</span><span class="p">)</span>
+            <span class="n">g1_results</span><span class="p">[</span><span class="n">g2</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span>
+
+        <span class="n">counts</span><span class="p">[</span><span class="n">g1</span><span class="p">]</span> <span class="o">=</span> <span class="n">g1_counts</span>
+        <span class="n">results</span><span class="p">[</span><span class="n">g1</span><span class="p">]</span> <span class="o">=</span> <span class="n">g1_results</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">record_counts</span><span class="p">:</span>
+            <span class="n">counts</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">return</span> <span class="n">results</span><span class="p">,</span> <span class="n">counts</span>
+
+</div>
+<div class="viewcode-block" id="apply_on_grid"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.apply_on_grid">[docs]</a><span class="k">def</span> <span class="nf">apply_on_grid</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">operation</span><span class="p">,</span> <span class="o">**</span><span class="n">operation_kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Applies the given operation on each grid member. The grid is assumed</span>
+<span class="sd">    to be the output of a ``grid_on_`` method (currently implemented: only</span>
+<span class="sd">    grid_on_intersect): a dict of dicts of lists. The operation is applied</span>
+<span class="sd">    to each grid member. The result is again a grid.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">output_grid</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">g1</span> <span class="ow">in</span> <span class="n">grid</span><span class="p">:</span>
+        <span class="n">current_output</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">current_member</span> <span class="o">=</span> <span class="n">grid</span><span class="p">[</span><span class="n">g1</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">g2</span> <span class="ow">in</span> <span class="n">current_member</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Applying operation on grid member </span><span class="si">%s</span><span class="s">/</span><span class="si">%s</span><span class="s">: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">g1</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">g2</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">current_member</span><span class="p">[</span><span class="n">g2</span><span class="p">])</span>
+            <span class="p">))</span>
+            <span class="n">current_output</span><span class="p">[</span><span class="n">g2</span><span class="p">]</span> <span class="o">=</span> <span class="n">operation</span><span class="p">(</span><span class="n">current_member</span><span class="p">[</span><span class="n">g2</span><span class="p">],</span>
+                                           <span class="o">**</span><span class="n">operation_kwargs</span><span class="p">)</span>
+        <span class="n">output_grid</span><span class="p">[</span><span class="n">g1</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_output</span>
+    <span class="k">return</span> <span class="n">output_grid</span>
+
+</div>
+<div class="viewcode-block" id="filter_grid"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.filter_grid">[docs]</a><span class="k">def</span> <span class="nf">filter_grid</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">condition</span><span class="p">,</span> <span class="o">**</span><span class="n">condition_kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Filters the given grid: only if the given condition holds,</span>
+<span class="sd">    will retain the given grid member in output. Non-destructive.&quot;&quot;&quot;</span>
+    <span class="n">output_grid</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">g1</span> <span class="ow">in</span> <span class="n">grid</span><span class="p">:</span>
+        <span class="n">current_output</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">current_member</span> <span class="o">=</span> <span class="n">grid</span><span class="p">[</span><span class="n">g1</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">g2</span> <span class="ow">in</span> <span class="n">current_member</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">condition</span><span class="p">(</span><span class="n">current_member</span><span class="p">[</span><span class="n">g2</span><span class="p">],</span> <span class="o">**</span><span class="n">condition_kwargs</span><span class="p">):</span>
+                <span class="n">current_output</span><span class="p">[</span><span class="n">g2</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_member</span><span class="p">[</span><span class="n">g2</span><span class="p">]</span>
+                <span class="c"># logging.debug(&#39;Filter_grid retaining member %s/%s: %s&#39; % (</span>
+                <span class="c">#     str(g1), str(g2), str(current_member[g2])</span>
+                <span class="c">#                                                          ))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Will not retain member </span><span class="si">%s</span><span class="s">/</span><span class="si">%s</span><span class="s">: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">g1</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">g2</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">current_member</span><span class="p">[</span><span class="n">g2</span><span class="p">])</span>
+                <span class="p">))</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">current_output</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Will retain grid for top-level member </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">g1</span><span class="p">))</span>
+            <span class="n">output_grid</span><span class="p">[</span><span class="n">g1</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_output</span>
+    <span class="k">return</span> <span class="n">output_grid</span>
+
+</div>
+<div class="viewcode-block" id="apply_on_grid_axis"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.apply_on_grid_axis">[docs]</a><span class="k">def</span> <span class="nf">apply_on_grid_axis</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">operation</span><span class="p">,</span> <span class="o">**</span><span class="n">operation_kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Applies the given operation on the list of values of each top-level</span>
+<span class="sd">    grid member (grid row).&quot;&quot;&quot;</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">g1</span> <span class="ow">in</span> <span class="n">grid</span><span class="p">:</span>
+        <span class="n">output</span><span class="p">[</span><span class="n">g1</span><span class="p">]</span> <span class="o">=</span> <span class="n">operation</span><span class="p">(</span><span class="n">grid</span><span class="p">[</span><span class="n">g1</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">(),</span> <span class="o">**</span><span class="n">operation_kwargs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">output</span>
+
+</div>
+<div class="viewcode-block" id="apply_on_grids"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.apply_on_grids">[docs]</a><span class="k">def</span> <span class="nf">apply_on_grids</span><span class="p">(</span><span class="n">grids</span><span class="p">,</span> <span class="n">operation</span><span class="p">,</span> <span class="o">**</span><span class="n">operation_kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Analogous to apply_on_annotations - applies the given operation</span>
+<span class="sd">    to members of grids indexed by the same label pairs. Outputs, again,</span>
+<span class="sd">    a grid with the results of the ``operation``.&quot;&quot;&quot;</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">g1</span> <span class="ow">in</span> <span class="n">grids</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+        <span class="n">current_output</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">g2</span> <span class="ow">in</span> <span class="n">grids</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">g1</span><span class="p">]:</span>
+            <span class="n">items</span> <span class="o">=</span> <span class="p">[</span> <span class="n">g</span><span class="p">[</span><span class="n">g1</span><span class="p">][</span><span class="n">g2</span><span class="p">]</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">grids</span> <span class="p">]</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">operation</span><span class="p">(</span><span class="o">*</span><span class="n">items</span><span class="p">,</span> <span class="o">**</span><span class="n">operation_kwargs</span><span class="p">)</span>
+            <span class="n">current_output</span><span class="p">[</span><span class="n">g2</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">current_output</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">output</span><span class="p">[</span><span class="n">g1</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_output</span>
+    <span class="k">return</span> <span class="n">output</span>
+
+</div>
+<div class="viewcode-block" id="grid_axis_weighed_average"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.grid_axis_weighed_average">[docs]</a><span class="k">def</span> <span class="nf">grid_axis_weighed_average</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">weights_grid</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes the weighed average for the top-level grid member (grid row).&quot;&quot;&quot;</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">g1</span> <span class="ow">in</span> <span class="n">grid</span><span class="p">:</span>
+        <span class="n">vw_pairs</span> <span class="o">=</span> <span class="p">[</span> <span class="p">(</span><span class="n">grid</span><span class="p">[</span><span class="n">g1</span><span class="p">][</span><span class="n">g2</span><span class="p">],</span> <span class="n">weights_grid</span><span class="p">[</span><span class="n">g1</span><span class="p">][</span><span class="n">g2</span><span class="p">])</span>
+                      <span class="k">for</span> <span class="n">g2</span> <span class="ow">in</span> <span class="n">grid</span><span class="p">[</span><span class="n">g1</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="p">]</span>
+        <span class="n">values</span><span class="p">,</span> <span class="n">weights</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">vw_pairs</span><span class="p">)</span>
+        <span class="n">output</span><span class="p">[</span><span class="n">g1</span><span class="p">]</span> <span class="o">=</span> <span class="n">avg</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">weights</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">output</span>
+
+<span class="c">##############################################################################</span>
+
+<span class="c"># Reporting and Evaluation</span>
+
+</div>
+<div class="viewcode-block" id="annot_stats"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.annot_stats">[docs]</a><span class="k">def</span> <span class="nf">annot_stats</span><span class="p">(</span><span class="n">annotations</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Computes all the statistics from the given annotations.</span>
+
+<span class="sd">    :param annotations: An annotations array.</span>
+
+<span class="sd">    :return: A dict of annotation statistics.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c"># Total annotations</span>
+    <span class="n">total_items</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">annotations</span><span class="p">)</span>
+
+    <span class="c"># Total/average appropriate</span>
+    <span class="n">total_appropriate</span> <span class="o">=</span> <span class="n">count_by_len</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="s">&#39;appropriate&#39;</span><span class="p">)</span>
+    <span class="n">avg_appropriate</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">total_appropriate</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">total_items</span><span class="p">)</span>
+
+    <span class="c"># Total/average inappropriate</span>
+    <span class="n">total_inappropriate</span> <span class="o">=</span> <span class="n">count_by_len</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="s">&#39;inappropriate&#39;</span><span class="p">)</span>
+    <span class="n">avg_inappropriate</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">total_inappropriate</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">total_items</span><span class="p">)</span>
+
+    <span class="c"># Total annotated</span>
+    <span class="n">total_images</span> <span class="o">=</span> <span class="n">total_appropriate</span> <span class="o">+</span> <span class="n">total_inappropriate</span>
+    <span class="n">avg_images</span> <span class="o">=</span> <span class="n">avg_appropriate</span> <span class="o">+</span> <span class="n">avg_inappropriate</span>
+
+    <span class="k">return</span> <span class="n">total_items</span><span class="p">,</span> <span class="n">total_images</span><span class="p">,</span> <span class="n">avg_images</span><span class="p">,</span> <span class="n">total_appropriate</span><span class="p">,</span> \
+            <span class="n">avg_appropriate</span><span class="p">,</span> <span class="n">total_inappropriate</span><span class="p">,</span> <span class="n">avg_inappropriate</span>
+
+</div>
+<div class="viewcode-block" id="annot_stats_report"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.annot_stats_report">[docs]</a><span class="k">def</span> <span class="nf">annot_stats_report</span><span class="p">(</span><span class="n">in_stats</span><span class="p">,</span> <span class="n">latex</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+
+    <span class="n">total_items</span><span class="p">,</span> <span class="n">total_images</span><span class="p">,</span> <span class="n">avg_images</span><span class="p">,</span> <span class="n">total_appropriate</span><span class="p">,</span>\
+        <span class="n">avg_appropriate</span><span class="p">,</span> <span class="n">total_inappropriate</span><span class="p">,</span> <span class="n">avg_inappropriate</span> <span class="o">=</span> <span class="n">in_stats</span>
+
+    <span class="n">table_line</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%d</span><span class="se">\t</span><span class="si">%.3f</span><span class="se">\t</span><span class="si">%d</span><span class="se">\t</span><span class="si">%.3f</span><span class="se">\t</span><span class="si">%d</span><span class="se">\t</span><span class="si">%.3f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">total_items</span><span class="p">,</span> <span class="n">avg_images</span><span class="p">,</span>
+    <span class="n">total_appropriate</span><span class="p">,</span> <span class="n">avg_appropriate</span><span class="p">,</span> <span class="n">total_inappropriate</span><span class="p">,</span> <span class="n">avg_inappropriate</span><span class="p">)</span>
+
+    <span class="c">#if latex:</span>
+        <span class="c">#table_line = &#39; &amp; &#39;.join(table_line.split()) + &#39; \\\\&#39;</span>
+        <span class="c">##table_line += &quot;\n\\hline&quot;</span>
+
+    <span class="k">return</span> <span class="n">table_line</span>
+
+</div>
+<div class="viewcode-block" id="count_by_len"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.count_by_len">[docs]</a><span class="k">def</span> <span class="nf">count_by_len</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">array_names</span><span class="o">=</span><span class="n">ao_array_names</span><span class="o">+</span><span class="n">ai_array_names</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Counts annotations in the given type.</span>
+
+<span class="sd">    :param annotations:</span>
+<span class="sd">    :param name:</span>
+<span class="sd">    :return:</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">array_names</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Name </span><span class="si">%s</span><span class="s"> not in array names (</span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">array_names</span><span class="p">)))</span>
+    <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">annotations</span><span class="p">:</span>
+        <span class="n">total</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">total</span>
+
+</div>
+<div class="viewcode-block" id="counts_by_len"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.counts_by_len">[docs]</a><span class="k">def</span> <span class="nf">counts_by_len</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">array_names</span><span class="o">=</span><span class="n">ao_array_names</span><span class="o">+</span><span class="n">ai_array_names</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Gives annotation array field lengths in the given column.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">array_names</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Name </span><span class="si">%s</span><span class="s"> not in array names (</span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">array_names</span><span class="p">)))</span>
+    <span class="n">lengths</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">annotations</span><span class="p">:</span>
+        <span class="n">lengths</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="n">name</span><span class="p">]))</span>
+    <span class="k">return</span> <span class="n">lengths</span>
+
+</div>
+<div class="viewcode-block" id="avg_annot_precision"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.avg_annot_precision">[docs]</a><span class="k">def</span> <span class="nf">avg_annot_precision</span><span class="p">(</span><span class="n">prediction</span><span class="p">,</span> <span class="n">true</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes the average precision of the ``prediction`` annotations of</span>
+<span class="sd">    column ``name`` against the ``true`` annotations.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">precisions</span> <span class="o">=</span> <span class="n">apply_on_annotations</span><span class="p">([</span><span class="n">prediction</span><span class="p">,</span> <span class="n">true</span><span class="p">],</span> <span class="n">name</span><span class="p">,</span> <span class="n">precision</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">precisions</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="c">#logging.warn(&#39;avg_annot_precision: No prediction!&#39;)</span>
+        <span class="k">return</span> <span class="mf">0.0</span>
+    <span class="n">average_precision</span> <span class="o">=</span> <span class="n">avg</span><span class="p">(</span><span class="n">precisions</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">average_precision</span>
+
+</div>
+<div class="viewcode-block" id="avg_annot_fscore"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.avg_annot_fscore">[docs]</a><span class="k">def</span> <span class="nf">avg_annot_fscore</span><span class="p">(</span><span class="n">prediction</span><span class="p">,</span> <span class="n">true</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="n">fscores</span> <span class="o">=</span> <span class="n">apply_on_annotations</span><span class="p">([</span><span class="n">prediction</span><span class="p">,</span> <span class="n">true</span><span class="p">],</span> <span class="n">name</span><span class="p">,</span> <span class="n">f_score</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fscores</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mf">0.0</span>
+    <span class="n">average_fsc</span> <span class="o">=</span> <span class="n">avg</span><span class="p">(</span><span class="n">fscores</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">average_fsc</span>
+
+</div>
+<div class="viewcode-block" id="group_mutual_precision"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.group_mutual_precision">[docs]</a><span class="k">def</span> <span class="nf">group_mutual_precision</span><span class="p">(</span><span class="n">grouped_annotations</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Measures the mutual precision in each group in the column with the given</span>
+<span class="sd">    name. Intended mainly for measuring items grouped by text.</span>
+
+<span class="sd">    :returns: A dict with keys corresponding to ``grouped_annotations`` groups</span>
+<span class="sd">        and values corresponding to mutual precision.&quot;&quot;&quot;</span>
+    <span class="n">outputs</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">gkey</span> <span class="ow">in</span> <span class="n">grouped_annotations</span><span class="p">:</span>
+        <span class="n">item_fields</span> <span class="o">=</span> <span class="p">[</span> <span class="n">g</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">grouped_annotations</span><span class="p">[</span><span class="n">gkey</span><span class="p">]]</span>
+        <span class="n">outputs</span><span class="p">[</span><span class="n">gkey</span><span class="p">]</span> <span class="o">=</span> <span class="n">avg_pairwise_mutual_precision</span><span class="p">(</span><span class="n">item_fields</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">outputs</span>
+
+<span class="c">##############################################################################</span>
+
+<span class="c"># Miscellaneous functions</span>
+</div>
+<div class="viewcode-block" id="timeframe"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.timeframe">[docs]</a><span class="k">def</span> <span class="nf">timeframe</span><span class="p">(</span><span class="n">annotations</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Outputs the minimum and maximum time of annotations as a tuple.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">annotations</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">None</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="s">&#39;time&#39;</span> <span class="ow">in</span> <span class="n">annotations</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Cannot get timeframe from annotations without time.&#39;</span><span class="p">)</span>
+
+    <span class="n">times</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">map</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="s">&#39;time&#39;</span><span class="p">),</span> <span class="n">annotations</span><span class="p">)]</span>
+    <span class="n">min_time</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">times</span><span class="p">)</span>
+    <span class="n">max_time</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">times</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">min_time</span><span class="p">,</span> <span class="n">max_time</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="human_timeframe"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.human_timeframe">[docs]</a><span class="k">def</span> <span class="nf">human_timeframe</span><span class="p">(</span><span class="n">annotations</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Gets the timeframe in a human-readable format.&quot;&quot;&quot;</span>
+    <span class="n">from_t</span><span class="p">,</span> <span class="n">to_t</span> <span class="o">=</span> <span class="n">timeframe</span><span class="p">(</span><span class="n">annotations</span><span class="p">)</span>
+
+    <span class="n">from_d</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span><span class="n">from_t</span><span class="p">)</span>
+    <span class="n">from_h</span> <span class="o">=</span> <span class="n">from_d</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s">&#39;%Y-%m-</span><span class="si">%d</span><span class="s"> %H:%M:%S&#39;</span><span class="p">)</span>
+
+    <span class="n">to_d</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">fromtimestamp</span><span class="p">(</span><span class="n">to_t</span><span class="p">)</span>
+    <span class="n">to_h</span> <span class="o">=</span> <span class="n">to_d</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s">&#39;%Y-%m-</span><span class="si">%d</span><span class="s"> %H:%M:%S&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">from_h</span><span class="p">,</span> <span class="n">to_h</span>
+</div>
+<div class="viewcode-block" id="plot_column_in_time"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.plot_column_in_time">[docs]</a><span class="k">def</span> <span class="nf">plot_column_in_time</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">pyplot_kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Plots the development of a certain column in time.</span>
+
+<span class="sd">    Assumes the column is numerical.&quot;&quot;&quot;</span>
+    <span class="n">times</span> <span class="o">=</span> <span class="p">[</span> <span class="nb">int</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="s">&#39;time&#39;</span><span class="p">])</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">annotations</span> <span class="p">]</span>
+    <span class="n">values</span> <span class="o">=</span> <span class="p">[</span> <span class="n">a</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">annotations</span> <span class="p">]</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="mi">4</span><span class="p">))</span>
+    <span class="k">if</span> <span class="s">&#39;title&#39;</span> <span class="ow">in</span> <span class="n">pyplot_kwargs</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="n">pyplot_kwargs</span><span class="p">[</span><span class="s">&#39;title&#39;</span><span class="p">])</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">times</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="s">&#39;ro&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">axis</span><span class="p">([</span><span class="nb">min</span><span class="p">(</span><span class="n">times</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">times</span><span class="p">),</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">12</span><span class="p">])</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+
+<span class="c">##############################################################################</span>
+
+<span class="c"># Agreement reporting</span>
+</div>
+<div class="viewcode-block" id="report_agreement"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.report_agreement">[docs]</a><span class="k">def</span> <span class="nf">report_agreement</span><span class="p">(</span><span class="n">avg_result_over_users</span><span class="p">,</span> <span class="n">avg_results</span><span class="p">,</span>
+                     <span class="n">column</span><span class="p">,</span> <span class="n">counts</span><span class="p">,</span> <span class="n">counts_per_user</span><span class="p">,</span> <span class="n">max_agreement</span><span class="p">,</span>
+                     <span class="n">min_agreement</span><span class="p">,</span> <span class="n">pivot_agreement</span><span class="p">,</span> <span class="n">results_counts</span><span class="p">,</span>
+                     <span class="n">w_avg_result_over_users</span><span class="p">,</span> <span class="n">w_avg_results_per_user</span><span class="p">,</span>
+                     <span class="n">averages_only</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">print_descriptor</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">latex</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Prints the agreement information.&quot;&quot;&quot;</span>
+    <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">---------    Inter-annotator scores for </span><span class="si">%s</span><span class="s">    ----------</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">column</span>
+    <span class="k">print</span> <span class="s">&#39;Average agreement: </span><span class="si">%f</span><span class="s">/</span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">w_avg_result_over_users</span><span class="p">,</span>
+                                        <span class="n">avg_result_over_users</span><span class="p">)</span>
+    <span class="k">print</span> <span class="s">&#39;Maximum/Minimum agreement: </span><span class="si">%f</span><span class="s"> / </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">max_agreement</span><span class="p">,</span>
+                                                  <span class="n">min_agreement</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">print_descriptor</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">-----------------------------------------------------------&#39;</span>
+        <span class="k">print</span> <span class="s">&#39;Columns:</span><span class="se">\n</span><span class="s">-------</span><span class="se">\n\n</span><span class="s">&#39;</span> \
+              <span class="s">&#39;username; avg. agreement; </span><span class="si">% o</span><span class="s">f median agr.; # of duplicates total&#39;</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">other u.name; agr. w. other; # of dupl. w. ot.; # of imgs. you/ot.&#39;</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">other u.name; agr. w. other; # of dupl. w. ot.; # of imgs. you/ot.&#39;</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">etc.&#39;</span>
+        <span class="k">print</span> <span class="s">&#39;-----------------------------------------------------------</span><span class="se">\n\n</span><span class="s">&#39;</span>
+
+    <span class="k">print</span> <span class="s">&#39;Individual user reports:</span><span class="se">\n</span><span class="s">&#39;</span>
+
+    <span class="k">for</span> <span class="n">u1</span> <span class="ow">in</span> <span class="n">avg_results</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">averages_only</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&#39;&#39;</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="se">\t</span><span class="si">%f</span><span class="se">\t</span><span class="si">%f</span><span class="se">\t</span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">u1</span><span class="p">[:</span><span class="mi">3</span><span class="p">],</span>
+                                    <span class="n">w_avg_results_per_user</span><span class="p">[</span><span class="n">u1</span><span class="p">],</span>
+                                    <span class="n">w_avg_results_per_user</span><span class="p">[</span><span class="n">u1</span><span class="p">]</span><span class="o">/</span><span class="n">pivot_agreement</span><span class="p">,</span>
+                                    <span class="n">counts_per_user</span><span class="p">[</span><span class="n">u1</span><span class="p">])</span>  <span class="c"># Add % of maximum res.</span>
+        <span class="k">if</span> <span class="n">latex</span><span class="p">:</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="s">&#39; &amp; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="o">+</span> <span class="s">&#39; </span><span class="se">\\\\</span><span class="s">&#39;</span>
+        <span class="k">print</span> <span class="n">out</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">averages_only</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&#39;</span><span class="se">\\</span><span class="s">hline&#39;</span>
+            <span class="k">for</span> <span class="n">u2</span> <span class="ow">in</span> <span class="n">avg_results</span><span class="p">[</span><span class="n">u1</span><span class="p">]:</span>
+                <span class="n">out</span> <span class="o">=</span><span class="s">&#39;</span><span class="se">\t</span><span class="si">%s</span><span class="se">\t</span><span class="si">%f</span><span class="se">\t</span><span class="si">%d</span><span class="se">\t</span><span class="si">%d</span><span class="s">/</span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">u2</span><span class="p">[:</span><span class="mi">3</span><span class="p">],</span> <span class="n">avg_results</span><span class="p">[</span><span class="n">u1</span><span class="p">][</span><span class="n">u2</span><span class="p">],</span>
+                                                 <span class="n">results_counts</span><span class="p">[</span><span class="n">u1</span><span class="p">][</span><span class="n">u2</span><span class="p">],</span>
+                                                 <span class="n">counts</span><span class="p">[</span><span class="n">u1</span><span class="p">][</span><span class="n">u2</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span>
+                                                 <span class="n">counts</span><span class="p">[</span><span class="n">u1</span><span class="p">][</span><span class="n">u2</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">latex</span><span class="p">:</span>
+                    <span class="n">out</span> <span class="o">=</span> <span class="s">&#39; &amp; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="o">+</span> <span class="s">&#39; </span><span class="se">\\\\</span><span class="s">&#39;</span>
+                <span class="k">print</span> <span class="n">out</span>
+
+</div>
+<div class="viewcode-block" id="compute_agreement"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.compute_agreement">[docs]</a><span class="k">def</span> <span class="nf">compute_agreement</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">column</span><span class="p">,</span> <span class="n">evaluation_fn</span><span class="p">,</span>
+                      <span class="n">print_averages_only</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">no_print</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">latex</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                     <span class="o">**</span><span class="n">evaluation_fn_kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Reports the average evaluation_fn for all pairs of annotation</span>
+<span class="sd">    groups with non-empty intersection.&quot;&quot;&quot;</span>
+    <span class="n">results</span><span class="p">,</span> <span class="n">counts</span> <span class="o">=</span> <span class="n">grid_on_intersection</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="s">&#39;text&#39;</span><span class="p">,</span>
+                                           <span class="n">column</span><span class="p">,</span> <span class="n">evaluation_fn</span><span class="p">,</span>
+                                           <span class="n">skip_identical</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                           <span class="o">**</span><span class="n">evaluation_fn_kwargs</span><span class="p">)</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">filter_grid</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">results_counts</span> <span class="o">=</span> <span class="n">apply_on_grid</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="nb">len</span><span class="p">)</span>
+    <span class="n">avg_results</span> <span class="o">=</span> <span class="n">apply_on_grid</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">avg</span><span class="p">)</span>
+
+    <span class="n">avg_results_per_user</span> <span class="o">=</span> <span class="n">apply_on_grid_axis</span><span class="p">(</span><span class="n">avg_results</span><span class="p">,</span> <span class="n">avg</span><span class="p">)</span>
+    <span class="n">w_avg_results_per_user</span> <span class="o">=</span> <span class="n">grid_axis_weighed_average</span><span class="p">(</span><span class="n">avg_results</span><span class="p">,</span>
+                                                       <span class="n">results_counts</span><span class="p">)</span>
+    <span class="n">counts_per_user</span> <span class="o">=</span> <span class="n">apply_on_grid_axis</span><span class="p">(</span><span class="n">results_counts</span><span class="p">,</span> <span class="nb">sum</span><span class="p">)</span>
+
+    <span class="c"># Get weighed average results instead of plain average</span>
+    <span class="c"># - weighing by no. of annotation items</span>
+
+    <span class="n">results_list</span> <span class="o">=</span> <span class="p">[</span> <span class="n">w_avg_results_per_user</span><span class="p">[</span><span class="n">u</span><span class="p">]</span>
+                     <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">w_avg_results_per_user</span><span class="o">.</span><span class="n">keys</span><span class="p">())]</span>
+    <span class="n">counts_list</span> <span class="o">=</span> <span class="p">[</span> <span class="n">counts_per_user</span><span class="p">[</span><span class="n">u</span><span class="p">]</span>
+                    <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">w_avg_results_per_user</span><span class="o">.</span><span class="n">keys</span><span class="p">())]</span>
+    <span class="n">avg_result_over_users</span> <span class="o">=</span> <span class="n">avg</span><span class="p">(</span><span class="n">results_list</span><span class="p">)</span>
+    <span class="n">w_avg_result_over_users</span> <span class="o">=</span> <span class="n">avg</span><span class="p">(</span><span class="n">results_list</span><span class="p">,</span> <span class="n">counts_list</span><span class="p">)</span>
+
+    <span class="n">max_agreement</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">results_list</span><span class="p">)</span>
+    <span class="n">min_agreement</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">results_list</span><span class="p">)</span>
+    <span class="n">pivot_agreement</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">results_list</span><span class="p">)[</span><span class="nb">len</span><span class="p">(</span><span class="n">results_list</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+
+    <span class="c"># Return weighed averages per user</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">no_print</span><span class="p">:</span>
+        <span class="n">report_agreement</span><span class="p">(</span><span class="n">avg_result_over_users</span><span class="p">,</span> <span class="n">avg_results</span><span class="p">,</span>
+                         <span class="n">column</span><span class="p">,</span> <span class="n">counts</span><span class="p">,</span> <span class="n">counts_per_user</span><span class="p">,</span> <span class="n">max_agreement</span><span class="p">,</span>
+                         <span class="n">min_agreement</span><span class="p">,</span> <span class="n">pivot_agreement</span><span class="p">,</span> <span class="n">results_counts</span><span class="p">,</span>
+                         <span class="n">w_avg_result_over_users</span><span class="p">,</span> <span class="n">w_avg_results_per_user</span><span class="p">,</span>
+                         <span class="n">averages_only</span><span class="o">=</span><span class="n">print_averages_only</span><span class="p">,</span> <span class="n">latex</span><span class="o">=</span><span class="n">latex</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">w_avg_results_per_user</span>
+
+<span class="c">##############################################################################</span>
+
+</div>
+<div class="viewcode-block" id="reward_coefficients"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.reward_coefficients">[docs]</a><span class="k">def</span> <span class="nf">reward_coefficients</span><span class="p">(</span><span class="n">average_agreement_by_user</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes reward coefficients based on the users&#39; average agreement.&quot;&quot;&quot;</span>
+    <span class="n">pivot</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">average_agreement_by_user</span><span class="o">.</span><span class="n">values</span><span class="p">())[</span><span class="nb">len</span><span class="p">(</span><span class="n">average_agreement_by_user</span><span class="o">.</span><span class="n">values</span><span class="p">())</span><span class="o">/</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="p">{</span> <span class="n">u</span> <span class="p">:</span> <span class="n">average_agreement_by_user</span><span class="p">[</span><span class="n">u</span><span class="p">]</span> <span class="o">/</span> <span class="n">pivot</span>
+               <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">average_agreement_by_user</span><span class="p">}</span>
+    <span class="k">return</span> <span class="n">output</span>
+
+</div>
+<div class="viewcode-block" id="compute_time_reward"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.compute_time_reward">[docs]</a><span class="k">def</span> <span class="nf">compute_time_reward</span><span class="p">(</span><span class="n">annotations</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes the reward for time spent annotating.&quot;&quot;&quot;</span>
+    <span class="n">minutes_worked</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">times</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="s">&#39;time&#39;</span><span class="p">),</span> <span class="n">annotations</span><span class="p">)))</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">times</span><span class="p">)</span>
+    <span class="n">end</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">times</span><span class="p">)</span>
+
+    <span class="n">tidx</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Maximum minutes: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">start</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">end</span> <span class="o">+</span> <span class="mi">59</span><span class="p">,</span> <span class="mi">60</span><span class="p">)))</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Total times: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">times</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">minute_start</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">start</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">end</span> <span class="o">+</span> <span class="mi">59</span><span class="p">,</span> <span class="mi">60</span><span class="p">):</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;minute starting: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">minute_start</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">times</span><span class="p">[</span><span class="n">tidx</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">minute_start</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Worked in minute starting at </span><span class="si">%d</span><span class="s">: time </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">minute_start</span><span class="p">,</span> <span class="n">times</span><span class="p">[</span><span class="n">tidx</span><span class="p">]))</span>
+            <span class="n">minutes_worked</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">while</span> <span class="n">times</span><span class="p">[</span><span class="n">tidx</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">minute_start</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Moving tidx to </span><span class="si">%d</span><span class="s">, time at tidx </span><span class="si">%d</span><span class="s"> &lt; </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">tidx</span><span class="p">,</span>
+                                                    <span class="n">times</span><span class="p">[</span><span class="n">tidx</span><span class="p">],</span> <span class="n">minute_start</span><span class="p">))</span>
+                <span class="n">tidx</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="n">tidx</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">times</span><span class="p">):</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="n">tidx</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">times</span><span class="p">):</span>
+                <span class="k">break</span>
+
+    <span class="n">reward_per_minute</span> <span class="o">=</span> <span class="mf">1.0</span>
+    <span class="k">return</span> <span class="n">minutes_worked</span> <span class="o">*</span> <span class="n">reward_per_minute</span>
+
+</div>
+<div class="viewcode-block" id="compute_item_reward"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.compute_item_reward">[docs]</a><span class="k">def</span> <span class="nf">compute_item_reward</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">coef_appropriate</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+                        <span class="n">coef_inappropriate</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes the reward for individual annotated images.&quot;&quot;&quot;</span>
+    <span class="n">total_item_reward</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">item_rewards</span> <span class="o">=</span> <span class="p">[</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.25</span> <span class="p">]</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">annotations</span><span class="p">:</span>
+        <span class="n">app</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s">&#39;appropriate&#39;</span><span class="p">])</span>
+        <span class="n">inapp</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s">&#39;inappropriate&#39;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">r</span><span class="p">,</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">item_rewards</span><span class="p">,</span> <span class="n">item</span><span class="p">[</span><span class="s">&#39;combined&#39;</span><span class="p">]):</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">app</span><span class="p">:</span>
+                <span class="n">total_item_reward</span> <span class="o">+=</span> <span class="n">r</span> <span class="o">*</span> <span class="n">coef_appropriate</span>
+            <span class="k">elif</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">inapp</span><span class="p">:</span>
+                <span class="n">total_item_reward</span> <span class="o">+=</span> <span class="n">r</span> <span class="o">*</span> <span class="n">coef_inappropriate</span>
+    <span class="k">return</span> <span class="n">total_item_reward</span>
+</div>
+<div class="viewcode-block" id="compute_reward"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.compute_reward">[docs]</a><span class="k">def</span> <span class="nf">compute_reward</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">coef_appropriate</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">coef_inappropriate</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes how much an annotator should be paid for the given set of</span>
+<span class="sd">    annotations.</span>
+
+<span class="sd">    The formula::</span>
+
+<span class="sd">        R = time_reward + item_rewards * agreement_coefficient</span>
+
+<span class="sd">    where::</span>
+
+<span class="sd">        time_reward = # of minutes in which at least one annotation was sent</span>
+<span class="sd">        item_rewards = sum of individual item rewards</span>
+<span class="sd">        item_reward = dot([1 for _ in annotated_pictures], reward_vector)</span>
+<span class="sd">        reward_vector = [1.0, 0.5, 0.5, 0.25, 0.25, 0.25, 0.25, 0., 0., 0., 0., 0.]</span>
+<span class="sd">        agreement_coefficient = apppropriate + inappropriate agr. coef. / 2</span>
+<span class="sd">        appropriate agr. coef. = avg. app. precision vs all users / 3rd best avg. prec.</span>
+<span class="sd">        inappropriate agr. coef. = dtto for inapp. precision</span>
+
+<span class="sd">    :returns: The total reward.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">time_reward</span> <span class="o">=</span> <span class="n">compute_time_reward</span><span class="p">(</span><span class="n">annotations</span><span class="p">)</span>
+    <span class="n">item_reward</span> <span class="o">=</span> <span class="n">compute_item_reward</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span>
+                                      <span class="n">coef_appropriate</span><span class="o">=</span><span class="n">coef_appropriate</span><span class="p">,</span>
+                                      <span class="n">coef_inappropriate</span><span class="o">=</span><span class="n">coef_inappropriate</span><span class="p">)</span>
+    <span class="n">reward</span> <span class="o">=</span> <span class="n">time_reward</span> <span class="o">+</span> <span class="n">item_reward</span>
+    <span class="k">return</span> <span class="n">reward</span>
+
+</div>
+<div class="viewcode-block" id="compute_user_orig_acc"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.compute_user_orig_acc">[docs]</a><span class="k">def</span> <span class="nf">compute_user_orig_acc</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">originals</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s">&#39;appropriate&#39;</span><span class="p">,</span>
+                          <span class="n">with_counts</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes how often are original illustrative images annotated</span>
+<span class="sd">        as the given column.</span>
+
+<span class="sd">        :param with_counts: Will also return the hit count.&quot;&quot;&quot;</span>
+    <span class="n">total_hits</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">total_with_original</span> <span class="o">=</span> <span class="mf">0.00001</span>
+    <span class="n">total_annotated</span> <span class="o">=</span> <span class="mf">0.00001</span>
+    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">annotations</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s">&#39;text&#39;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">originals</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">original</span> <span class="o">=</span> <span class="n">originals</span><span class="p">[</span><span class="n">a</span><span class="p">[</span><span class="s">&#39;text&#39;</span><span class="p">]]</span>
+        <span class="k">if</span> <span class="n">original</span> <span class="ow">in</span> <span class="n">a</span><span class="p">[</span><span class="s">&#39;images&#39;</span><span class="p">]:</span>
+            <span class="n">total_with_original</span> <span class="o">+=</span> <span class="mf">1.0</span>
+            <span class="n">total_annotated</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">column</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">original</span> <span class="ow">in</span> <span class="n">a</span><span class="p">[</span><span class="n">column</span><span class="p">]:</span>
+                <span class="n">total_hits</span> <span class="o">+=</span> <span class="mf">1.0</span>
+
+    <span class="n">rec</span> <span class="o">=</span> <span class="n">total_hits</span> <span class="o">/</span> <span class="n">total_with_original</span>
+    <span class="n">prec</span> <span class="o">=</span> <span class="n">total_hits</span> <span class="o">/</span> <span class="n">total_annotated</span>
+    <span class="n">f_sc</span> <span class="o">=</span> <span class="p">(</span><span class="n">rec</span> <span class="o">*</span> <span class="n">prec</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">rec</span> <span class="o">+</span> <span class="n">prec</span> <span class="o">+</span> <span class="mf">0.00001</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">with_counts</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">rec</span><span class="p">,</span> <span class="n">prec</span><span class="p">,</span> <span class="n">f_sc</span><span class="p">,</span> <span class="n">total_hits</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">rec</span><span class="p">,</span> <span class="n">prec</span><span class="p">,</span> <span class="n">f_sc</span>
+
+<span class="c">###############################################################################</span>
+</div>
+<div class="viewcode-block" id="find_overlapping"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.find_overlapping">[docs]</a><span class="k">def</span> <span class="nf">find_overlapping</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">group</span><span class="o">=</span><span class="s">&#39;text&#39;</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s">&#39;appropriate&#39;</span><span class="p">,</span>
+                     <span class="n">output_column</span><span class="o">=</span><span class="s">&#39;overlapping&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Will add an ``output_column`` that contains images that overlap in the</span>
+<span class="sd">    given ``column`` when annotations are grouped by ``group_by``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">grouped</span> <span class="o">=</span> <span class="n">group_by</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">group</span><span class="p">)</span>
+    <span class="n">overlapping</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="c"># Find overlapping items</span>
+    <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">grouped</span><span class="p">:</span>
+        <span class="n">cg</span> <span class="o">=</span> <span class="n">grouped</span><span class="p">[</span><span class="n">g</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">cg</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">i1_set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">cg</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">column</span><span class="p">])</span>
+        <span class="n">intersection</span> <span class="o">=</span> <span class="n">i1_set</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="o">*</span><span class="nb">map</span><span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">map</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="n">column</span><span class="p">),</span> <span class="n">cg</span><span class="p">[</span><span class="mi">1</span><span class="p">:])))</span>
+        <span class="n">overlapping</span><span class="p">[</span><span class="n">g</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">intersection</span><span class="p">)</span>
+        <span class="c">#print &#39;Appended to overlapping %s: %s&#39; % (g, str(list(intersection)))</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Total overlapping: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">overlapping</span><span class="p">))</span>
+
+    <span class="c"># Generate output column</span>
+    <span class="n">o_column</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">annotations</span><span class="p">:</span>
+        <span class="n">g</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">group</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">g</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">overlapping</span><span class="p">:</span>
+            <span class="n">o_column</span><span class="o">.</span><span class="n">append</span><span class="p">([])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Appending to key </span><span class="si">%s</span><span class="s">, overlapping members: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">overlapping</span><span class="p">[</span><span class="n">g</span><span class="p">])))</span>
+            <span class="n">o_column</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">overlapping</span><span class="p">[</span><span class="n">g</span><span class="p">])</span>
+
+    <span class="n">output_annotations</span> <span class="o">=</span> <span class="n">add_column</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">o_column</span><span class="p">,</span> <span class="n">output_column</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">output_annotations</span>
+</div>
+<div class="viewcode-block" id="generate_t2i_map"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.generate_t2i_map">[docs]</a><span class="k">def</span> <span class="nf">generate_t2i_map</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s">&#39;overlapping&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Generates the text-image map string from the given annotations.&quot;&quot;&quot;</span>
+    <span class="n">output_lines</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="n">grouped</span> <span class="o">=</span> <span class="n">group_by</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="s">&#39;text&#39;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">grouped</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">Processing key </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">g</span><span class="p">)</span>
+        <span class="n">cg</span> <span class="o">=</span> <span class="n">grouped</span><span class="p">[</span><span class="n">g</span><span class="p">]</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">c</span><span class="p">[</span><span class="n">column</span><span class="p">])</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">cg</span><span class="p">]))</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">cg</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">column</span><span class="p">])</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Continuing&#39;</span><span class="p">)</span>
+            <span class="k">continue</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Adding items:</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\t\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">c</span><span class="p">[</span><span class="n">column</span><span class="p">])</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">cg</span><span class="p">]))</span>
+            <span class="n">all_items</span> <span class="o">=</span> <span class="p">[</span> <span class="n">i</span> <span class="k">for</span> <span class="n">cgl</span> <span class="ow">in</span> <span class="n">cg</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">cgl</span><span class="p">[</span><span class="n">column</span><span class="p">]</span> <span class="p">]</span>
+            <span class="n">all_items_deduplicated</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">all_items</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Adding items: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">all_items_deduplicated</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">all_items_deduplicated</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="s">&#39;&#39;</span><span class="p">:</span> <span class="c"># HACK: when both annotators agree that no image fits</span>
+                    <span class="k">continue</span>
+                <span class="n">output_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">g</span><span class="p">,</span> <span class="n">i</span><span class="p">]))</span>
+
+    <span class="k">return</span> <span class="n">output_lines</span>
+
+
+<span class="c">###############################################################################</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Executing annotation_stats.py...&#39;</span><span class="p">)</span>
+
+    <span class="n">output_annotations</span> <span class="o">=</span> <span class="n">parse_annotations</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">annot_output</span><span class="p">)</span>
+    <span class="n">input_annotations</span> <span class="o">=</span> <span class="n">parse_annotation_inputs</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">annot_input</span><span class="p">)</span>
+    <span class="n">annotations</span> <span class="o">=</span> <span class="n">inner_join_by</span><span class="p">(</span><span class="n">output_annotations</span><span class="p">,</span> <span class="n">input_annotations</span><span class="p">,</span> <span class="s">&#39;id&#39;</span><span class="p">)</span>
+
+    <span class="c"># Obtaining item counts:</span>
+    <span class="n">appropriate_counts</span> <span class="o">=</span> <span class="n">counts_by_len</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="s">&#39;appropriate&#39;</span><span class="p">)</span>
+    <span class="n">annotations</span> <span class="o">=</span> <span class="n">add_column</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">appropriate_counts</span><span class="p">,</span> <span class="s">&#39;app_count&#39;</span><span class="p">)</span>
+    <span class="n">inappropriate_counts</span> <span class="o">=</span> <span class="n">counts_by_len</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="s">&#39;inappropriate&#39;</span><span class="p">)</span>
+    <span class="n">annotations</span> <span class="o">=</span> <span class="n">add_column</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">inappropriate_counts</span><span class="p">,</span> <span class="s">&#39;inapp_count&#39;</span><span class="p">)</span>
+    <span class="n">total_counts</span> <span class="o">=</span> <span class="n">apply_on_columns</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;app_count&#39;</span><span class="p">,</span> <span class="s">&#39;inapp_count&#39;</span><span class="p">],</span>
+                                    <span class="k">lambda</span> <span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">:</span> <span class="n">x</span><span class="o">+</span><span class="n">y</span><span class="p">)</span>
+    <span class="n">annotations</span> <span class="o">=</span> <span class="n">add_column</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">total_counts</span><span class="p">,</span> <span class="s">&#39;total_count&#39;</span><span class="p">)</span>
+
+    <span class="c"># Filling in combined and unannotated columns.</span>
+    <span class="n">combined</span> <span class="o">=</span> <span class="n">apply_on_columns</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;appropriate&#39;</span><span class="p">,</span> <span class="s">&#39;inappropriate&#39;</span><span class="p">],</span>
+                                <span class="k">lambda</span> <span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">:</span> <span class="n">x</span><span class="o">+</span><span class="n">y</span><span class="p">)</span>
+    <span class="n">annotations</span> <span class="o">=</span> <span class="n">add_column</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">combined</span><span class="p">,</span> <span class="s">&#39;combined&#39;</span><span class="p">)</span>
+
+    <span class="n">unannotated</span> <span class="o">=</span> <span class="n">apply_on_columns</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;images&#39;</span><span class="p">,</span><span class="s">&#39;combined&#39;</span><span class="p">],</span>
+                                   <span class="k">lambda</span> <span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">:</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">x</span> <span class="k">if</span> <span class="n">i</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">y</span><span class="p">])</span>
+    <span class="n">annotations</span> <span class="o">=</span> <span class="n">add_column</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">unannotated</span><span class="p">,</span> <span class="s">&#39;unannotated&#39;</span><span class="p">)</span>
+
+    <span class="c"># Filtering items</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">labels</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">--------- Filtering by labels: </span><span class="si">%s</span><span class="s"> ---------</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="s">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">labels</span><span class="p">)</span>
+        <span class="n">annotations</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[</span><span class="s">&#39;label&#39;</span><span class="p">]</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">labels</span><span class="p">,</span> <span class="n">annotations</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">filter_suspicious_inappropriate</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">----- Suspicious item filtering: inappropriate imgs. -----</span><span class="se">\n</span><span class="s">&#39;</span>
+        <span class="n">filtered_annotations</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="s">&#39;inappropriate&#39;</span><span class="p">])</span> <span class="o">&gt;=</span> <span class="n">args</span><span class="o">.</span><span class="n">filter_suspicious_inappropriate</span><span class="p">,</span>
+                             <span class="n">annotations</span><span class="p">)</span>
+        <span class="n">annotations</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="s">&#39;inappropriate&#39;</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">args</span><span class="o">.</span><span class="n">filter_suspicious_inappropriate</span><span class="p">,</span>
+                             <span class="n">annotations</span><span class="p">)</span>
+        <span class="k">print</span> <span class="s">&#39;Total filtered: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">filtered_annotations</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">filter_suspicious</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">----- Suspicious item filtering: combined imgs. -----</span><span class="se">\n</span><span class="s">&#39;</span>
+        <span class="n">filtered_annotations</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="s">&#39;combined&#39;</span><span class="p">])</span> <span class="o">&gt;=</span> <span class="n">args</span><span class="o">.</span><span class="n">filter_suspicious</span><span class="p">,</span>
+                             <span class="n">annotations</span><span class="p">)</span>
+        <span class="n">annotations</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="s">&#39;combined&#39;</span><span class="p">])</span> <span class="o">&lt;</span> <span class="n">args</span><span class="o">.</span><span class="n">filter_suspicious</span><span class="p">,</span>
+                             <span class="n">annotations</span><span class="p">)</span>
+        <span class="k">print</span> <span class="s">&#39;Total filtered: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">filtered_annotations</span><span class="p">)</span>
+
+    <span class="n">annotations_by_user</span> <span class="o">=</span> <span class="n">group_by</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="s">&#39;user&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">total</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">---------- Totals report ---------</span><span class="se">\n</span><span class="s">&#39;</span>
+
+        <span class="n">tline</span> <span class="o">=</span> <span class="s">&#39;Total:                   </span><span class="se">\t</span><span class="s">&#39;</span> <span class="o">+</span>  <span class="n">annot_stats_report</span><span class="p">(</span><span class="n">annot_stats</span><span class="p">(</span><span class="n">annotations</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">latex</span><span class="p">:</span>
+            <span class="n">tline</span> <span class="o">=</span> <span class="s">&#39; &amp; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">tline</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="o">+</span> <span class="s">&#39; </span><span class="se">\\\\</span><span class="s">&#39;</span>
+            <span class="n">tline</span> <span class="o">+=</span> <span class="s">&quot;</span><span class="se">\n\\</span><span class="s">hline&quot;</span>
+        <span class="k">print</span> <span class="n">tline</span>
+
+        <span class="k">for</span> <span class="n">user</span> <span class="ow">in</span> <span class="n">annotations_by_user</span><span class="p">:</span>
+            <span class="n">report</span> <span class="o">=</span> <span class="n">annot_stats_report</span><span class="p">(</span><span class="n">annot_stats</span><span class="p">(</span><span class="n">annotations_by_user</span><span class="p">[</span><span class="n">user</span><span class="p">]))</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="se">\t</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">user</span><span class="p">[:</span><span class="mi">3</span><span class="p">],</span> <span class="n">report</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">latex</span><span class="p">:</span>
+                <span class="n">out</span> <span class="o">=</span> <span class="s">&#39; &amp; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="o">+</span> <span class="s">&#39; </span><span class="se">\\\\</span><span class="s">&#39;</span>
+            <span class="k">print</span> <span class="n">out</span>
+
+    <span class="c"># Agreement reports</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">global_agreement_report</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">------------- Agreement report -----------------</span><span class="se">\n</span><span class="s">&#39;</span>
+
+        <span class="n">annotations_by_text</span> <span class="o">=</span> <span class="n">group_by</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="s">&#39;text&#39;</span><span class="p">)</span>
+        <span class="n">duplicate_annotations</span> <span class="o">=</span> <span class="p">{</span> <span class="n">t</span> <span class="p">:</span> <span class="n">annotations_by_text</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">annotations_by_text</span>
+                                  <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">annotations_by_text</span><span class="p">[</span><span class="n">t</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="p">}</span>
+        <span class="k">print</span> <span class="s">&#39;Total duplicates: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">duplicate_annotations</span><span class="p">)</span>
+
+        <span class="c"># Appropriate items global agreement report</span>
+
+        <span class="n">appropriate_pmp</span> <span class="o">=</span> <span class="n">group_mutual_precision</span><span class="p">(</span><span class="n">duplicate_annotations</span><span class="p">,</span> <span class="s">&#39;appropriate&#39;</span><span class="p">)</span>
+        <span class="n">avg_appropriate_pmp</span> <span class="o">=</span> <span class="n">avg</span><span class="p">(</span><span class="n">appropriate_pmp</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+        <span class="k">print</span> <span class="s">&#39;Appropriate average p.m.p.: </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">avg_appropriate_pmp</span>
+
+        <span class="n">no_agreement_appropriate</span> <span class="o">=</span> <span class="p">[</span> <span class="n">annotations_by_text</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">appropriate_pmp</span> <span class="k">if</span> <span class="n">appropriate_pmp</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">]</span>
+        <span class="k">print</span> <span class="s">&#39;Texts with no agreement on appropriate: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">no_agreement_appropriate</span><span class="p">)</span>
+        <span class="n">perfect_agreement_appropriate</span> <span class="o">=</span> <span class="p">[</span> <span class="n">annotations_by_text</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">appropriate_pmp</span> <span class="k">if</span> <span class="n">appropriate_pmp</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.0</span><span class="p">]</span>
+        <span class="k">print</span> <span class="s">&#39;Texts with perfect agreement on appropriate: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">perfect_agreement_appropriate</span><span class="p">)</span>
+
+        <span class="c"># Inappropriate items global agreement report</span>
+
+        <span class="n">inappropriate_pmp</span> <span class="o">=</span> <span class="n">group_mutual_precision</span><span class="p">(</span><span class="n">duplicate_annotations</span><span class="p">,</span> <span class="s">&#39;inappropriate&#39;</span><span class="p">)</span>
+        <span class="n">avg_inappropriate_pmp</span> <span class="o">=</span> <span class="n">avg</span><span class="p">(</span><span class="n">inappropriate_pmp</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+        <span class="k">print</span> <span class="s">&#39;Inppropriate average p.m.p.: </span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">avg_inappropriate_pmp</span>
+
+        <span class="n">no_agreement_inappropriate</span> <span class="o">=</span> <span class="p">[</span> <span class="n">annotations_by_text</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">inappropriate_pmp</span> <span class="k">if</span> <span class="n">inappropriate_pmp</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">==</span> <span class="mf">0.0</span><span class="p">]</span>
+        <span class="k">print</span> <span class="s">&#39;Texts with no agreement on inappropriate: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">no_agreement_inappropriate</span><span class="p">)</span>
+        <span class="n">perfect_agreement_inappropriate</span> <span class="o">=</span> <span class="p">[</span> <span class="n">annotations_by_text</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">inappropriate_pmp</span> <span class="k">if</span> <span class="n">inappropriate_pmp</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.0</span><span class="p">]</span>
+        <span class="k">print</span> <span class="s">&#39;Texts with perfect agreement on inappropriate: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">perfect_agreement_inappropriate</span><span class="p">)</span>
+
+    <span class="c"># Report agreement by user</span>
+    <span class="n">agreement_columns</span> <span class="o">=</span> <span class="p">[</span> <span class="s">&#39;appropriate&#39;</span><span class="p">,</span> <span class="s">&#39;inappropriate&#39;</span><span class="p">]</span>
+    <span class="c"># Compute f-score of user 1 predicting user 2&#39;s labels</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">f_score</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">Reporting: f-scores&#39;</span>
+        <span class="n">eval_fn</span> <span class="o">=</span> <span class="n">f_score</span>
+        <span class="n">eval_fn_kwargs</span> <span class="o">=</span> <span class="p">{</span> <span class="s">&#39;w_rec&#39;</span> <span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span> <span class="s">&#39;w_prec&#39;</span> <span class="p">:</span> <span class="mf">1.5</span> <span class="p">}</span>
+        <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">agreement_columns</span><span class="p">:</span>
+            <span class="n">compute_agreement</span><span class="p">(</span><span class="n">annotations_by_user</span><span class="p">,</span> <span class="n">column</span><span class="p">,</span> <span class="n">eval_fn</span><span class="p">,</span>
+                              <span class="n">print_averages_only</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">agreement_averages_only</span><span class="p">,</span>
+                              <span class="n">latex</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">latex</span><span class="p">,</span>
+                              <span class="o">**</span><span class="n">eval_fn_kwargs</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">precision</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">Reporting: precisions&#39;</span>
+        <span class="n">eval_fn</span> <span class="o">=</span> <span class="n">precision</span>
+        <span class="n">eval_fn_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">agreement_columns</span><span class="p">:</span>
+            <span class="n">compute_agreement</span><span class="p">(</span><span class="n">annotations_by_user</span><span class="p">,</span> <span class="n">column</span><span class="p">,</span> <span class="n">eval_fn</span><span class="p">,</span>
+                              <span class="n">print_averages_only</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">agreement_averages_only</span><span class="p">,</span>
+                              <span class="n">latex</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">latex</span><span class="p">,</span>
+                              <span class="o">**</span><span class="n">eval_fn_kwargs</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">recall</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">Reporting: recall&#39;</span>
+        <span class="n">eval_fn</span> <span class="o">=</span> <span class="n">recall</span>
+        <span class="n">eval_fn_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">agreement_columns</span><span class="p">:</span>
+            <span class="n">compute_agreement</span><span class="p">(</span><span class="n">annotations_by_user</span><span class="p">,</span> <span class="n">column</span><span class="p">,</span> <span class="n">eval_fn</span><span class="p">,</span>
+                              <span class="n">print_averages_only</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">agreement_averages_only</span><span class="p">,</span>
+                              <span class="n">latex</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">latex</span><span class="p">,</span>
+                              <span class="o">**</span><span class="n">eval_fn_kwargs</span><span class="p">)</span>
+
+    <span class="c"># &quot;Suspiciously many pictures&quot; items report</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">suspicious</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">--------- Suspicion report -------------</span><span class="se">\n</span><span class="s">&#39;</span>
+
+        <span class="n">suspicion_level</span> <span class="o">=</span> <span class="mi">10</span>
+
+        <span class="k">print</span> <span class="s">&#39;Reporting itmes with more than </span><span class="si">%d</span><span class="s"> images tagged.&#39;</span> <span class="o">%</span> <span class="n">suspicion_level</span>
+
+        <span class="n">suspiciously_many</span> <span class="o">=</span> <span class="p">[</span> <span class="n">item</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">annotations</span> <span class="k">if</span> <span class="n">item</span><span class="p">[</span><span class="s">&#39;app_count&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">item</span><span class="p">[</span><span class="s">&#39;inapp_count&#39;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">suspicion_level</span><span class="p">]</span>
+        <span class="n">suspiciously_many_by_user</span> <span class="o">=</span> <span class="n">group_by</span><span class="p">(</span><span class="n">suspiciously_many</span><span class="p">,</span> <span class="s">&#39;user&#39;</span><span class="p">)</span>
+
+        <span class="k">print</span> <span class="s">&#39;Total suspiciously prolific items: </span><span class="si">%d</span><span class="se">\n</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">suspiciously_many</span><span class="p">)</span>
+        <span class="c">#print &#39;\nColumns:\n\tusername; # susp.; % susp.&#39;</span>
+
+        <span class="k">for</span> <span class="n">user</span> <span class="ow">in</span> <span class="n">suspiciously_many_by_user</span><span class="p">:</span>
+            <span class="n">suspicious_proportion</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">suspiciously_many_by_user</span><span class="p">[</span><span class="n">user</span><span class="p">]))</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">annotations_by_user</span><span class="p">[</span><span class="n">user</span><span class="p">]))</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="s">&#39;</span><span class="se">\t</span><span class="si">%25s</span><span class="se">\t</span><span class="si">%d</span><span class="se">\t</span><span class="si">%f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">user</span><span class="p">,</span>
+                                          <span class="nb">len</span><span class="p">(</span><span class="n">suspiciously_many_by_user</span><span class="p">[</span><span class="n">user</span><span class="p">]),</span>
+                                          <span class="n">suspicious_proportion</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">latex</span><span class="p">:</span>
+                <span class="n">out</span> <span class="o">=</span> <span class="s">&#39; &amp; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="o">+</span> <span class="s">&#39; </span><span class="se">\\\\</span><span class="s">&#39;</span>
+            <span class="k">print</span> <span class="n">out</span>
+
+    <span class="c"># Plot for each user the annotated inappropriate item counts.</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">plot_counts</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">user</span> <span class="ow">in</span> <span class="n">annotations_by_user</span><span class="p">:</span>
+            <span class="n">plot_column_in_time</span><span class="p">(</span><span class="n">annotations_by_user</span><span class="p">[</span><span class="n">user</span><span class="p">],</span> <span class="s">&#39;inapp_count&#39;</span><span class="p">,</span>
+                                <span class="n">title</span><span class="o">=</span><span class="n">user</span><span class="p">)</span>
+            <span class="n">plot_column_in_time</span><span class="p">(</span><span class="n">annotations_by_user</span><span class="p">[</span><span class="n">user</span><span class="p">],</span> <span class="s">&#39;total_count&#39;</span><span class="p">,</span>
+                                <span class="n">title</span><span class="o">=</span><span class="n">user</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">rewards</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">------------ Rewards -------------</span><span class="se">\n</span><span class="s">&#39;</span>
+        <span class="c"># print &#39;Columns:\n\tusername; time; item; total; app.coef.; inapp.coef.&#39;</span>
+
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">reward_metric</span> <span class="o">==</span> <span class="s">&#39;precision&#39;</span><span class="p">:</span>
+            <span class="n">reward_metric</span> <span class="o">=</span> <span class="n">precision</span>
+        <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">reward_metric</span> <span class="o">==</span> <span class="s">&#39;f-score&#39;</span><span class="p">:</span>
+            <span class="n">reward_metric</span> <span class="o">=</span> <span class="n">f_score</span>
+        <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">reward_metric</span> <span class="o">==</span> <span class="s">&#39;recall&#39;</span><span class="p">:</span>
+            <span class="n">reward_metric</span> <span class="o">=</span> <span class="n">recall</span>
+
+        <span class="n">appropriate_agreements</span> <span class="o">=</span> <span class="n">compute_agreement</span><span class="p">(</span><span class="n">annotations_by_user</span><span class="p">,</span>
+                                                   <span class="s">&#39;appropriate&#39;</span><span class="p">,</span>
+                                                   <span class="n">reward_metric</span><span class="p">,</span>
+                                                   <span class="n">no_print</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">appropriate_rewards</span> <span class="o">=</span> <span class="n">reward_coefficients</span><span class="p">(</span><span class="n">appropriate_agreements</span><span class="p">)</span>
+        <span class="n">inappropriate_agreements</span> <span class="o">=</span> <span class="n">compute_agreement</span><span class="p">(</span><span class="n">annotations_by_user</span><span class="p">,</span>
+                                                   <span class="s">&#39;inappropriate&#39;</span><span class="p">,</span>
+                                                   <span class="n">reward_metric</span><span class="p">,</span>
+                                                   <span class="n">no_print</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">inappropriate_rewards</span> <span class="o">=</span> <span class="n">reward_coefficients</span><span class="p">(</span><span class="n">inappropriate_agreements</span><span class="p">)</span>
+
+        <span class="n">total_rewards</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="n">total_time_rewards</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="n">total_item_rewards</span> <span class="o">=</span> <span class="mf">0.0</span>
+
+        <span class="k">for</span> <span class="n">user</span> <span class="ow">in</span> <span class="n">annotations_by_user</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">user</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">appropriate_agreements</span><span class="p">:</span>
+                <span class="n">reward</span> <span class="o">=</span> <span class="mf">0.0</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">time_reward</span> <span class="o">=</span> <span class="n">compute_time_reward</span><span class="p">(</span><span class="n">annotations_by_user</span><span class="p">[</span><span class="n">user</span><span class="p">])</span>
+                <span class="n">item_reward</span> <span class="o">=</span> <span class="n">compute_item_reward</span><span class="p">(</span><span class="n">annotations_by_user</span><span class="p">[</span><span class="n">user</span><span class="p">],</span>
+                                    <span class="n">coef_appropriate</span><span class="o">=</span><span class="n">appropriate_rewards</span><span class="p">[</span><span class="n">user</span><span class="p">],</span>
+                                    <span class="n">coef_inappropriate</span><span class="o">=</span><span class="n">inappropriate_rewards</span><span class="p">[</span><span class="n">user</span><span class="p">])</span>
+                <span class="n">total_reward</span> <span class="o">=</span> <span class="n">time_reward</span> <span class="o">+</span> <span class="n">item_reward</span>
+
+                <span class="n">total_time_rewards</span> <span class="o">+=</span> <span class="n">time_reward</span>
+                <span class="n">total_item_rewards</span> <span class="o">+=</span> <span class="n">item_reward</span>
+                <span class="n">total_rewards</span> <span class="o">+=</span> <span class="n">total_reward</span>
+                <span class="n">out</span> <span class="o">=</span> <span class="s">&#39;</span><span class="se">\t</span><span class="si">%25s</span><span class="se">\t</span><span class="si">%.1f</span><span class="se">\t</span><span class="si">%.1f</span><span class="se">\t</span><span class="si">%.1f</span><span class="se">\t</span><span class="si">%.3f</span><span class="se">\t</span><span class="si">%.3f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">user</span><span class="p">,</span>
+                                                <span class="n">time_reward</span><span class="p">,</span>
+                                                <span class="n">item_reward</span><span class="p">,</span>
+                                                <span class="n">total_reward</span><span class="p">,</span>
+                                                <span class="n">appropriate_rewards</span><span class="p">[</span><span class="n">user</span><span class="p">],</span>
+                                                <span class="n">inappropriate_rewards</span><span class="p">[</span><span class="n">user</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">latex</span><span class="p">:</span>
+                    <span class="n">out</span> <span class="o">=</span> <span class="s">&#39; &amp; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="o">+</span> <span class="s">&#39; </span><span class="se">\\\\</span><span class="s">&#39;</span>
+                <span class="k">print</span> <span class="n">out</span>
+
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">Total rewards:</span><span class="se">\t</span><span class="si">%.1f</span><span class="se">\t</span><span class="si">%.1f</span><span class="se">\t</span><span class="si">%.1f</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">total_time_rewards</span><span class="p">,</span>
+                                                      <span class="n">total_item_rewards</span><span class="p">,</span>
+                                                      <span class="n">total_rewards</span><span class="p">)</span>
+
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">dump_duplicate_texts</span><span class="p">:</span>
+        <span class="n">duplicate_texts</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">duplicate_annotations</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="n">duplicate_ids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">duplicate_texts</span><span class="p">:</span>
+            <span class="n">ids</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="s">&#39;id&#39;</span><span class="p">),</span> <span class="n">duplicate_annotations</span><span class="p">[</span><span class="n">t</span><span class="p">])</span>
+            <span class="n">duplicate_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span>
+
+        <span class="n">duplicate_lines</span> <span class="o">=</span> <span class="p">[</span> <span class="n">t</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span> <span class="o">+</span> <span class="s">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ids</span><span class="p">])</span>
+                            <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">ids</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">duplicate_texts</span><span class="p">,</span> <span class="n">duplicate_ids</span><span class="p">)</span> <span class="p">]</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">dump_duplicate_texts</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">output_handle</span><span class="p">:</span>
+            <span class="n">output_handle</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">duplicate_lines</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">original</span><span class="p">:</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">------ Original image recall report --------</span><span class="se">\n</span><span class="s">&#39;</span>
+
+        <span class="c"># print &#39;\nColumns:&#39;</span>
+        <span class="c"># print &#39;username; % orig. in app.; # orig. in app.; % and # orig. in inapp.; dtto for unannotated\n\n&#39;</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">text_imfile_map</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Have to supply --text_imfile_map to compute original!&#39;</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">text_imfile_map</span><span class="p">)</span> <span class="k">as</span> <span class="n">t2i_handle</span><span class="p">:</span>
+            <span class="n">originals</span> <span class="o">=</span> <span class="p">{</span> <span class="n">text</span> <span class="p">:</span> <span class="n">image</span>
+                          <span class="k">for</span> <span class="n">text</span><span class="p">,</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">imap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">split</span><span class="p">(),</span>
+                                                            <span class="n">t2i_handle</span><span class="p">)</span>
+            <span class="p">}</span>
+        <span class="n">user_orig_accs</span> <span class="o">=</span> <span class="p">{</span> <span class="n">u</span> <span class="p">:</span> <span class="n">compute_user_orig_acc</span><span class="p">(</span><span class="n">annotations_by_user</span><span class="p">[</span><span class="n">u</span><span class="p">],</span>
+                                                     <span class="n">originals</span><span class="p">,</span>
+                                                     <span class="n">with_counts</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                           <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">annotations_by_user</span> <span class="p">}</span>
+        <span class="n">user_orig_inapp_accs</span> <span class="o">=</span> <span class="p">{</span> <span class="n">u</span> <span class="p">:</span> <span class="n">compute_user_orig_acc</span><span class="p">(</span><span class="n">annotations_by_user</span><span class="p">[</span><span class="n">u</span><span class="p">],</span>
+                                                           <span class="n">originals</span><span class="p">,</span>
+                                                           <span class="n">column</span><span class="o">=</span><span class="s">&#39;inappropriate&#39;</span><span class="p">,</span>
+                                                           <span class="n">with_counts</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                                         <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">annotations_by_user</span> <span class="p">}</span>
+        <span class="n">user_orig_untagged_accs</span> <span class="o">=</span> <span class="p">{</span> <span class="n">u</span> <span class="p">:</span> <span class="n">compute_user_orig_acc</span><span class="p">(</span><span class="n">annotations_by_user</span><span class="p">[</span><span class="n">u</span><span class="p">],</span>
+                                                           <span class="n">originals</span><span class="p">,</span>
+                                                           <span class="n">column</span><span class="o">=</span><span class="s">&#39;unannotated&#39;</span><span class="p">,</span>
+                                                           <span class="n">with_counts</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                                         <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">annotations_by_user</span> <span class="p">}</span>
+
+        <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">user_orig_accs</span><span class="p">:</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="s">&#39;</span><span class="si">%s</span><span class="se">\t</span><span class="si">%.3f</span><span class="se">\t</span><span class="si">%d</span><span class="se">\t</span><span class="si">%.3f</span><span class="se">\t</span><span class="si">%d</span><span class="se">\t</span><span class="si">%.3f</span><span class="se">\t</span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">u</span><span class="p">[:</span><span class="mi">3</span><span class="p">],</span>
+                                      <span class="n">user_orig_accs</span><span class="p">[</span><span class="n">u</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span>
+                                      <span class="n">user_orig_accs</span><span class="p">[</span><span class="n">u</span><span class="p">][</span><span class="mi">3</span><span class="p">],</span>
+                                      <span class="n">user_orig_inapp_accs</span><span class="p">[</span><span class="n">u</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span>
+                                      <span class="n">user_orig_inapp_accs</span><span class="p">[</span><span class="n">u</span><span class="p">][</span><span class="mi">3</span><span class="p">],</span>
+                                      <span class="n">user_orig_untagged_accs</span><span class="p">[</span><span class="n">u</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span>
+                                      <span class="n">user_orig_untagged_accs</span><span class="p">[</span><span class="n">u</span><span class="p">][</span><span class="mi">3</span><span class="p">],</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">latex</span><span class="p">:</span>
+                <span class="n">out</span> <span class="o">=</span> <span class="s">&#39; &amp; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">split</span><span class="p">())</span> <span class="o">+</span> <span class="s">&#39; </span><span class="se">\\\\</span><span class="s">&#39;</span>
+            <span class="k">print</span> <span class="n">out</span>
+        <span class="n">recs</span><span class="p">,</span> <span class="n">precs</span><span class="p">,</span> <span class="n">f_scores</span><span class="p">,</span> <span class="n">counts</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">user_orig_accs</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+        <span class="n">avg_rec</span> <span class="o">=</span> <span class="n">avg</span><span class="p">(</span><span class="n">recs</span><span class="p">,</span> <span class="n">counts</span><span class="p">)</span>
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">Weighed average original recall: </span><span class="si">%.3f</span><span class="s"> (total hits: </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span>
+            <span class="n">avg_rec</span><span class="p">,</span> <span class="nb">sum</span><span class="p">(</span><span class="n">counts</span><span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">t2i</span><span class="p">:</span>
+
+        <span class="k">print</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">Exporting t2i map...&#39;</span>
+
+        <span class="n">annotations</span> <span class="o">=</span> <span class="n">find_overlapping</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="n">group</span><span class="o">=</span><span class="s">&#39;text&#39;</span><span class="p">,</span>
+                                       <span class="n">column</span><span class="o">=</span><span class="s">&#39;appropriate&#39;</span><span class="p">,</span>
+                                       <span class="n">output_column</span><span class="o">=</span><span class="s">&#39;t2i_output&#39;</span><span class="p">)</span>
+        <span class="k">print</span> <span class="s">&#39;Total annotations: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">annotations</span><span class="p">)</span>
+        <span class="n">t2i_string</span> <span class="o">=</span> <span class="n">generate_t2i_map</span><span class="p">(</span><span class="n">annotations</span><span class="p">,</span> <span class="s">&#39;t2i_output&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">t2i</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">t2i_handle</span><span class="p">:</span>
+            <span class="n">t2i_handle</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">t2i_string</span><span class="p">)</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span>
+
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Exiting annotation_stats.py.&#39;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="build_argument_parser"><a class="viewcode-back" href="../../scripts.annotation_stats.html#scripts.annotation_stats.build_argument_parser">[docs]</a><span class="k">def</span> <span class="nf">build_argument_parser</span><span class="p">():</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="n">__doc__</span><span class="p">,</span> <span class="n">add_help</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                    <span class="n">formatter_class</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">RawDescriptionHelpFormatter</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-r&#39;</span><span class="p">,</span> <span class="s">&#39;--root&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Annotation data dir root. This works for &#39;</span>
+                             <span class="s">&#39;retrieving the </span><span class="se">\&#39;</span><span class="s">real</span><span class="se">\&#39;</span><span class="s"> images that were &#39;</span>
+                             <span class="s">&#39;originally assigned to the text.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-a&#39;</span><span class="p">,</span> <span class="s">&#39;--annot_output&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The annotations output file to process (full path).&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-i&#39;</span><span class="p">,</span> <span class="s">&#39;--annot_input&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The annotations input file that was used to &#39;</span>
+                             <span class="s">&#39;distribute items to annotators. Used to group &#39;</span>
+                             <span class="s">&#39;annotations by text. (Full path.)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-m&#39;</span><span class="p">,</span> <span class="s">&#39;--text_imfile_map&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The text-image file map file. Used when computing&#39;</span>
+                             <span class="s">&#39; how much annotators identified the original&#39;</span>
+                             <span class="s">&#39; images.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-l&#39;</span><span class="p">,</span> <span class="s">&#39;--labels&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s">&#39;+&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Only consider annotations with this label.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--total&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will compute total amounts of tagged &#39;</span>
+                             <span class="s">&#39;images and items.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--f_score&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will compute f-score agreement for all&#39;</span>
+                             <span class="s">&#39; pairs of users.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--precision&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will compute precision agreement for all&#39;</span>
+                             <span class="s">&#39; pairs of users.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--recall&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will compute recall agreement for all&#39;</span>
+                             <span class="s">&#39; pairs of users.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--agreement_averages_only&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will not print detailed user-vs-user&#39;</span>
+                             <span class="s">&#39;agreement stats.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--plot_counts&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will plot annotated items counts for &#39;</span>
+                             <span class="s">&#39;annotators.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--dump_duplicate_texts&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Will dump duplicate text IDs into this file, &#39;</span>
+                             <span class="s">&#39;one per line, together with corresponding item &#39;</span>
+                             <span class="s">&#39;IDs comma-separated in the second column.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--filter_suspicious&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Will filter out items with suspiciously many &#39;</span>
+                             <span class="s">&#39;images tagged. The argument is the threshold for&#39;</span>
+                             <span class="s">&#39; marking an item as suspicious.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--filter_suspicious_inappropriate&#39;</span><span class="p">,</span>
+                        <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Will filter out items with suspiciously many &#39;</span>
+                             <span class="s">&#39;images tagged as inappropriate.. The argument is &#39;</span>
+                             <span class="s">&#39;the threshold for marking an item as suspicious.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--original&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Will report how often annotators identified the &#39;</span>
+                             <span class="s">&#39;original images used for the texts.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--suspicious&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Will report items with a suspicious amount of &#39;</span>
+                             <span class="s">&#39;annotated images.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--rewards&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Compute rewards for users.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--reward_metric&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s">&#39;precision&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Determine which metric should be used to compute&#39;</span>
+                             <span class="s">&#39; reward coefficients. Accepts </span><span class="se">\&#39;</span><span class="s">precision</span><span class="se">\&#39;</span><span class="s">, &#39;</span>
+                             <span class="s">&#39;</span><span class="se">\&#39;</span><span class="s">recall</span><span class="se">\&#39;</span><span class="s"> and </span><span class="se">\&#39;</span><span class="s">f-score</span><span class="se">\&#39;</span><span class="s">. Defaults to precision.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--global_agreement_report&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Compute global agreement stats.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--t2i&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Generate a vtext-image map to this file. By &#39;</span>
+                             <span class="s">&#39;default in a strict regime.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--relaxed&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will also put images to t2i map that were&#39;</span>
+                             <span class="s">&#39; only tagged by one annotator. [NOT IMPLEMENTED]&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--with_solo&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Will run in un-relaxed regime, but will also &#39;</span>
+                             <span class="s">&#39;output images from items that only one annotator&#39;</span>
+                             <span class="s">&#39; has seen. [NOT IMPLEMENTED]&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--latex&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will output tables with LaTeX delimiters.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-v&#39;</span><span class="p">,</span> <span class="s">&#39;--verbose&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on INFO logging messages.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--debug&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on DEBUG logging messages. (May get very &#39;</span>
+                             <span class="s">&#39;verbose.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">parser</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">build_argument_parser</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+    <span class="n">main</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

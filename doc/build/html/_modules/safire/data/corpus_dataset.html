@@ -1,0 +1,532 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.corpus_dataset &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.data.corpus_dataset</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">cPickle</span>
+<span class="kn">from</span> <span class="nn">gensim.corpora</span> <span class="kn">import</span> <span class="n">MmCorpus</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+
+<span class="kn">from</span> <span class="nn">gensim</span> <span class="kn">import</span> <span class="n">corpora</span>
+<span class="kn">from</span> <span class="nn">gensim</span> <span class="kn">import</span> <span class="n">matutils</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">safire.utils</span> <span class="kn">import</span> <span class="n">profile_run</span>
+
+<span class="kn">from</span> <span class="nn">.supervised_dataset</span> <span class="kn">import</span> <span class="n">SupervisedDataset</span>
+<span class="kn">from</span> <span class="nn">.unsupervised_dataset</span> <span class="kn">import</span> <span class="n">UnsupervisedDataset</span>
+<span class="kn">from</span> <span class="nn">.vtextcorpus</span> <span class="kn">import</span> <span class="n">VTextCorpus</span>
+<span class="kn">from</span> <span class="nn">.imagenetcorpus</span> <span class="kn">import</span> <span class="n">ImagenetCorpus</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="UnsupervisedCorpusDataset"><a class="viewcode-back" href="../../../safire.data.corpus_dataset.html#safire.data.corpus_dataset.UnsupervisedCorpusDataset">[docs]</a><span class="k">class</span> <span class="nc">UnsupervisedCorpusDataset</span><span class="p">(</span><span class="n">UnsupervisedDataset</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;This dataset implements a memory-efficient way of feeding</span>
+<span class="sd">    large corpora by batch. Only the requested batch is loaded</span>
+<span class="sd">    into memory.</span>
+
+<span class="sd">    Internally keeps a reference to a gensim-style indexed corpus,</span>
+<span class="sd">    which it uses to retrieve batches.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mm_corpus_filename</span><span class="p">,</span> <span class="n">dim</span><span class="p">,</span> <span class="n">test_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">devel_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+                 <span class="n">serializer</span><span class="o">=</span><span class="n">MmCorpus</span><span class="p">,</span> <span class="n">try_loading</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">save_dataset</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">load_dataset</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">profile_loading</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the dataset - loads corpus, sets devel and test offsets.</span>
+<span class="sd">        Retrieving a batch from the dataset means reading the batch from the</span>
+<span class="sd">        corpus and converting it to a dense representation.</span>
+
+<span class="sd">        :type mm_corpus_filename: str</span>
+<span class="sd">        :param mm_corpus_filename: Where to find the *.mmcorp file, previously</span>
+<span class="sd">            created by ``gensim.corpora.MmCorpus.serialize(fname, corpus)``.</span>
+
+<span class="sd">        :type dim: int</span>
+<span class="sd">        :param dim: The desired output *y* dimension of the batches - the size</span>
+<span class="sd">            of the word vector; number of output columns. This should fit with</span>
+<span class="sd">            the dimension of the corpus dictionary. (Future plan: implement</span>
+<span class="sd">            option to truncate to first ``dim`` words.)</span>
+
+<span class="sd">        :type test_p: float</span>
+<span class="sd">        :param test_p: The proportion of documents in the corpus</span>
+<span class="sd">            used for the test set. The documents will be taken from the end</span>
+<span class="sd">            of the corpus.</span>
+
+<span class="sd">        :type devel_p: float</span>
+<span class="sd">        :param devel_p: The proportion of documents in the corpus</span>
+<span class="sd">            used for the development set. The documents will be taken</span>
+<span class="sd">            from between the training and test sets.</span>
+
+<span class="sd">        :type serializer: class froom gensim.interfaces.CorpusABC</span>
+<span class="sd">        :param serializer: The corpus class that should be used to</span>
+<span class="sd">            de-serialize the corpus data. Has to be the same as the one</span>
+<span class="sd">            used to build the data.</span>
+
+<span class="sd">        :type try_loading: bool</span>
+<span class="sd">        :param try_loading: If set, will attempt to load the whole dataset</span>
+<span class="sd">            into memory on initialization, leading to faster retrieval times.</span>
+
+<span class="sd">        :type save_dataset: str</span>
+<span class="sd">        :param save_dataset: If the dataset is successfully pre-loaded, attempts</span>
+<span class="sd">            to pickle the numpy ndarrray into this file.</span>
+
+<span class="sd">        :type load_dataset: str</span>
+<span class="sd">        :param load_dataset: If given, will attempt to load a cPickled numpy</span>
+<span class="sd">            ndarray from the given file.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">serializer</span> <span class="o">=</span> <span class="n">serializer</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">serializer</span><span class="p">(</span><span class="n">mm_corpus_filename</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">dim</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span> <span class="o">=</span> <span class="n">dim</span> <span class="c"># For interface compatibility with models, etc.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="c"># Compute devel and test set first document, number of batches</span>
+        <span class="c"># available.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">test_p</span> <span class="o">=</span> <span class="n">test_p</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">-</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_p</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">devel_p</span> <span class="o">=</span> <span class="n">devel_p</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">-</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_docs</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">devel_p</span><span class="p">)</span>
+
+        <span class="c"># Various pre-loading</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">try_loading</span> <span class="o">=</span> <span class="n">try_loading</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__loaded_dataset</span> <span class="o">=</span> <span class="bp">None</span>
+
+        <span class="k">if</span> <span class="n">load_dataset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">load_dataset</span><span class="p">,</span> <span class="s">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">unpickle_handle</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">__loaded_dataset</span> <span class="o">=</span> <span class="n">cPickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">unpickle_handle</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Loading dataset directly from pickled file failed, falling back to slower methods.&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">try_loading</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__loaded_dataset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Dataset already loaded, skipping try_loading...&#39;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">profile_loading</span><span class="p">:</span>
+                        <span class="n">s</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">__loaded_dataset</span> <span class="o">=</span> <span class="n">profile_run</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_load_dataset</span><span class="p">)</span>
+                        <span class="k">print</span> <span class="s">&quot;Loading profiling:&quot;</span>
+                        <span class="k">print</span> <span class="n">s</span><span class="o">.</span><span class="n">getvalue</span><span class="p">()</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">__loaded_dataset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_dataset</span><span class="p">()</span>
+                <span class="k">except</span> <span class="ne">MemoryError</span><span class="p">:</span>
+                    <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Attempted loading failed due to MemoryError.&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">save_dataset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__loaded_dataset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Pickling dataset ndarray to </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">save_dataset</span><span class="p">)</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">save_dataset</span><span class="p">,</span> <span class="s">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">pickle_handle</span><span class="p">:</span>
+                    <span class="n">cPickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__loaded_dataset</span><span class="p">,</span> <span class="n">pickle_handle</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Attempted loading failed; cannot save dataset.&#39;</span><span class="p">)</span>
+
+
+
+
+<div class="viewcode-block" id="UnsupervisedCorpusDataset.n_train_batches"><a class="viewcode-back" href="../../../safire.data.corpus_dataset.html#safire.data.corpus_dataset.UnsupervisedCorpusDataset.n_train_batches">[docs]</a>    <span class="k">def</span> <span class="nf">n_train_batches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Determines how many batches of given size the training data will</span>
+<span class="sd">        be split into.</span>
+
+<span class="sd">        :type batch_size: int</span>
+<span class="sd">        :param batch_size: The intended size of one batch of the data.</span>
+
+<span class="sd">        :returns: The number of batches the training data will be split into</span>
+<span class="sd">            for the given ``batch_size``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span> <span class="o">/</span> <span class="n">batch_size</span>
+</div>
+<div class="viewcode-block" id="UnsupervisedCorpusDataset.n_devel_batches"><a class="viewcode-back" href="../../../safire.data.corpus_dataset.html#safire.data.corpus_dataset.UnsupervisedCorpusDataset.n_devel_batches">[docs]</a>    <span class="k">def</span> <span class="nf">n_devel_batches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Determines how many batches of given size the training data will</span>
+<span class="sd">        be split into.</span>
+
+<span class="sd">        :type batch_size: int</span>
+<span class="sd">        :param batch_size: The intended size of one batch of the data.</span>
+
+<span class="sd">        :returns: The number of batches the training data will be split into</span>
+<span class="sd">            for the given ``batch_size``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">)</span> <span class="o">/</span> <span class="n">batch_size</span>
+</div>
+<div class="viewcode-block" id="UnsupervisedCorpusDataset.n_test_batches"><a class="viewcode-back" href="../../../safire.data.corpus_dataset.html#safire.data.corpus_dataset.UnsupervisedCorpusDataset.n_test_batches">[docs]</a>    <span class="k">def</span> <span class="nf">n_test_batches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Determines how many batches of given size the training data will</span>
+<span class="sd">        be split into.</span>
+
+<span class="sd">        :type batch_size: int</span>
+<span class="sd">        :param batch_size: The intended size of one batch of the data.</span>
+
+<span class="sd">        :returns: The number of batches the training data will be split into</span>
+<span class="sd">            for the given ``batch_size``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span><span class="p">)</span> <span class="o">/</span> <span class="n">batch_size</span>
+</div>
+    <span class="k">def</span> <span class="nf">_get_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">subset</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span>
+                   <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieves a segment of the data, specified by the arguments.</span>
+
+<span class="sd">        :type subset: str</span>
+<span class="sd">        :param subset: One of ``&#39;train&#39;``, ``&#39;devel&#39;`` or ``&#39;test&#39;``.</span>
+<span class="sd">            Specifies which subset of the dataset should be used.</span>
+
+<span class="sd">        :type kind: str</span>
+<span class="sd">        :param kind: One of ``&#39;X&#39;`` or ``&#39;y&#39;``. Specifies whether we want</span>
+<span class="sd">            the inputs or the response.</span>
+
+<span class="sd">        :type b_index: int</span>
+<span class="sd">        :param b_index: The order of the batch in the dataset (0 for first,</span>
+<span class="sd">            1 for second, etc.)</span>
+
+<span class="sd">        :type b_size: int</span>
+<span class="sd">        :param b_size: Size of one batch.</span>
+
+<span class="sd">        :raises: ValueError</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">lbound</span> <span class="o">=</span> <span class="n">b_index</span> <span class="o">*</span> <span class="n">b_size</span>
+
+        <span class="k">if</span> <span class="n">subset</span> <span class="o">==</span> <span class="s">&#39;train&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;X&#39;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">lbound</span> <span class="o">+</span> <span class="n">b_size</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Too high batch index and/or batch size (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">); training dataset has only </span><span class="si">%d</span><span class="s"> documents.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">))</span>
+                <span class="n">batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">batch</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch kind specified: </span><span class="si">%s</span><span class="s"> (unsupervised datasets only support </span><span class="se">\&#39;</span><span class="s">X</span><span class="se">\&#39;</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">kind</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">subset</span> <span class="o">==</span> <span class="s">&#39;devel&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;X&#39;</span><span class="p">:</span>
+                <span class="n">lbound</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span>
+                <span class="k">if</span> <span class="n">lbound</span> <span class="o">+</span> <span class="n">b_size</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Too high batch index and/or batch size (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">); devel dataset has only </span><span class="si">%d</span><span class="s"> documents.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_devel_doc_offset</span><span class="p">))</span>
+                <span class="n">batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">batch</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch kind specified: </span><span class="si">%s</span><span class="s"> (unsupervised datasets only support </span><span class="se">\&#39;</span><span class="s">X</span><span class="se">\&#39;</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">kind</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">subset</span> <span class="o">==</span> <span class="s">&#39;test&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s">&#39;X&#39;</span><span class="p">:</span>
+                <span class="n">lbound</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span>
+                <span class="k">if</span> <span class="n">lbound</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Too high batch index and/or batch size (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">); testing dataset has only </span><span class="si">%d</span><span class="s"> documents.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">b_index</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_test_doc_offset</span><span class="p">))</span>
+                <span class="n">batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_batch</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">b_size</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">batch</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch kind specified: </span><span class="si">%s</span><span class="s"> (unsupervised datasets only support </span><span class="se">\&#39;</span><span class="s">X</span><span class="se">\&#39;</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="n">kind</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong batch subset specified: </span><span class="si">%s</span><span class="s"> (datasets only supports </span><span class="se">\&#39;</span><span class="s">train</span><span class="se">\&#39;</span><span class="s">, </span><span class="se">\&#39;</span><span class="s">devel</span><span class="se">\&#39;</span><span class="s">, </span><span class="se">\&#39;</span><span class="s">test</span><span class="se">\&#39;</span><span class="s">).&#39;</span> <span class="o">%</span> <span class="n">subset</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_build_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Given the first index of a batch and batch size, builds the batch</span>
+<span class="sd">        from the corpus.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__loaded_dataset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__loaded_dataset</span><span class="p">[</span><span class="n">lbound</span><span class="p">:</span><span class="n">lbound</span><span class="o">+</span><span class="n">batch_size</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">docno</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">xrange</span><span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">lbound</span> <span class="o">+</span> <span class="n">batch_size</span><span class="p">)):</span>
+                <span class="n">doc</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">docno</span><span class="p">]</span>
+                <span class="n">result</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">doc</span>
+
+        <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_shared_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span> <span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Given a numpy array, returns it as a Theano shared variable.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">theano</span><span class="o">.</span><span class="n">shared</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">,</span> <span class="n">borrow</span><span class="o">=</span><span class="n">borrow</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_load_dataset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Attempts to load the dataset into memory for more efficient</span>
+<span class="sd">         retrieval.&quot;&quot;&quot;</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;...attempting to load dataset...&#39;</span><span class="p">)</span>
+        <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+        <span class="n">dataset</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">doc</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">):</span>
+            <span class="n">doc</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">doc</span><span class="p">)</span>
+            <span class="n">dataset</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="nb">list</span><span class="p">(</span><span class="n">doc</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">iter</span><span class="p">(</span><span class="n">doc</span><span class="o">.</span><span class="n">itervalues</span><span class="p">()))</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">500</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;   at doc </span><span class="si">%i</span><span class="s"> / </span><span class="si">%i</span><span class="s">, so far </span><span class="si">%d</span><span class="s"> s&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span>
+                                <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">),</span>
+                                <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span><span class="p">))</span>
+
+        <span class="n">end_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">clock</span><span class="p">()</span>
+        <span class="n">total_time</span> <span class="o">=</span> <span class="n">end_time</span> <span class="o">-</span> <span class="n">start_time</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;   Loading took </span><span class="si">%d</span><span class="s"> s, </span><span class="si">%d</span><span class="s"> / doc&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">total_time</span><span class="p">,</span> <span class="n">total_time</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="n">dataset</span>
+
+    <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;There should be dense output.&quot;&quot;&quot;</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">matutils</span><span class="o">.</span><span class="n">sparse2full</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">)</span>
+        <span class="c">#return self.indexed_corpus_X[idx]</span>
+
+<div class="viewcode-block" id="UnsupervisedCorpusDataset.get_sparse"><a class="viewcode-back" href="../../../safire.data.corpus_dataset.html#safire.data.corpus_dataset.UnsupervisedCorpusDataset.get_sparse">[docs]</a>    <span class="k">def</span> <span class="nf">get_sparse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieves the given item in the sparse form from the source</span>
+<span class="sd">        corpus.&quot;&quot;&quot;</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">doc</span>
+</div>
+<div class="viewcode-block" id="UnsupervisedCorpusDataset.iter_sparse"><a class="viewcode-back" href="../../../safire.data.corpus_dataset.html#safire.data.corpus_dataset.UnsupervisedCorpusDataset.iter_sparse">[docs]</a>    <span class="k">def</span> <span class="nf">iter_sparse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Iterates through the corpus inside, yielding the sparse vectors.&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)):</span>
+            <span class="n">doc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_sparse</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">doc</span>
+</div>
+    <span class="k">def</span> <span class="nf">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Iterate through the corpus inside, yielding dense data items.&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)):</span>
+            <span class="n">vector</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="k">yield</span> <span class="n">vector</span>
+
+</div>
+<div class="viewcode-block" id="UnsupervisedVTextCorpusDataset"><a class="viewcode-back" href="../../../safire.data.corpus_dataset.html#safire.data.corpus_dataset.UnsupervisedVTextCorpusDataset">[docs]</a><span class="k">class</span> <span class="nc">UnsupervisedVTextCorpusDataset</span><span class="p">(</span><span class="n">UnsupervisedCorpusDataset</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Adds VTextCorpus capabilities to UnsupervisedCorpusDataset:</span>
+<span class="sd">    in addition to loading a MmCorpus-serialized corpus and making</span>
+<span class="sd">    it available as a dataset, it will load a VTextCorpus used to</span>
+<span class="sd">    build the MmCorpus-serialized data. The VTextCorpus is then</span>
+<span class="sd">    made available as the ``vtcorp`` member of the object.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mm_corpus_filename</span><span class="p">,</span> <span class="n">vt_corpus_filename</span><span class="p">,</span>
+                 <span class="n">dim</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">test_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">devel_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">serializer</span><span class="o">=</span><span class="n">MmCorpus</span><span class="p">,</span>
+                 <span class="n">try_loading</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">save_dataset</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">load_dataset</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">profile_loading</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the dataset - loads corpora, sets devel and test offset.</span>
+<span class="sd">        Retrieving a batch from the dataset means reading the batch from the</span>
+<span class="sd">        corpus and converting it to a dense representation.</span>
+
+<span class="sd">        Also loads the specified VTextCorpus and uses it to determine the</span>
+<span class="sd">        output dimension (as the Dictionary size).</span>
+
+<span class="sd">        :type mm_corpus_filename: str</span>
+<span class="sd">        :param mm_corpus_filename: Where to find the *.mmcorp file, previously</span>
+<span class="sd">            created by ``gensim.corpora.MmCorpus.serialize(fname, corpus)``</span>
+<span class="sd">            where ``corpus`` is a VTextCorpus.</span>
+
+<span class="sd">        :type vt_corpus_filename: str</span>
+<span class="sd">        :param vt_corpus_filename: Where to find the *.vtcorp file, created</span>
+<span class="sd">            through ``corpus.save(&#39;vt_corpus_filename&#39;)``. The ``corpus`` is</span>
+<span class="sd">            the VTextCorpus serialized through MmCorpus to create the</span>
+<span class="sd">            ``mm_corpus_filename`` file.</span>
+
+<span class="sd">        :type dim: int</span>
+<span class="sd">        :param dim: The desired output *y* dimension of the batches - the size</span>
+<span class="sd">            of the word vector; number of output columns. This should fit with</span>
+<span class="sd">            the dimension of the corpus dictionary. (Future plan: implement</span>
+<span class="sd">            option to truncate to first ``dim`` words.)</span>
+
+<span class="sd">        :type test_p: float</span>
+<span class="sd">        :param test_p: The proportion of documents in the corpus</span>
+<span class="sd">            used for the test set. The documents will be taken from the end</span>
+<span class="sd">            of the corpus.</span>
+
+<span class="sd">        :type devel_p: float</span>
+<span class="sd">        :param devel_p: The proportion of documents in the corpus</span>
+<span class="sd">            used for the development set. The documents will be taken</span>
+<span class="sd">            from between the training and test sets.</span>
+
+<span class="sd">        :type serializer: class froom gensim.interfaces.CorpusABC</span>
+<span class="sd">        :param serializer: The corpus class that should be used to</span>
+<span class="sd">            de-serialize the corpus data. Has to be the same as the one</span>
+<span class="sd">            used to build the data.</span>
+
+<span class="sd">        :type try_loading: bool</span>
+<span class="sd">        :param try_loading: If set, will attempt to load the whole dataset</span>
+<span class="sd">            into memory on initialization, leading to faster retrieval times.</span>
+
+<span class="sd">        :type save_dataset: str</span>
+<span class="sd">        :param save_dataset: If the dataset is successfully pre-loaded, attempts</span>
+<span class="sd">            to pickle the numpy ndarrray into this file.</span>
+
+<span class="sd">        :type load_dataset: str</span>
+<span class="sd">        :param load_dataset: If given, will attempt to load a cPickled numpy</span>
+<span class="sd">            ndarray from the given file.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span> <span class="o">=</span> <span class="n">VTextCorpus</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">vt_corpus_filename</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">dim</span><span class="p">:</span>
+            <span class="n">dim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">dictionary</span><span class="p">)</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Setting text dataset dimension to </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">dim</span><span class="p">)</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">UnsupervisedVTextCorpusDataset</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">mm_corpus_filename</span><span class="p">,</span>
+                 <span class="n">dim</span><span class="p">,</span> <span class="n">test_p</span><span class="p">,</span> <span class="n">devel_p</span><span class="p">,</span> <span class="n">serializer</span><span class="p">,</span> <span class="n">try_loading</span><span class="p">,</span> <span class="n">save_dataset</span><span class="p">,</span>
+                 <span class="n">load_dataset</span><span class="p">,</span> <span class="n">profile_loading</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="UnsupervisedImagenetCorpusDataset"><a class="viewcode-back" href="../../../safire.data.corpus_dataset.html#safire.data.corpus_dataset.UnsupervisedImagenetCorpusDataset">[docs]</a><span class="k">class</span> <span class="nc">UnsupervisedImagenetCorpusDataset</span><span class="p">(</span><span class="n">UnsupervisedCorpusDataset</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Adds ImgnetCorpus capabilities to UnsupervisedCorpusDataset:</span>
+<span class="sd">    in addition to loading a MmCorpus-serialized corpus and making</span>
+<span class="sd">    it available as a dataset, it will load an ImgnetCorpus used to</span>
+<span class="sd">    build the MmCorpus-serialized data. The ImgnetCorpus is then</span>
+<span class="sd">    made available as the ``icorp`` member of the object.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mm_corpus_filename</span><span class="p">,</span> <span class="n">ic_corpus_filename</span><span class="p">,</span>
+                 <span class="n">dim</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">test_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">devel_p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">serializer</span><span class="o">=</span><span class="n">MmCorpus</span><span class="p">,</span>
+                 <span class="n">try_loading</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">save_dataset</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">load_dataset</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">profile_loading</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the dataset - loads corpora, sets devel and test offset.</span>
+<span class="sd">        Retrieving a batch from the dataset means reading the batch from the</span>
+<span class="sd">        corpus and converting it to a dense representation.</span>
+
+<span class="sd">        Also loads the specified VTextCorpus and uses it to determine the</span>
+<span class="sd">        output dimension (as the Dictionary size).</span>
+
+<span class="sd">        :type mm_corpus_filename: str</span>
+<span class="sd">        :param mm_corpus_filename: Where to find the *.mmcorp file, previously</span>
+<span class="sd">            created by ``gensim.corpora.MmCorpus.serialize(fname, corpus)``</span>
+<span class="sd">            where ``corpus`` is an ImgnetCorpus.</span>
+
+<span class="sd">        :type ic_corpus_filename: str</span>
+<span class="sd">        :param ic_corpus_filename: Where to find the *.icorp file, created</span>
+<span class="sd">            through ``corpus.save(&#39;ic_corpus_filename&#39;)``. The ``corpus`` is</span>
+<span class="sd">            the ImgnetCorpus serialized through MmCorpus to create the</span>
+<span class="sd">            ``mm_corpus_filename`` file.</span>
+
+<span class="sd">        :type dim: int</span>
+<span class="sd">        :param dim: The desired output *y* dimension of the batches - the size</span>
+<span class="sd">            of the word vector; number of output columns. This should fit with</span>
+<span class="sd">            the dimension of the corpus dictionary. (Future plan: implement</span>
+<span class="sd">            option to truncate to first ``dim`` words.)</span>
+
+<span class="sd">        :type test_p: float</span>
+<span class="sd">        :param test_p: The proportion of documents in the corpus</span>
+<span class="sd">            used for the test set. The documents will be taken from the end</span>
+<span class="sd">            of the corpus.</span>
+
+<span class="sd">        :type devel_p: float</span>
+<span class="sd">        :param devel_p: The proportion of documents in the corpus</span>
+<span class="sd">            used for the development set. The documents will be taken</span>
+<span class="sd">            from between the training and test sets.</span>
+
+<span class="sd">        :type serializer: class froom gensim.interfaces.CorpusABC</span>
+<span class="sd">        :param serializer: The corpus class that should be used to</span>
+<span class="sd">            de-serialize the corpus data. Has to be the same as the one</span>
+<span class="sd">            used to build the data.</span>
+
+<span class="sd">        :type try_loading: bool</span>
+<span class="sd">        :param try_loading: If set, will attempt to load the whole dataset</span>
+<span class="sd">            into memory on initialization, leading to faster retrieval times.</span>
+
+<span class="sd">        :type save_dataset: str</span>
+<span class="sd">        :param save_dataset: If the dataset is successfully pre-loaded, attempts</span>
+<span class="sd">            to pickle the numpy ndarrray into this file.</span>
+
+<span class="sd">        :type load_dataset: str</span>
+<span class="sd">        :param load_dataset: If given, will attempt to load a cPickled numpy</span>
+<span class="sd">            ndarray from the given file.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">icorp</span> <span class="o">=</span> <span class="n">ImagenetCorpus</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">ic_corpus_filename</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">dim</span><span class="p">:</span>
+            <span class="n">dim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">icorp</span><span class="o">.</span><span class="n">dim</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Setting image dataset dimension to </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">dim</span><span class="p">)</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">UnsupervisedImagenetCorpusDataset</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">mm_corpus_filename</span><span class="p">,</span>
+                 <span class="n">dim</span><span class="p">,</span> <span class="n">test_p</span><span class="p">,</span> <span class="n">devel_p</span><span class="p">,</span> <span class="n">serializer</span><span class="p">,</span> <span class="n">try_loading</span><span class="p">,</span> <span class="n">save_dataset</span><span class="p">,</span>
+                 <span class="n">load_dataset</span><span class="p">,</span> <span class="n">profile_loading</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.image_browser module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.data.image_browser">
+<span id="safire-data-image-browser-module"></span><h1>safire.data.image_browser module<a class="headerlink" href="#module-safire.data.image_browser" title="Permalink to this headline">¶</a></h1>
+<p>Maps image IDs from an ImagenetCorpus to image files for exploring
+Safire model performance.</p>
+<dl class="class">
+<dt id="safire.data.image_browser.ImageBrowser">
+<em class="property">class </em><tt class="descclassname">safire.data.image_browser.</tt><tt class="descname">ImageBrowser</tt><big>(</big><em>root</em>, <em>ids2files_map</em>, <em>icorp=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/image_browser.html#ImageBrowser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.image_browser.ImageBrowser" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>Provides functionality for looking directly at the images used to build the
+ImagenetCorpus.</p>
+<dl class="method">
+<dt id="safire.data.image_browser.ImageBrowser.build_tiled_image">
+<tt class="descname">build_tiled_image</tt><big>(</big><em>iids</em>, <em>similiarities=None</em>, <em>with_order=False</em>, <em>width=1000.0</em>, <em>height=600.0</em>, <em>margin=10.0</em><big>)</big><a class="reference internal" href="_modules/safire/data/image_browser.html#ImageBrowser.build_tiled_image"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.image_browser.ImageBrowser.build_tiled_image" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given a list of image IDs, creates a merged image from all
+of them.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>iids</strong> &#8211; A list of image ID from the source list.</li>
+<li><strong>similarities</strong> &#8211; A list that gives for each image a similarity
+to a query &#8220;image&#8221;.</li>
+<li><strong>with_order</strong> &#8211; A flag. If set, will draw in the upper-left corner
+the order of each image.</li>
+<li><strong>width</strong> &#8211; The total width of the output image.</li>
+<li><strong>height</strong> &#8211; The total height of the output image.</li>
+<li><strong>margin</strong> &#8211; The margin of each sub-image.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.image_browser.ImageBrowser.load_image">
+<tt class="descname">load_image</tt><big>(</big><em>iid</em><big>)</big><a class="reference internal" href="_modules/safire/data/image_browser.html#ImageBrowser.load_image"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.image_browser.ImageBrowser.load_image" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads the image with the given image ID.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.image_browser.ImageBrowser.load_images">
+<tt class="descname">load_images</tt><big>(</big><em>iids</em>, <em>similarities=None</em>, <em>with_order=False</em><big>)</big><a class="reference internal" href="_modules/safire/data/image_browser.html#ImageBrowser.load_images"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.image_browser.ImageBrowser.load_images" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>iids</strong> &#8211; A list of image ID from the source list.</li>
+<li><strong>similarities</strong> &#8211; A list that gives for each image a similarity
+to a query &#8220;image&#8221;.</li>
+<li><strong>with_order</strong> &#8211; A flag. If set, will draw in the upper-left corner
+the order of each image. [NOT IMPLEMENTED]</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">A list of images.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.image_browser.ImageBrowser.parse_ids2files">
+<tt class="descname">parse_ids2files</tt><big>(</big><em>ids2files_map</em><big>)</big><a class="reference internal" href="_modules/safire/data/image_browser.html#ImageBrowser.parse_ids2files"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.image_browser.ImageBrowser.parse_ids2files" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses the map of IDs to files.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>ids2files_map</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#file" title="(in Python v2.7)"><em>file</em></a>) &#8211; A file-like object from which the ID-to-file
+mapping will be read. Expected format is two tab-separated columns,
+with the IDs in the first column and files in the second column.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.image_browser.ImageBrowser.show">
+<tt class="descname">show</tt><big>(</big><em>iid</em><big>)</big><a class="reference internal" href="_modules/safire/data/image_browser.html#ImageBrowser.show"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.image_browser.ImageBrowser.show" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given an image ID, opens the image.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>iid</strong> &#8211; An image ID from the source list.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.image_browser.ImageBrowser.show_multiple">
+<tt class="descname">show_multiple</tt><big>(</big><em>iids</em>, <em>width=1000</em>, <em>height=600</em><big>)</big><a class="reference internal" href="_modules/safire/data/image_browser.html#ImageBrowser.show_multiple"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.image_browser.ImageBrowser.show_multiple" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given a list of image IDs, creates a merged image from all
+of them.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>iid</strong> &#8211; An image ID from the source list.</li>
+<li><strong>width</strong> &#8211; The total width of the output image.</li>
+<li><strong>height</strong> &#8211; The total height of the output image.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.data.image_browser.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

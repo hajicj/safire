@@ -1,0 +1,170 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.run module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-scripts.run">
+<span id="scripts-run-module"></span><h1>scripts.run module<a class="headerlink" href="#module-scripts.run" title="Permalink to this headline">¶</a></h1>
+<p><tt class="docutils literal"><span class="pre">run.py</span></tt> is a script that runs a trained text-image system.</p>
+<p>The text and image pipelines are loaded layer by layer, then the joint layer
+is loaded. The text-to-image joint sampling handle and the backward-pass handles
+through the image pipeline are initialized.</p>
+<p>run.py -t .NAV.pf0.2.pff.tfidf .RSM-2000 .RBM-1000 -i . .DA-1000 -j .RBM-1000</p>
+<p>The labels for individual pipelines are assembled gradually from the left.
+The first layer of the text pipeline will have the infix
+<tt class="docutils literal"><span class="pre">.NAV.pf0.2.pff.tfidf</span></tt>, the second layer <tt class="docutils literal"><span class="pre">.NAV.pf0.2.pff.tfidf.RSM-2000</span></tt>,
+the third <tt class="docutils literal"><span class="pre">.NAV.pf0.2.pff.tfidf.RSM-2000.RBM-1000</span></tt>. For an empty infix, use
+<tt class="docutils literal"><span class="pre">.</span></tt>; the layers above the preprocessing layer should always have a non-empty
+label.</p>
+<p>The joint label is constructed by joining the text and image labels by a dash
+(<tt class="docutils literal"><span class="pre">-</span></tt>) and then joining, also by dash, the joint label. (The text labels come
+first.)</p>
+<p>To run the baseline system (text similarity -&gt; direct transfer to image -&gt;
+image similarity), use the <tt class="docutils literal"><span class="pre">--baseline</span></tt> flag. The top-level text label will
+be used as a text index label.</p>
+<dl class="function">
+<dt id="scripts.run.baseline_run">
+<tt class="descclassname">scripts.run.</tt><tt class="descname">baseline_run</tt><big>(</big><em>input_corpus</em>, <em>text_index</em>, <em>image_index</em>, <em>multimodal_dataset</em>, <em>retrieve_num_best=10</em><big>)</big><a class="reference internal" href="_modules/scripts/run.html#baseline_run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.run.baseline_run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Runs the baseline system: find most similar text, get its image,
+find most similar.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>multimodal_dataset</strong> (<em>safire.data.sharded_multimodal_dataset.ShardedMultimodalDatasest</em>) &#8211; The multimodal dataset that contains the appropriate
+text-image mapping.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.run.build_argument_parser">
+<tt class="descclassname">scripts.run.</tt><tt class="descname">build_argument_parser</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/scripts/run.html#build_argument_parser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.run.build_argument_parser" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="scripts.run.construct_joint_label">
+<tt class="descclassname">scripts.run.</tt><tt class="descname">construct_joint_label</tt><big>(</big><em>text_label</em>, <em>img_label</em>, <em>joint_label</em><big>)</big><a class="reference internal" href="_modules/scripts/run.html#construct_joint_label"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.run.construct_joint_label" title="Permalink to this definition">¶</a></dt>
+<dd><p>Constructs the label for the joint layer.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.run.construct_pipeline_labels">
+<tt class="descclassname">scripts.run.</tt><tt class="descname">construct_pipeline_labels</tt><big>(</big><em>labels</em><big>)</big><a class="reference internal" href="_modules/scripts/run.html#construct_pipeline_labels"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.run.construct_pipeline_labels" title="Permalink to this definition">¶</a></dt>
+<dd><p>Correctly concatenates the labels for one pipeline, to produce their full
+versions.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>labels</strong> &#8211; A list of partial labels (suffixes).</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The list of full labels.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.run.emit_results">
+<tt class="descclassname">scripts.run.</tt><tt class="descname">emit_results</tt><big>(</big><em>results</em><big>)</big><a class="reference internal" href="_modules/scripts/run.html#emit_results"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.run.emit_results" title="Permalink to this definition">¶</a></dt>
+<dd><p>Writes the query results. The output format is a CSV file with three
+columns: query text name, sorted image IDs and sorted similarities.
+The latter two columns are <tt class="docutils literal"><span class="pre">;</span></tt>-separated.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.run.main">
+<tt class="descclassname">scripts.run.</tt><tt class="descname">main</tt><big>(</big><em>args</em><big>)</big><a class="reference internal" href="_modules/scripts/run.html#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.run.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/scripts.run.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

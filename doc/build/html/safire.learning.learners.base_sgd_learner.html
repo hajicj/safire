@@ -1,0 +1,371 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.learners.base_sgd_learner module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" />
+    <link rel="up" title="safire.learning.learners package" href="safire.learning.learners.html" />
+    <link rel="next" title="safire.learning.models package" href="safire.learning.models.html" />
+    <link rel="prev" title="safire.learning.learners package" href="safire.learning.learners.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="safire.learning.models.html" title="safire.learning.models package"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="safire.learning.learners.html" title="safire.learning.learners package"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="safire.html" >safire package</a> &raquo;</li>
+          <li><a href="safire.learning.html" >safire.learning package</a> &raquo;</li>
+          <li><a href="safire.learning.learners.html" accesskey="U">safire.learning.learners package</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.learning.learners.base_sgd_learner">
+<span id="safire-learning-learners-base-sgd-learner-module"></span><h1>safire.learning.learners.base_sgd_learner module<a class="headerlink" href="#module-safire.learning.learners.base_sgd_learner" title="Permalink to this headline">¶</a></h1>
+<p>The SGDLearner module contains learner classes for stochastic gradient
+descent.</p>
+<p>A <strong>Learner</strong> is a class that gets a model handle and a dataset and optimizes
+the model parameters.</p>
+<dl class="class">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner">
+<em class="property">class </em><tt class="descclassname">safire.learning.learners.base_sgd_learner.</tt><tt class="descname">BaseSGDLearner</tt><big>(</big><em>n_epochs</em>, <em>b_size</em>, <em>learning_rate=0.13</em>, <em>patience=5000</em>, <em>patience_increase=100</em>, <em>improvement_threshold=0.995</em>, <em>validation_frequency=None</em>, <em>track_weights=False</em>, <em>track_weights_change=False</em>, <em>monitoring=True</em>, <em>shuffle_batches=False</em>, <em>plot_transformation=False</em>, <em>plot_weights=False</em>, <em>plot_every=10</em>, <em>plot_on_init=False</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">gensim.utils.SaveLoad</span></tt></p>
+<p>Base class for other Learner classes. Defines the Learner interface.
+Implements a basic Stochastic Gradient Descent algorithm and provides some
+elementary training environment.</p>
+<p>Using a Learner:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">model_handle</span> <span class="o">=</span> <span class="n">Model</span><span class="o">.</span><span class="n">setup</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">dataset</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">learner</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">)</span>
+<span class="go">Average cost: 0.897</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">learner</span> <span class="o">=</span> <span class="n">BaseSGDLearner</span><span class="p">(</span><span class="n">n_epochs</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">learner</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">learner</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">)</span>
+<span class="go">Average cost: 0.017</span>
+</pre></div>
+</div>
+<p>The learner can also log and save its progress. This is done using the
+<tt class="docutils literal"><span class="pre">track_weights</span></tt> and <tt class="docutils literal"><span class="pre">track_weights_change</span></tt> for logging weights and
+the <tt class="docutils literal"><span class="pre">set_saving()</span></tt> method for saving intermediate models at each K epochs.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">mloader</span> <span class="o">=</span> <span class="n">ModelLoader</span><span class="p">(</span><span class="s">&#39;test-data&#39;</span><span class="p">,</span> <span class="s">&#39;test-data&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">learner</span><span class="o">.</span><span class="n">set_saving</span><span class="p">(</span><span class="n">mloader</span><span class="p">,</span> <span class="n">save_every</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">infix</span><span class="o">=</span><span class="s">&#39;.test_label&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">learner</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">mloader</span><span class="o">.</span><span class="n">model_full_path</span><span class="p">(</span><span class="n">learner</span><span class="o">.</span><span class="n">_generate_stage_infix</span><span class="p">(</span><span class="mi">3</span><span class="p">)))</span>
+<span class="go">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">mloader</span><span class="o">.</span><span class="n">model_full_path</span><span class="p">(</span><span class="n">learner</span><span class="o">.</span><span class="n">_generate_stage_infix</span><span class="p">(</span><span class="mi">11</span><span class="p">)))</span>
+<span class="go">False</span>
+</pre></div>
+</div>
+<p>In the spirit of providing the training environment, learners can also
+try to resume training where it left off by attempting to load a saved
+intermediate file.</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">learner</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">model_handle</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">resume</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">force_resume</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.attempt_resume">
+<tt class="descname">attempt_resume</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.attempt_resume"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.attempt_resume" title="Permalink to this definition">¶</a></dt>
+<dd><p>Attempts to resume training from last intermediate file saved.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.clear_intermediate">
+<tt class="descname">clear_intermediate</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.clear_intermediate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.clear_intermediate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Removes all intermediate files saved so far. Has to keep the list
+of available intermediate files consistent!</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.evaluate">
+<tt class="descname">evaluate</tt><big>(</big><em>model_handle</em>, <em>dataset</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.evaluate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.evaluate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluates model performance on the test portion of the given
+dataset.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>model_handle</strong> (<em>ModelHandle</em>) &#8211; A model handle.</li>
+<li><strong>dataset</strong> (<em>Dataset</em>) &#8211; A dataset that corresponds to the type of the model
+instance in <tt class="docutils literal"><span class="pre">model_handle</span></tt> - Supervised or Unsupervised.
+A SupervisedDataset is allowed for an UnsupervisedModel, but not
+the other way round.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.find_maximum_diff">
+<tt class="descname">find_maximum_diff</tt><big>(</big><em>W_diff</em>, <em>k=3</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.find_maximum_diff"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.find_maximum_diff" title="Permalink to this definition">¶</a></dt>
+<dd><p>Finds the k highest differences (in absolute values) in the weight
+difference report.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.load_intermediate">
+<tt class="descname">load_intermediate</tt><big>(</big><em>tid</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.load_intermediate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.load_intermediate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given a stage ID, can load a model. This is to be able to continue
+training from some model state.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>tid</strong> &#8211; </td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.plot_transformed_results">
+<tt class="descname">plot_transformed_results</tt><big>(</big><em>dataset</em>, <em>model_handle</em>, <em>title='Dataset heatmap after learner run'</em>, <em>with_orig=False</em>, <em>with_no_bias=False</em>, <em>plot_bias=False</em>, <em>backward_handle=None</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.plot_transformed_results"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.plot_transformed_results" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plots a sample heatmap of how the dataset will be transformed.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.report_max_weight_change">
+<tt class="descname">report_max_weight_change</tt><big>(</big><em>model</em>, <em>k=3</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.report_max_weight_change"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.report_max_weight_change" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.report_maximum_diff">
+<tt class="descname">report_maximum_diff</tt><big>(</big><em>max_diff_w_indices</em>, <em>W_diff</em>, <em>W</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.report_maximum_diff"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.report_maximum_diff" title="Permalink to this definition">¶</a></dt>
+<dd><p>Formats the maximum differences.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.report_weights">
+<tt class="descname">report_weights</tt><big>(</big><em>model, submatrix=[[[0, 0], [0, 9]], [[9, 0], [9, 9]]]</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.report_weights"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.report_weights" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reports the weight submatrix from the first layer of the model.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.run">
+<tt class="descname">run</tt><big>(</big><em>model_handle</em>, <em>data</em>, <em>resume=False</em>, <em>force_resume=False</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Runs the learner. Returns the model handle.</p>
+<p>Intermediate result saving and progress logging depends on how the
+learner has been set up (see <a class="reference internal" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.set_saving" title="safire.learning.learners.base_sgd_learner.BaseSGDLearner.set_saving"><tt class="xref py py-meth docutils literal"><span class="pre">set_saving()</span></tt></a>).</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>model_handle</strong> (<em>ModelHandle</em>) &#8211; A model handle that came out of a <tt class="docutils literal"><span class="pre">setup</span></tt>
+classmethod of a model.</li>
+<li><strong>data</strong> (<em>Dataset</em>) &#8211; A dataset on which the learner should run.</li>
+<li><strong>resume</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) &#8211; If given, will attempt to load the last intermediate file
+saved by the learner. (Useful for resuming interrupted training.)</li>
+<li><strong>force_resume</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) &#8211; If set to <tt class="docutils literal"><span class="pre">True</span></tt> and resuming fails, will raise a
+<tt class="docutils literal"><span class="pre">ValueError</span></tt>. If set to <tt class="docutils literal"><span class="pre">False</span></tt> and resuming fails, will warn
+and train from scratch.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.save_intermediate">
+<tt class="descname">save_intermediate</tt><big>(</big><em>model</em>, <em>tid</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.save_intermediate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.save_intermediate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Given previously supplied settings, saves the given model. No infix or
+filename is given - it will be generated based on the saving settings.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>model</strong> &#8211; The model to save.</li>
+<li><strong>tid</strong> &#8211; The ID of the stage at which the intermediate model is created.
+If saving at epochs, this will typically be a number. The learner
+will generate this argument during <a class="reference internal" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.run" title="safire.learning.learners.base_sgd_learner.BaseSGDLearner.run"><tt class="xref py py-meth docutils literal"><span class="pre">run()</span></tt></a>.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.set_saving">
+<tt class="descname">set_saving</tt><big>(</big><em>model_loader</em>, <em>save_every</em>, <em>infix=None</em>, <em>overwrite=False</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.set_saving"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.set_saving" title="Permalink to this definition">¶</a></dt>
+<dd><p>Settings for saving intermediate models. Currently, will save every K-th
+epoch, using the given infix and a <tt class="docutils literal"><span class="pre">.tmp.n</span></tt> suffix, for n-th epoch.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Design-wise, this adds some internal state to the learner and introduces
+a binding from a loader class (data management) inside the training
+architecture. This is not a problem per se - however, it is thus wrong
+to imagine that the loader classes are a <em>layer</em> of architecture;
+instead, they are <em>services</em> for data management, permeating throughout
+the application. Since loaders have no internal state of their own
+(their &#8220;internal state&#8221; is the actual state of the data directory),
+this is not a problem; they can be freely shared across the application.</p>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>infix</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; <p>The infix to use for the model.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">A temp-string will be appended to this infix for each intermediate
+saved model that includes <tt class="docutils literal"><span class="pre">.tmp</span></tt> - the best saving infix is
+simply the infix under which you want to save the final model.</p>
+</div>
+</li>
+<li><strong>model_loader</strong> (<a class="reference internal" href="safire.data.loaders.html#safire.data.loaders.ModelLoader" title="safire.data.loaders.ModelLoader"><em>safire.data.loaders.ModelLoader</em></a>) &#8211; The model loader that will correctly generate file
+names.</li>
+<li><strong>save_every</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; Each k-th epoch, the learner will save an intermediate
+model.</li>
+<li><strong>overwrite</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) &#8211; If True, will only keep the last intermediate model.</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.training_updates">
+<tt class="descname">training_updates</tt><big>(</big><em>model</em>, <em>cost</em>, <em>learning_rate=0.13</em>, <em>**gradient_kwargs</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.training_updates"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.training_updates" title="Permalink to this definition">¶</a></dt>
+<dd><p>Builds the training function. To implement various optimization
+strategies (rprop, conjugate gradients, levenberg-marquart, etc.),
+override this method.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>model</strong> &#8211; </li>
+<li><strong>kwargs</strong> &#8211; </li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">Updates.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.weight_change_vs_snapshot">
+<tt class="descname">weight_change_vs_snapshot</tt><big>(</big><em>model</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.weight_change_vs_snapshot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.weight_change_vs_snapshot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the difference in weights between the model and the
+snapshot.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.learners.base_sgd_learner.BaseSGDLearner.weights_snapshot">
+<tt class="descname">weights_snapshot</tt><big>(</big><em>model</em><big>)</big><a class="reference internal" href="_modules/safire/learning/learners/base_sgd_learner.html#BaseSGDLearner.weights_snapshot"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.learners.base_sgd_learner.BaseSGDLearner.weights_snapshot" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes a snapshot of the model weights and stores it to a cache.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="safire.learning.learners.html"
+                        title="previous chapter">safire.learning.learners package</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="safire.learning.models.html"
+                        title="next chapter">safire.learning.models package</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.learning.learners.base_sgd_learner.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="safire.learning.models.html" title="safire.learning.models package"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="safire.learning.learners.html" title="safire.learning.learners package"
+             >previous</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="safire.html" >safire package</a> &raquo;</li>
+          <li><a href="safire.learning.html" >safire.learning package</a> &raquo;</li>
+          <li><a href="safire.learning.learners.html" >safire.learning.learners package</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

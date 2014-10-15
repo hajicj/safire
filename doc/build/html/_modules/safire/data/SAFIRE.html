@@ -1,0 +1,345 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.SAFIRE &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.data.SAFIRE</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="kn">from</span> <span class="nn">gensim.corpora.mmcorpus</span> <span class="kn">import</span> <span class="n">MmCorpus</span>
+
+<span class="kn">from</span> <span class="nn">.vtextcorpus</span> <span class="kn">import</span> <span class="n">VTextCorpus</span>
+<span class="kn">from</span> <span class="nn">.imagenetcorpus</span> <span class="kn">import</span> <span class="n">ImagenetCorpus</span>
+<span class="kn">from</span> <span class="nn">.multimodal_dataset</span> <span class="kn">import</span> <span class="n">MultimodalDataset</span>
+
+<span class="kn">from</span> <span class="nn">.layouts</span> <span class="kn">import</span> <span class="n">DataDirLayout</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DataDirLayout"><a class="viewcode-back" href="../../../safire.data.SAFIRE.html#safire.data.SAFIRE.DataDirLayout">[docs]</a><span class="k">class</span> <span class="nc">DataDirLayout</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;A static class that holds constants that define the layout of a</span>
+<span class="sd">    dataset root dir. For specific layouts, override the ``name`` attribute.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">img_dir</span> <span class="o">=</span> <span class="s">&#39;img&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text_dir</span> <span class="o">=</span> <span class="s">&#39;text&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">corpus_dir</span> <span class="o">=</span> <span class="s">&#39;corpora&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">vtlist</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s">&#39;.vtlist&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">image_vectors</span> <span class="o">=</span> <span class="s">&#39;im.ftrs.csv&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">textdoc2imdoc</span> <span class="o">=</span> <span class="s">&#39;vtext-image-map.csv&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">=</span> <span class="s">&#39;.img&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">=</span> <span class="s">&#39;.vt&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">mm_corp_suffix</span> <span class="o">=</span> <span class="s">&#39;.mmcorp&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mm_index_suffix</span> <span class="o">=</span> <span class="s">&#39;.mmcorp.index&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text_corp_suffix</span> <span class="o">=</span> <span class="s">&#39;.vtcorp&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">img_corp_suffix</span> <span class="o">=</span> <span class="s">&#39;.icorp&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">tcorp_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_corp_suffix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tcorp_obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corp_suffix</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">icorp_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_corp_suffix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">icorp_obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img_corp_suffix</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">required_corpus_names</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_corp_suffix</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_index_suffix</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">img_corp_suffix</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_corp_suffix</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">mm_index_suffix</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corpname</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">text_corp_suffix</span> <span class="p">]</span>
+
+</div>
+<div class="viewcode-block" id="MultimodalDatasetLoader"><a class="viewcode-back" href="../../../safire.data.SAFIRE.html#safire.data.SAFIRE.MultimodalDatasetLoader">[docs]</a><span class="k">class</span> <span class="nc">MultimodalDatasetLoader</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;A class that works as an interface for loading a SAFIRE dataset.</span>
+
+<span class="sd">    The loading itself may take a shortcut through a ``load`` class method::</span>
+
+<span class="sd">        &gt;&gt;&gt; safire_multimodal_dataset = SAFIRE.load(&#39;/path/to/safire/root&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; mlp = MultilayerPerceptron.setup(data=safire_multimodal_dataset, ...)</span>
+
+<span class="sd">    Or the SAFIRE class may be instantiated:</span>
+
+<span class="sd">        &gt;&gt;&gt; safire = SAFIRE(&#39;/path/to/safire/root&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; safire_multimodal_dataset = safire.load()</span>
+
+<span class="sd">    Relies on gensim-style corpora already being generated. If they are not</span>
+<span class="sd">    present, will first need to generate them. Because that is a time-consuming</span>
+<span class="sd">    procedure, the SAFIRE class will not generate them automatically. Instead,</span>
+<span class="sd">    the following workflow is available:</span>
+
+<span class="sd">        &gt;&gt;&gt; safire = SAFIRE(&#39;/path/to/safire/root&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; safire.has_corpora()</span>
+<span class="sd">        False</span>
+<span class="sd">        &gt;&gt;&gt; dataset = safire.load()</span>
+<span class="sd">        ValueError: Corpora unavailable in SAFIRE dataset at /path/to/safire/root</span>
+<span class="sd">        &gt;&gt;&gt; safire.generate_corpora(safire_root)</span>
+<span class="sd">        [...takes a long time..]</span>
+<span class="sd">        &gt;&gt;&gt; safire.has_corpora()</span>
+<span class="sd">        True</span>
+<span class="sd">        &gt;&gt;&gt; dataset = safire.load()</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c">### TODO: Test, refactor to a more abstract level - constants given at</span>
+    <span class="c">#         __init__() time</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">sentences</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="n">text_loader</span><span class="o">=</span><span class="n">VTextCorpus</span><span class="p">,</span>
+                 <span class="n">img_loader</span><span class="o">=</span><span class="n">ImagenetCorpus</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initializes the SAFIRE dataset loader.</span>
+
+<span class="sd">        :type root: str</span>
+<span class="sd">        :param root: The root directory where the safire data lies. The expected</span>
+<span class="sd">            contents are the text/ and img/ directories, a ``*.vtlist`` file,</span>
+<span class="sd">            an Imagenet output file in the format described in</span>
+<span class="sd">            :class:`ImagenetCorpus` and a text-image mapping as described in</span>
+<span class="sd">            :class:`MultimodalDataset`.</span>
+
+<span class="sd">            By default, the output corpora will be serialized/saved into a</span>
+<span class="sd">            corpora/ subdirectory of ``root``.</span>
+
+<span class="sd">        :type sentences: bool</span>
+<span class="sd">        :param sentences: Defines whether sentences should be used as documents</span>
+<span class="sd">            in corpusifying the text data</span>
+
+<span class="sd">        :type text_loader: gensim.interfaces.CorpusABC</span>
+<span class="sd">        :param text_loader: Corpus class used to load the text data.</span>
+
+<span class="sd">        :type img_loader: gensim.interfaces.CorpusABC</span>
+<span class="sd">        :param img_loader: Corpus class used to load the image data.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">root</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Could not find SAFIRE root: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">.</span> <span class="n">root</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">root</span> <span class="o">=</span> <span class="n">root</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">sentences</span> <span class="o">=</span> <span class="n">sentences</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layout</span> <span class="o">=</span> <span class="n">DataDirLayout</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">root</span> <span class="o">=</span> <span class="n">root</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_verify_layout</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">serializer</span> <span class="o">=</span> <span class="n">MmCorpus</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">text_loader</span><span class="p">:</span>
+            <span class="n">text_loader</span> <span class="o">=</span> <span class="n">VTextCorpus</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">img_loader</span><span class="p">:</span>
+            <span class="n">img_loader</span> <span class="o">=</span> <span class="n">ImagenetCorpus</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">text_loader</span> <span class="o">=</span> <span class="n">text_loader</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">img_loader</span> <span class="o">=</span> <span class="n">img_loader</span>
+
+
+
+
+
+    <span class="k">def</span> <span class="nf">_verify_layout</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Check that the SAFIRE root given at initialization contains all</span>
+<span class="sd">        required directories and files. Only called at initialization.</span>
+
+<span class="sd">        Does not check for corpora.</span>
+
+<span class="sd">        Will raise a ``ValueError`` if the required components are missing,</span>
+<span class="sd">        instead of returning True/False, because a valid SAFIRE object cannot</span>
+<span class="sd">        exist unless the requirements checked by ``_verify`` are met.</span>
+
+<span class="sd">        :raises: ValueError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">files</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">img_dir</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Image dir </span><span class="si">%s</span><span class="s"> missing in SAFIRE root (</span><span class="si">%s</span><span class="s">), available: </span><span class="si">%s</span><span class="s">&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                                                 <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">img_dir</span><span class="p">,</span>
+                                                 <span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span>
+                                                 <span class="nb">str</span><span class="p">(</span><span class="n">files</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">text_dir</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Text dir </span><span class="si">%s</span><span class="s"> missing in SAFIRE root (</span><span class="si">%s</span><span class="s">), available:</span><span class="se">\n</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                                                 <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">text_dir</span><span class="p">,</span>
+                                                 <span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span>
+                                                 <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">files</span><span class="p">)))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">vtlist</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Vtlist </span><span class="si">%s</span><span class="s"> missing in SAFIRE root (</span><span class="si">%s</span><span class="s">), available:</span><span class="se">\n</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                                                 <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">vtlist</span><span class="p">,</span>
+                                                 <span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span>
+                                                 <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">files</span><span class="p">)))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">image_vectors</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Image vectors </span><span class="si">%s</span><span class="s"> missing in SAFIRE root (</span><span class="si">%s</span><span class="s">), available:</span><span class="se">\n</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                                                 <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">image_vectors</span><span class="p">,</span>
+                                                 <span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span>
+                                                 <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">files</span><span class="p">)))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">textdoc2imdoc</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Vtlist </span><span class="si">%s</span><span class="s"> missing in SAFIRE root (</span><span class="si">%s</span><span class="s">), available:</span><span class="se">\n</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                                                 <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">textdoc2imdoc</span><span class="p">,</span>
+                                                 <span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span>
+                                                 <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">files</span><span class="p">)))</span>
+
+
+<div class="viewcode-block" id="MultimodalDatasetLoader.has_corpora"><a class="viewcode-back" href="../../../safire.data.SAFIRE.html#safire.data.SAFIRE.MultimodalDatasetLoader.has_corpora">[docs]</a>    <span class="k">def</span> <span class="nf">has_corpora</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Checks whether corpora for loading the SAFIRE multimodal dataset</span>
+<span class="sd">        have been generated and are in the right place.&quot;&quot;&quot;</span>
+        <span class="n">corpus_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">corpus_dir</span><span class="p">)</span>
+        <span class="n">files</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">corpus_dir</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">corpus</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">required_corpus_names</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">corpus</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Corpus </span><span class="si">%s</span><span class="s"> not found in corpus directory </span><span class="si">%s</span><span class="s"> (safire root </span><span class="si">%s</span><span class="s">). Available:</span><span class="se">\n</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+                                <span class="n">corpus</span><span class="p">,</span>
+                                <span class="n">corpus_dir</span><span class="p">,</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span>
+                                <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">files</span><span class="p">)))</span>
+                <span class="k">return</span> <span class="bp">False</span>
+
+        <span class="k">return</span> <span class="bp">True</span>
+
+</div>
+<div class="viewcode-block" id="MultimodalDatasetLoader.build_corpora"><a class="viewcode-back" href="../../../safire.data.SAFIRE.html#safire.data.SAFIRE.MultimodalDatasetLoader.build_corpora">[docs]</a>    <span class="k">def</span> <span class="nf">build_corpora</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Creates all corpora necessary for the creation of the</span>
+<span class="sd">        MultimodalDataset over the SAFIRE data.&quot;&quot;&quot;</span>
+
+        <span class="n">corpus_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">corpus_dir</span><span class="p">)</span>
+
+        <span class="c"># Text corpus building/serialization</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">vtlist</span><span class="p">))</span> <span class="k">as</span> <span class="n">vtlist_handle</span><span class="p">:</span>
+            <span class="n">text_corpus</span> <span class="o">=</span> <span class="n">VTextCorpus</span><span class="p">(</span><span class="n">vtlist_handle</span><span class="p">,</span> <span class="n">input_root</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">serializer</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">corpus_dir</span><span class="p">,</span>
+                                                   <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">tcorp_data</span><span class="p">),</span>
+                                      <span class="n">text_corpus</span><span class="p">)</span>
+
+            <span class="n">text_corpus</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">corpus_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">tcorp_obj</span><span class="p">))</span>
+
+        <span class="c"># Image corpus building/serialization</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">image_vectors</span><span class="p">))</span> <span class="k">as</span> <span class="n">img_handle</span><span class="p">:</span>
+
+            <span class="n">img_corpus</span> <span class="o">=</span> <span class="n">ImagenetCorpus</span><span class="p">(</span><span class="n">img_handle</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s">&#39;;&#39;</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">serializer</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">corpus_dir</span><span class="p">,</span>
+                                                   <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">icorp_data</span><span class="p">),</span>
+                                      <span class="n">img_corpus</span><span class="p">)</span>
+
+            <span class="n">img_corpus</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">corpus_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">icorp_obj</span><span class="p">))</span>
+</div>
+<div class="viewcode-block" id="MultimodalDatasetLoader.load"><a class="viewcode-back" href="../../../safire.data.SAFIRE.html#safire.data.SAFIRE.MultimodalDatasetLoader.load">[docs]</a>    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Creates the SAFIRE MultimodalDataset. If corpora are not generated,</span>
+<span class="sd">        raises a ValueError.</span>
+
+<span class="sd">        :raises: ValueError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_corpora</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Corpora unavailable in SAFIRE dataset &#39;</span><span class="o">+</span>
+                             <span class="s">&#39;at </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span>
+                                                    <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">corpus_dir</span><span class="p">))</span>
+
+        <span class="n">corpus_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">corpus_dir</span><span class="p">)</span>
+
+        <span class="n">text_data</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">corpus_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">tcorp_data</span><span class="p">)</span>
+        <span class="n">text_obj</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">corpus_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">tcorp_obj</span><span class="p">)</span>
+
+        <span class="n">img_data</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">corpus_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">icorp_data</span><span class="p">)</span>
+        <span class="n">img_obj</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">corpus_dir</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">icorp_obj</span><span class="p">)</span>
+
+        <span class="n">textdoc2imdoc</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">textdoc2imdoc</span><span class="p">)</span>
+
+        <span class="n">dataset</span> <span class="o">=</span> <span class="n">MultimodalDataset</span><span class="p">(</span><span class="n">text_data</span><span class="p">,</span> <span class="n">text_obj</span><span class="p">,</span> <span class="n">img_data</span><span class="p">,</span> <span class="n">img_obj</span><span class="p">,</span>
+                                    <span class="n">aligned</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                                    <span class="n">textdoc2imdoc</span><span class="o">=</span><span class="n">textdoc2imdoc</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">dataset</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

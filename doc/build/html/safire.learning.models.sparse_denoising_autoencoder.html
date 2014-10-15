@@ -1,0 +1,120 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.sparse_denoising_autoencoder module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.learning.models.sparse_denoising_autoencoder">
+<span id="safire-learning-models-sparse-denoising-autoencoder-module"></span><h1>safire.learning.models.sparse_denoising_autoencoder module<a class="headerlink" href="#module-safire.learning.models.sparse_denoising_autoencoder" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.learning.models.sparse_denoising_autoencoder.SparseDenoisingAutoencoder">
+<em class="property">class </em><tt class="descclassname">safire.learning.models.sparse_denoising_autoencoder.</tt><tt class="descname">SparseDenoisingAutoencoder</tt><big>(</big><em>inputs</em>, <em>n_in</em>, <em>n_out=100</em>, <em>activation=&lt;theano.tensor.elemwise.Elemwise object at 0x000000000ACAB4A8&gt;</em>, <em>backward_activation=&lt;theano.tensor.elemwise.Elemwise object at 0x000000000ACAB4A8&gt;</em>, <em>reconstruction='cross-entropy'</em>, <em>W=None</em>, <em>W_prime=None</em>, <em>b=None</em>, <em>b_prime=None</em>, <em>tied_weights=True</em>, <em>corruption_level=0.3</em>, <em>sparsity_target=0.5</em>, <em>rng=&lt;mtrand.RandomState object at 0x000000000BE2D9C0&gt;</em>, <em>theano_rng=None</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/sparse_denoising_autoencoder.html#SparseDenoisingAutoencoder"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.sparse_denoising_autoencoder.SparseDenoisingAutoencoder" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="safire.learning.models.autoencoder.html#safire.learning.models.autoencoder.Autoencoder" title="safire.learning.models.autoencoder.Autoencoder"><tt class="xref py py-class docutils literal"><span class="pre">safire.learning.models.autoencoder.Autoencoder</span></tt></a></p>
+<p>This is a dummy docstring for class . You had better write a real one.</p>
+<dl class="method">
+<dt id="safire.learning.models.sparse_denoising_autoencoder.SparseDenoisingAutoencoder.mean_h_given_v">
+<tt class="descname">mean_h_given_v</tt><big>(</big><em>inputs</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/sparse_denoising_autoencoder.html#SparseDenoisingAutoencoder.mean_h_given_v"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.sparse_denoising_autoencoder.SparseDenoisingAutoencoder.mean_h_given_v" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the activation of the hidden units.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>inputs</strong> (<em>theano.tensor.TensorType</em>) &#8211; Values of the visible units (i.e. rows of data).</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The activation on hidden units, as symbolic expression</td>
+</tr>
+</tbody>
+</table>
+<p>bound to <tt class="docutils literal"><span class="pre">inputs</span></tt>.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.learning.models.sparse_denoising_autoencoder.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

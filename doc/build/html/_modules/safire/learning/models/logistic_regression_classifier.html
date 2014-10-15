@@ -1,0 +1,276 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.logistic_regression_classifier &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.learning.models.logistic_regression_classifier</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+
+<span class="c">#</span>
+<span class="c"># Logistic regression using Theano</span>
+<span class="c">#</span>
+<span class="kn">import</span> <span class="nn">cPickle</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">theano.tensor</span> <span class="kn">as</span> <span class="nn">TT</span>
+
+<span class="kn">import</span> <span class="nn">safire.utils</span> <span class="kn">as</span> <span class="nn">utils</span>
+<span class="kn">from</span> <span class="nn">base_supervised_model</span> <span class="kn">import</span> <span class="n">BaseSupervisedModel</span>
+
+<div class="viewcode-block" id="LogisticRegressionClassifier"><a class="viewcode-back" href="../../../../safire.learning.models.logistic_regression_classifier.html#safire.learning.models.logistic_regression_classifier.LogisticRegressionClassifier">[docs]</a><span class="k">class</span> <span class="nc">LogisticRegressionClassifier</span><span class="p">(</span><span class="n">BaseSupervisedModel</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">,</span> <span class="n">W</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">rng</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">()):</span>
+        <span class="sd">&quot;&quot;&quot; Initialize the parameters of the logistic regression</span>
+
+<span class="sd">        A Logistic Regression layer is the end layer in classificatio</span>
+
+<span class="sd">        :type inputs: theano.tensor.TensorType</span>
+<span class="sd">        :param inputs: symbolic variable that descripbes the input</span>
+<span class="sd">                       of the architecture (e.g., one minibatch of</span>
+<span class="sd">                       input images, or output of a previous layer)</span>
+
+
+<span class="sd">        :type n_in: int</span>
+<span class="sd">        :param n_in: number of input units, the dimension of the space</span>
+<span class="sd">                     in which the data points live</span>
+
+<span class="sd">        :type n_out: int</span>
+<span class="sd">        :param n_out: number of output units, the dimension of the space</span>
+<span class="sd">                      in which the target lies</span>
+
+<span class="sd">        :type W: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param W: Optionally, a shared weight matrix can be supplied.</span>
+
+<span class="sd">        :type b: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">        :param b: Optionally, a shared bias vector can be supplied.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">LogisticRegressionClassifier</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">__init__</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">)</span>
+        <span class="c">#self.n_in = n_in</span>
+        <span class="c">#self.n_out = n_out</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">activation</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">nnet</span><span class="o">.</span><span class="n">softmax</span>
+        
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">W</span><span class="p">:</span>
+            <span class="c"># initialize with 0 the weights W as a matrix of shape (n_in, n_out)</span>
+            <span class="n">W</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_weights</span><span class="p">(</span><span class="s">&#39;W&#39;</span><span class="p">,</span> <span class="p">(</span><span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">),</span> <span class="n">rng</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>    <span class="c"># Check for consistency in supplied weights</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_init_param_consistency_check</span><span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="p">(</span><span class="n">n_in</span><span class="p">,</span> <span class="n">n_out</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">W</span> <span class="o">=</span> <span class="n">W</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">b</span><span class="p">:</span>
+            <span class="c"># initialize the biases b as a vector of n_out 0s</span>
+            <span class="n">b</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">shared</span><span class="p">(</span><span class="n">value</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_out</span><span class="p">,),</span>
+                              <span class="n">dtype</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">),</span>
+                              <span class="n">name</span> <span class="o">=</span> <span class="s">&#39;b&#39;</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>    <span class="c"># Check for consistency in supplied weights</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_init_param_consistency_check</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="p">(</span><span class="n">n_out</span><span class="p">,))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="o">=</span> <span class="n">b</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">]</span>
+
+        <span class="c"># compute vector of class-membership probabilities in symbolic form</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">p_y_given_x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)</span>
+
+        <span class="c"># Just a formality, so that the model has a common interface.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">outputs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">p_y_given_x</span>
+
+        <span class="c"># compute the prediction as class whose probability is maximal</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y_pred</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">p_y_given_x</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<div class="viewcode-block" id="LogisticRegressionClassifier.negative_log_likelihood"><a class="viewcode-back" href="../../../../safire.learning.models.logistic_regression_classifier.html#safire.learning.models.logistic_regression_classifier.LogisticRegressionClassifier.negative_log_likelihood">[docs]</a>    <span class="k">def</span> <span class="nf">negative_log_likelihood</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Compute the mean of the negative log-likelihood of the prediction</span>
+<span class="sd">        of this model under a given target distribution.</span>
+
+<span class="sd">        .. math::</span>
+
+<span class="sd">          \frac{1}{|\mathcal{D}|} \mathcal{L} (\theta=\{W,b\}, \mathcal{D}) =</span>
+<span class="sd">          \frac{1}{|\mathcal{D}|} \sum_{i=0}^{|\mathcal{D}|} \log(P(Y=y^{(i)}|x^{(i)}, W,b)) \\</span>
+<span class="sd">             \ell (\theta=\{W,b\}, \mathcal{D})</span>
+
+<span class="sd">        .. note:: </span>
+<span class="sd">        </span>
+<span class="sd">          We use the mean instead of the sum so that the learning rate</span>
+<span class="sd">          is less dependent on the batch size.</span>
+
+<span class="sd">        :type y: theano.tensor.TensorType</span>
+<span class="sd">        :param y: Corresponds to a vector that gives for each example the</span>
+<span class="sd">                  correct label.</span>
+<span class="sd">                  </span>
+<span class="sd">        :returns: The mean of the negative log-likelihood of the prediction of</span>
+<span class="sd">                  this model under a given target distribution (see intro).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="o">-</span><span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">p_y_given_x</span><span class="p">)[</span><span class="n">TT</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span><span class="n">y</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="LogisticRegressionClassifier.error"><a class="viewcode-back" href="../../../../safire.learning.models.logistic_regression_classifier.html#safire.learning.models.logistic_regression_classifier.LogisticRegressionClassifier.error">[docs]</a>    <span class="k">def</span> <span class="nf">error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the proportion of incorrectly classified instances.</span>
+<span class="sd">        </span>
+<span class="sd">        :type y: theano.tensor.TensorType</span>
+<span class="sd">        :param y: Corresponds to a vector that gives for each example the</span>
+<span class="sd">                  correct label.</span>
+<span class="sd">        </span>
+<span class="sd">        :returns: The proportion of incorrectly classified instances.</span>
+<span class="sd">        </span>
+<span class="sd">        :raises: TypeError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">y</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">y_pred</span><span class="o">.</span><span class="n">ndim</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&#39;y should have the same shape as self.y_pred&#39;</span><span class="p">,</span> <span class="p">(</span><span class="s">&#39;y&#39;</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="s">&#39;y_pred&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y_pred</span><span class="o">.</span><span class="n">type</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">y</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">&#39;int&#39;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">TT</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">TT</span><span class="o">.</span><span class="n">neq</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y_pred</span><span class="p">))</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+</div>
+    <span class="k">def</span> <span class="nf">_init_args_snapshot</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Saves the model in the form of an init kwarg dict, since not all</span>
+<span class="sd">        attributes of the instance can be pickled. Upon loading, the saved</span>
+<span class="sd">        model kwarg dict will be used as ``**kwargs`` (the ``load`` method</span>
+<span class="sd">        is a classmethod) for an initialization of the model.&quot;&quot;&quot;</span>
+
+        <span class="n">init_arg_dict</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s">&#39;W&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">,</span>
+            <span class="s">&#39;b&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span>
+            <span class="s">&#39;n_in&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_in</span><span class="p">,</span>
+            <span class="s">&#39;n_out&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_out</span><span class="p">,</span>
+            <span class="s">&#39;activation&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span>
+            <span class="s">&#39;inputs&#39;</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">inputs</span>
+            <span class="c"># Random number generators are ignored?</span>
+        <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">init_arg_dict</span>
+
+    <span class="k">def</span> <span class="nf">_cost</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the cost expression, binding the response variable for y.</span>
+<span class="sd">        Used during setup. The cost used in logistic regression is the</span>
+<span class="sd">        negative log likelihood of the response.</span>
+<span class="sd">        </span>
+<span class="sd">        :type y: theano.tensor.TensorType</span>
+<span class="sd">        :param y: Corresponds to a vector that gives for each example the</span>
+<span class="sd">                  correct label.</span>
+<span class="sd">        </span>
+<span class="sd">        :returns: The negative log likelihood symbolic expression bound to y.</span>
+<span class="sd">           </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">negative_log_likelihood</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_training_updates</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Computes the update expression for updating the model parameters</span>
+<span class="sd">        during training.</span>
+<span class="sd">        </span>
+<span class="sd">        .. note::</span>
+<span class="sd">        </span>
+<span class="sd">          This method should only be called from the ``setup()`` class method.</span>
+
+<span class="sd">        :type learning_rate: theano.config.floatX</span>
+<span class="sd">        :param learning_rate: A coefficient by which the gradient is</span>
+<span class="sd">                              scaled on one update step.</span>
+<span class="sd">        </span>
+<span class="sd">        :type cost: theano.tensor.TensorType</span>
+<span class="sd">        :param cost: The cost expression.</span>
+
+<span class="sd">        :returns: A list of ``(param, update_expr)`` tuplets that can be</span>
+<span class="sd">                  passed directly to ``theano.function`` as the ``updates``</span>
+<span class="sd">                  field.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">utils</span><span class="o">.</span><span class="n">check_kwargs</span><span class="p">(</span><span class="n">kwargs</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;learning_rate&#39;</span><span class="p">,</span> <span class="s">&#39;cost&#39;</span><span class="p">])</span>
+
+        <span class="n">learning_rate</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;learning_rate&#39;</span><span class="p">]</span>
+        <span class="n">bound_cost</span> <span class="o">=</span> <span class="n">kwargs</span><span class="p">[</span><span class="s">&#39;cost&#39;</span><span class="p">]</span>
+
+        <span class="c"># Problem: need symbolic &#39;y&#39; for self.negative_log_likelihood(y)</span>
+        <span class="c"># TODO: test behavior with dummy TT.ivector symbolic variable</span>
+        <span class="n">g_W</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">cost</span> <span class="o">=</span> <span class="n">bound_cost</span><span class="p">,</span> <span class="n">wrt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">)</span>
+        <span class="n">g_b</span> <span class="o">=</span> <span class="n">TT</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">cost</span> <span class="o">=</span> <span class="n">bound_cost</span><span class="p">,</span> <span class="n">wrt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">W</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">W</span> <span class="o">-</span> <span class="n">learning_rate</span> <span class="o">*</span> <span class="n">g_W</span><span class="p">),</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">b</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">b</span> <span class="o">-</span> <span class="n">learning_rate</span> <span class="o">*</span> <span class="n">g_b</span><span class="p">)]</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

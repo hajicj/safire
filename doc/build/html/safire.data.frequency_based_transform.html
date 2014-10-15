@@ -1,0 +1,112 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.frequency_based_transform module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.data.frequency_based_transform">
+<span id="safire-data-frequency-based-transform-module"></span><h1>safire.data.frequency_based_transform module<a class="headerlink" href="#module-safire.data.frequency_based_transform" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.data.frequency_based_transform.FrequencyBasedTransformer">
+<em class="property">class </em><tt class="descclassname">safire.data.frequency_based_transform.</tt><tt class="descname">FrequencyBasedTransformer</tt><big>(</big><em>corpus</em>, <em>k</em>, <em>discard_top=0</em>, <em>label=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/frequency_based_transform.html#FrequencyBasedTransformer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.frequency_based_transform.FrequencyBasedTransformer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">gensim.interfaces.TransformationABC</span></tt></p>
+<p>Provides functionality for retaining only the top K most frequent
+words in a text corpus.</p>
+<dl class="method">
+<dt id="safire.data.frequency_based_transform.FrequencyBasedTransformer.report_features">
+<tt class="descname">report_features</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/frequency_based_transform.html#FrequencyBasedTransformer.report_features"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.frequency_based_transform.FrequencyBasedTransformer.report_features" title="Permalink to this definition">¶</a></dt>
+<dd><p>Builds a report of the retained features and their
+frequencies: returns a list of triplets (feature no., feature word,
+feature freq. in corpus) sorted descending by frequency in corpus.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.data.frequency_based_transform.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

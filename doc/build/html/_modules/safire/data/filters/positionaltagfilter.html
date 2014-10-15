@@ -1,0 +1,171 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.filters.positionaltagfilter &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../../index.html" />
+    <link rel="up" title="Module code" href="../../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.data.filters.positionaltagfilter</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="c"># -*- coding: utf-8 -*-</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="kn">from</span> <span class="nn">.basefilter</span> <span class="kn">import</span> <span class="n">BaseFilter</span>
+
+
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="n">__name__</span><span class="p">)</span>
+
+
+
+<div class="viewcode-block" id="PositionalTagTokenFilter"><a class="viewcode-back" href="../../../../safire.data.filters.positionaltagfilter.html#safire.data.filters.positionaltagfilter.PositionalTagTokenFilter">[docs]</a><span class="k">class</span> <span class="nc">PositionalTagTokenFilter</span><span class="p">(</span><span class="n">BaseFilter</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Implements a positional tag-based filter, either as an exclusion</span>
+<span class="sd">    filter or an inclusion filter (inclusion, by default: only listed values</span>
+<span class="sd">    are retained). Works by matching a tag string&#39;s position against a set of</span>
+<span class="sd">    permitted/forbidden values.</span>
+
+<span class="sd">    Working with the UFAL positional tag set and tagged text in vertical</span>
+<span class="sd">    format as output by MorphoDiTa, we can set up a filter for autosemantic</span>
+<span class="sd">    words like this:</span>
+
+<span class="sd">    &gt;&gt;&gt; f = PositionalTagTokenFilter([&#39;N&#39;,&#39;A&#39;,&#39;D&#39;,&#39;V&#39;], 0)</span>
+
+<span class="sd">    (Defaults enable cooperation with defaults of VTextCorpus seamlesssly.)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">t_position</span><span class="p">,</span> <span class="n">inclusive</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                 <span class="n">colnames</span><span class="o">=</span><span class="p">[</span><span class="s">&#39;form&#39;</span><span class="p">,</span><span class="s">&#39;lemma&#39;</span><span class="p">,</span><span class="s">&#39;tag&#39;</span><span class="p">],</span> <span class="n">tag_colname</span><span class="o">=</span><span class="s">&#39;tag&#39;</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Initilizes the filter.</span>
+
+<span class="sd">        :type values: list</span>
+<span class="sd">        :param values: A list of items that should match what the method</span>
+<span class="sd">            ``extract_value(fields)`` returns.</span>
+
+<span class="sd">        :type t_position: int</span>
+<span class="sd">        :param t_position: Which position of the tag should be checked for</span>
+<span class="sd">            presence/absence in given ``values`` list.</span>
+
+<span class="sd">        :type inclusive: bool</span>
+<span class="sd">        :param inclusive: If True (default), will let pass those items</span>
+<span class="sd">            that have their POS in the ``pos`` list. If False, will filter</span>
+<span class="sd">            the given parts of speech out.</span>
+
+<span class="sd">        :type colnames: list</span>
+<span class="sd">        :param colnames: A list of column names used together with </span>
+<span class="sd">            ``tag_colname`` to determine which column to use as the tag.</span>
+
+<span class="sd">        :type tag_colname: str</span>
+<span class="sd">        :param tag_colname: One of the ``colnames``. The one that contains the</span>
+<span class="sd">            tag itself. Defaults cooperate seamlessly with VTextCorpus.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">values</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">inclusive</span> <span class="o">=</span> <span class="n">inclusive</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">colnames</span> <span class="o">=</span> <span class="n">colnames</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">tag_colname</span> <span class="o">=</span> <span class="n">tag_colname</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">tag_colname</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">colnames</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Tag column name </span><span class="si">%s</span><span class="s"> not in column names </span><span class="si">%s</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">tag_colname</span><span class="p">,</span> <span class="n">colnames</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_tag_col_idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">colnames</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tag_colname</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">t_position</span> <span class="o">=</span> <span class="n">t_position</span>
+
+<div class="viewcode-block" id="PositionalTagTokenFilter.passes"><a class="viewcode-back" href="../../../../safire.data.filters.positionaltagfilter.html#safire.data.filters.positionaltagfilter.PositionalTagTokenFilter.passes">[docs]</a>    <span class="k">def</span> <span class="nf">passes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fields</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Implements the filtering. Returns True on item passing through the</span>
+<span class="sd">        filter, False on item being filtered out.&quot;&quot;&quot;</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_tag_position</span><span class="p">(</span><span class="n">fields</span><span class="p">)</span>
+
+        <span class="c">#logging.debug(&#39;Matching value %s against values %s&#39; % (value, self.values))</span>
+
+        <span class="k">return</span> <span class="p">(</span><span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">inclusive</span>
+</div>
+    <span class="k">def</span> <span class="nf">_extract_tag_position</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fields</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Based on the ``init()`` parameters ``colnames``, ``tag_colname``</span>
+<span class="sd">        and ``t_position``, returns the value at the tag position that</span>
+<span class="sd">        should be checked.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">fields</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_tag_col_idx</span><span class="p">][</span><span class="bp">self</span><span class="o">.</span><span class="n">t_position</span><span class="p">]</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

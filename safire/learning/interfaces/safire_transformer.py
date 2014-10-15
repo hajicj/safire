@@ -1,0 +1,220 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+Implements the TransformationABC interface, so that SAFIRE
+neural network models can be plugged into a gensim-style
+pipeline.
+"""
+import logging
+import cPickle
+
+import gensim.utils
+import gensim.matutils
+from gensim.interfaces import TransformationABC, TransformedCorpus
+from gensim.similarities import Similarity
+import theano
+import theano.printing
+
+from safire.learning.interfaces import ModelHandle
+from safire.utils import profile_run
+
+
+class SafireTransformer(TransformationABC):
+    """Wraps a SAFIRE model into a gensim-style transformation object.
+
+    Initialized with a Model Handle, Dataset and Learner:
+
+    >>> dataset = loader.load()
+    >>> model_handle = MultilayerPerceptron.setup(dataset, ...)
+    >>> learner = BaseSGDLearner(n_epochs=3, b_size=100)
+    >>> transformer = SafireTransformer(model_handle, learner, dataset)
+
+    *This initialization will run the training,* in line with other gensim
+    transformers (models) that train on initialization.
+
+    If you want to load a handle with an already trained model, initialize
+    the transformer without a Learner and Dataset:
+
+    >>> model_handle = MultilayerPerceptron.setup(dataset, ...)
+    >>> model_handle.save('multilayerperceptron.mhandle')
+    >>> loaded_model_handle = ModelHandle.load('multilayerperceptron.mhandle')
+    >>> transformer = SafireTransformer(loaded_model_handle)
+
+    This is much faster and the preferred way of doing this, especially for
+    runtime initialization.
+
+    Computing outputs
+    -----------------
+
+    The items passed to the transformer through ``__getitem__`` will be
+    passed as inputs to the neural network inside the model handle, as
+    inputs to the ``run`` theano compiled function. The outputs of ``run``
+    will be collected and returned again as a corpus.
+
+    """
+    def __init__(self, model_handle, dataset=None, learner=None,
+                 eps=1e-09, chunksize=1000, attempt_resume=False,
+                 profile_training=False):
+        """Initializes the transformer. If necessary, performs model training
+        (when the ``dataset`` and ``learner`` arguments are given).
+
+        :type model_handle: safire.learning.interfaces.ModelHandle
+        :param model_handle: A :class:`ModelHandle`.
+
+        :type dataset: safire.data.dataset.Dataset
+        :param dataset: A Safire :class:`Dataset` that should be used for
+            training the model. If not supplied, no training is performed.
+            **This is currently inconsistent with gensim: we want a dataset,
+            gensim uses corpora** to feed data to model training.
+
+        :type learner: safire.learning.learners.base_sgd_learner.BaseSGDLearner
+        :param learner: A :class:`BaseSGDLearner` that will be used to train
+            the model. If not supplied, no training is performed.
+
+        :type eps: float
+        :param eps: A threshold under which output values will be considered
+            noise and not included in the sparse output.
+
+            .. warning::
+
+                Currently not implemented, the gensim builtin ``eps`` of 1e-09
+                is used.
+
+        :type chunksize: int
+        :param chunksize: The batch size by which input documents will be fed
+            to the transformer. It is faster to chunk a larger corpus than to
+            transform it one-by-one, because the conversion machinery involved
+            in feeding the input to the underlying Theano model and getting it
+            back is much less efficient than the mathematical operations on the
+            input matrix.
+
+        :type attempt_resume: bool
+        :param attempt_resume: If set, the learner will attempt to resume
+            training an earlier model.
+
+        :type profile_training: bool
+        :param profile_training: If set, will profile the learner run.
+        """
+
+        self.model_handle = model_handle
+
+        if dataset is not None and learner is not None:
+            logging.info('Training SAFIRE model...')
+            if profile_training:
+                s, _ = profile_run(learner.run, self.model_handle, dataset,
+                                   resume=attempt_resume)
+                print 'Profiling training:'
+                print s.getvalue()
+            else:
+                learner.run(self.model_handle, dataset, resume=attempt_resume)
+
+        # Shortcuts to dimension checking
+        self.n_in = self.model_handle.n_in
+        self.n_out = self.model_handle.n_out
+
+        self.chunksize = chunksize
+        self.eps = eps # Using this is not implemented.
+
+    def save(self, fname, protocol=-1):
+        """Saves the transformer. Saving is achieved by getting the handle
+        pickleable object and adding the other instance attributes, then
+        pickling this dict."""
+
+        pickleable_obj = self._export_pickleable_obj()
+
+        with open(fname, 'wb') as pickle_handle:
+            cPickle.dump(pickleable_obj, pickle_handle, protocol=protocol)
+
+    def _export_pickleable_obj(self):
+        """
+        Exports a dicitonary that can directly be pickled to sufficiently
+        describe the transformer.
+        """
+        init_args = {
+            'handle' : self.model_handle._export_pickleable_obj(),
+            'handle_class' : self.model_handle.__class__, # Generality...
+            'chunksize' : self.chunksize,
+            'eps' : self.eps
+        }
+
+        return init_args
+
+    def __getitem__(self, bow, chunksize=1000):
+
+        # We want to do the _apply thing only when the corpus
+        # is a stream-style yield()-ing corpus, not when it's
+        # a list of sparse vectors. What _apply does is it goes
+        # through the corpus in chunks, by setting the chunksize
+        # parameter of TransformedCorpus.
+        if isinstance(bow, gensim.interfaces.CorpusABC):
+            return self._apply(bow, self.chunksize)
+
+        # Convert chunk to dense. We can use the fact that the array of
+        # sparse vectors obtained from a corpus is itself a corpus.
+        # Both input dense dimensions are known.
+        #
+        # Note that the ``corpus2dense`` function returns a numpy ndarray with
+        # documents as *columns*, while the safire model expects documents as
+        # *rows*.
+        is_corpus, bow = gensim.utils.is_corpus(bow)
+        if not is_corpus: # If we got a single item: make a one-item corpus
+                          # from it, to simplify code path.
+            bow = [bow]
+
+        dense_bow = gensim.matutils.corpus2dense(bow,
+                                                 self.n_in,
+                                                 len(bow)).T
+        # Transposition!!! (Due to gensim's corpus2dense returning documents
+        # as columns)
+
+        # logging.debug('Debug print of self.model_handle.run():')
+        # logging.debug(theano.printing.debugprint(self.model_handle.run.maker.fgraph.outputs[0]))
+        # theano.printing.pp(self.model_handle.run.maker.fgraph.outputs[0])
+        # theano.printing.pydotprint(self.model_handle.run,
+        #                            outfile='run.pydotprint.png',
+        #                            with_ids=True)
+        # theano.printing.pydotprint(self.model_handle.train,
+        #                            outfile='train.pydotprint.png',
+        #                            with_ids=True)
+        # theano.printing.pydotprint(self.model_handle.validate,
+        #                            outfile='validate.pydotprint.png',
+        #                            with_ids=True)
+        # theano.printing.pydotprint(self.model_handle.test,
+        #                            outfile='test.pydotprint.png',
+        #                            with_ids=True)
+
+        # Run the model on the dense representation of input.
+        dense_out = self.model_handle.run(dense_bow)
+
+        sparse_out = gensim.matutils.Dense2Corpus(dense_out,
+                                                  documents_columns=False)#,
+                                                  #eps=self.eps) Param
+                                                  # not available in gensim
+                                                  # 0.10.1
+
+        return sparse_out
+
+    def _apply(self, corpus, chunksize=1000):
+        """
+
+        :param corpus:
+        :param chunksize:
+        :return:
+        """
+
+        return TransformedCorpus(self, corpus, chunksize)
+
+    @classmethod
+    def load(cls, fname):
+        """Loads a SafireTransformer pickle dump created with the ``save()``
+        mehtod of a SafireTransformer instance."""
+
+        with open(fname, 'rb') as unpickle_handle:
+            pickled_obj = cPickle.load(unpickle_handle)
+
+        handle_cls = pickled_obj['handle_class']
+        handle = handle_cls._load_from_save_dict(pickled_obj['handle'])
+        transformer = cls(handle)
+
+        return transformer

@@ -1,0 +1,256 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.text_preprocessing_explorer &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for scripts.text_preprocessing_explorer</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">from</span> <span class="nn">copy</span> <span class="kn">import</span> <span class="n">deepcopy</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">operator</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">webbrowser</span>
+<span class="kn">from</span> <span class="nn">safire.data.text_browser</span> <span class="kn">import</span> <span class="n">TextBrowser</span>
+<span class="kn">import</span> <span class="nn">safire.utils</span>
+<span class="kn">from</span> <span class="nn">safire.data.image_browser</span> <span class="kn">import</span> <span class="n">ImageBrowser</span>
+<span class="kn">from</span> <span class="nn">safire.data.loaders</span> <span class="kn">import</span> <span class="n">MultimodalDatasetLoader</span><span class="p">,</span> <span class="n">IndexLoader</span><span class="p">,</span> \
+    <span class="n">ModelLoader</span><span class="p">,</span> <span class="n">MultimodalShardedDatasetLoader</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+<span class="c">##############################################################################</span>
+
+<div class="viewcode-block" id="build_argument_parser"><a class="viewcode-back" href="../../scripts.text_preprocessing_explorer.html#scripts.text_preprocessing_explorer.build_argument_parser">[docs]</a><span class="k">def</span> <span class="nf">build_argument_parser</span><span class="p">():</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="n">__doc__</span><span class="p">,</span> <span class="n">add_help</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-r&#39;</span><span class="p">,</span> <span class="s">&#39;--root&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                        <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The path to&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; the directory which is the root of a dataset.&#39;</span> <span class="o">+</span>
+                        <span class="s">&#39; (Will be passed to a Loader as a root.)&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-n&#39;</span><span class="p">,</span> <span class="s">&#39;--name&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;The dataset name passed to the&#39;</span> <span class="o">+</span>
+                        <span class="s">&#39; Loader. Has to correspond to the *.vtlist file name.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-l&#39;</span><span class="p">,</span> <span class="s">&#39;--labels&#39;</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s">&#39;+&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The corpus labels.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--first_n_sentences&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Display only this many sentences from the &#39;</span>
+                             <span class="s">&#39;beginning of a text.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-v&#39;</span><span class="p">,</span> <span class="s">&#39;--verbose&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on&#39;</span><span class="o">+</span>
+                        <span class="s">&#39; INFO logging messages.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--debug&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on debug &#39;</span><span class="o">+</span>
+                        <span class="s">&#39;prints.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">parser</span>
+
+</div>
+<div class="viewcode-block" id="print_interactive_help"><a class="viewcode-back" href="../../scripts.text_preprocessing_explorer.html#scripts.text_preprocessing_explorer.print_interactive_help">[docs]</a><span class="k">def</span> <span class="nf">print_interactive_help</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Prints the help message for interactive mode.&quot;&quot;&quot;</span>
+    <span class="k">print</span> <span class="s">&#39;Image index explorer interactive mode help</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;==========================================</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;Commands:</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;  h        ... help</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;  c N      ... compare representations for N-th document in vtlist</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;  q|e      ... exit (will ask for confirmation)</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;On the </span><span class="se">\&#39;</span><span class="s">c</span><span class="se">\&#39;</span><span class="s"> command, will show two columns of most similar images</span><span class="se">\n</span><span class="s">&#39;</span> \
+          <span class="s">&#39;with the similarities. Will show query image on top.&#39;</span>
+
+</div>
+<div class="viewcode-block" id="run_interactive"><a class="viewcode-back" href="../../scripts.text_preprocessing_explorer.html#scripts.text_preprocessing_explorer.run_interactive">[docs]</a><span class="k">def</span> <span class="nf">run_interactive</span><span class="p">(</span><span class="n">vtlist</span><span class="p">,</span> <span class="n">raw_corpus</span><span class="p">,</span> <span class="n">raw_browser</span><span class="p">,</span>
+                    <span class="n">corpora</span><span class="p">,</span> <span class="n">browsers</span><span class="p">,</span> <span class="n">labels</span><span class="p">):</span>
+
+    <span class="n">exit_commands</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">([</span><span class="s">&#39;q&#39;</span><span class="p">,</span> <span class="s">&#39;e&#39;</span><span class="p">])</span>
+    <span class="n">compare_commands</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">([</span><span class="s">&#39;c&#39;</span><span class="p">])</span>
+    <span class="n">help_commands</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">([</span><span class="s">&#39;h&#39;</span><span class="p">])</span>
+
+    <span class="c"># Starting settings</span>
+    <span class="n">highest_scoring</span> <span class="o">=</span> <span class="mi">10</span>
+
+    <span class="n">exit_interactive</span> <span class="o">=</span> <span class="bp">False</span>
+    <span class="k">while</span> <span class="ow">not</span> <span class="n">exit_interactive</span><span class="p">:</span>
+
+        <span class="c"># Parse command</span>
+        <span class="n">user_input</span> <span class="o">=</span> <span class="nb">raw_input</span><span class="p">(</span><span class="s">&#39;--&gt; &#39;</span><span class="p">)</span>
+        <span class="n">split_input</span> <span class="o">=</span> <span class="n">user_input</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s">&#39; &#39;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">split_input</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">command</span><span class="p">,</span> <span class="n">options</span> <span class="o">=</span> <span class="n">split_input</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">command</span> <span class="o">=</span> <span class="n">split_input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">options</span> <span class="o">=</span> <span class="bp">None</span>
+
+
+        <span class="c"># Execute command</span>
+        <span class="k">if</span> <span class="n">command</span> <span class="ow">in</span> <span class="n">help_commands</span><span class="p">:</span>
+            <span class="n">print_interactive_help</span><span class="p">()</span>
+            <span class="k">continue</span>
+
+        <span class="k">elif</span> <span class="n">command</span> <span class="ow">in</span> <span class="n">compare_commands</span><span class="p">:</span>
+
+            <span class="n">N</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
+            <span class="n">text</span> <span class="o">=</span> <span class="n">raw_browser</span><span class="o">.</span><span class="n">get_text</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
+
+            <span class="n">btext</span> <span class="o">=</span> <span class="n">text</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">[end of text]</span><span class="se">\n</span><span class="s">&#39;</span>
+            <span class="c">#print btext</span>
+
+            <span class="n">representations</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">browser</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">labels</span><span class="p">,</span> <span class="n">browsers</span><span class="p">):</span>
+                <span class="n">representation</span> <span class="o">=</span> <span class="n">browser</span><span class="o">.</span><span class="n">get_word_representation</span><span class="p">(</span><span class="n">N</span><span class="p">,</span>
+                                            <span class="n">highest_scoring</span><span class="o">=</span><span class="n">highest_scoring</span><span class="p">)</span>
+                <span class="c"># Add headers to representation</span>
+                <span class="n">representation</span> <span class="o">=</span> <span class="p">[(</span><span class="s">&#39;model&#39;</span><span class="p">,</span> <span class="n">label</span><span class="p">),</span> <span class="p">(</span><span class="s">&#39;-----&#39;</span><span class="p">,</span> <span class="s">&#39;-----&#39;</span><span class="p">)]</span> \
+                                 <span class="o">+</span> <span class="n">representation</span>
+                <span class="n">representations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">representation</span><span class="p">)</span>
+
+            <span class="n">all_representations</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span><span class="o">*</span><span class="n">representations</span><span class="p">))</span>
+
+            <span class="c"># ???</span>
+            <span class="n">formatted_repr</span> <span class="o">=</span> <span class="n">raw_browser</span><span class="o">.</span><span class="n">format_representation</span><span class="p">(</span>
+                <span class="n">all_representations</span><span class="p">,</span> <span class="n">n_cols</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">representations</span><span class="p">))</span>
+
+            <span class="n">output</span> <span class="o">=</span> <span class="n">text</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">&#39;</span> <span class="o">+</span> <span class="n">formatted_repr</span>
+            <span class="n">raw_browser</span><span class="o">.</span><span class="n">text_to_window</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+
+
+        <span class="k">elif</span> <span class="n">command</span> <span class="ow">in</span> <span class="n">exit_commands</span><span class="p">:</span>
+            <span class="n">confirmation</span> <span class="o">=</span> <span class="nb">raw_input</span><span class="p">(</span><span class="s">&#39;-[y/n]-&gt; &#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">confirmation</span> <span class="ow">in</span> <span class="n">exit_commands</span> <span class="ow">or</span> <span class="n">confirmation</span> <span class="o">==</span> <span class="s">&#39;&#39;</span> \
+                    <span class="ow">or</span> <span class="n">confirmation</span> <span class="o">==</span> <span class="s">&#39;y&#39;</span><span class="p">:</span>
+                <span class="n">exit_interactive</span> <span class="o">=</span> <span class="bp">True</span>
+                <span class="k">continue</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&#39;Invalid command </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">command</span>
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../scripts.text_preprocessing_explorer.html#scripts.text_preprocessing_explorer.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Initializing loaders with root </span><span class="si">%s</span><span class="s">, name </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
+
+    <span class="n">dloader</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">vtlist_file</span> <span class="o">=</span> <span class="n">dloader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">vtlist</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">vtlist_file</span><span class="p">))</span> <span class="k">as</span> <span class="n">vtlist_handle</span><span class="p">:</span>
+        <span class="n">vtlist</span> <span class="o">=</span> <span class="p">[</span> <span class="n">l</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">vtlist_handle</span> <span class="p">]</span>
+
+    <span class="c"># The corpus and browser used for displaying the raw texts</span>
+    <span class="n">raw_text_corpus</span> <span class="o">=</span> <span class="n">dloader</span><span class="o">.</span><span class="n">load_text_corpus</span><span class="p">()</span>
+    <span class="n">raw_text_browser</span> <span class="o">=</span> <span class="n">TextBrowser</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">raw_text_corpus</span><span class="p">,</span>
+                                   <span class="n">first_n_sentences</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">first_n_sentences</span><span class="p">)</span>
+
+    <span class="c"># The browsers from which we pull representations</span>
+    <span class="n">text_corpora</span> <span class="o">=</span> <span class="p">[</span> <span class="n">dloader</span><span class="o">.</span><span class="n">load_text_corpus</span><span class="p">(</span><span class="n">label</span><span class="p">)</span> <span class="k">for</span> <span class="n">label</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">labels</span><span class="p">]</span>
+    <span class="n">text_browsers</span> <span class="o">=</span> <span class="p">[</span> <span class="n">TextBrowser</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">corpus</span><span class="p">,</span>
+                                  <span class="n">first_n_sentences</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">first_n_sentences</span><span class="p">)</span>
+                      <span class="k">for</span> <span class="n">corpus</span> <span class="ow">in</span> <span class="n">text_corpora</span> <span class="p">]</span>
+
+    <span class="n">run_interactive</span><span class="p">(</span><span class="n">vtlist</span><span class="p">,</span> <span class="n">raw_text_corpus</span><span class="p">,</span> <span class="n">raw_text_browser</span><span class="p">,</span>
+                    <span class="n">text_corpora</span><span class="p">,</span> <span class="n">text_browsers</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">labels</span><span class="p">)</span>
+
+    <span class="c"># Explicit delete</span>
+    <span class="k">del</span> <span class="n">raw_text_browser</span>
+    <span class="k">for</span> <span class="n">browser</span> <span class="ow">in</span> <span class="n">text_browsers</span><span class="p">:</span>
+        <span class="k">del</span> <span class="n">browser</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">build_argument_parser</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+    <span class="n">main</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,524 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.annotation_stats module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-scripts.annotation_stats">
+<span id="scripts-annotation-stats-module"></span><h1>scripts.annotation_stats module<a class="headerlink" href="#module-scripts.annotation_stats" title="Permalink to this headline">¶</a></h1>
+<p><tt class="docutils literal"><span class="pre">annotation_stats.py</span></tt> is a script that processes annotation results and
+compiles statistics about the annotations so far.</p>
+<p>In total:
+- # annotated items
+- # annotated appropriate, average
+- # annotated inappropriate, average
+- are original images tagged as appropriate?</p>
+<p>For each annotator:
+- same as in total
+- agreement with other annotators</p>
+<p>If the <tt class="docutils literal"><span class="pre">--t2i</span></tt> option is given, will generate a vtext-image map to
+the given file.</p>
+<ul class="simple">
+<li>By default, it only outputs text-image pairs for appropriate
+images on which annotators agreed.</li>
+<li>If the <tt class="docutils literal"><span class="pre">--relaxed</span></tt> option is given, will
+output all images that were tagged by at least one annotator (incl. items
+which were seen by only one annotator).</li>
+<li>If the <tt class="docutils literal"><span class="pre">--with_solo</span></tt> option is given,
+will output the images tagged only by one annotator, but from duplicate items,
+will only output images tagged by both.</li>
+</ul>
+<dl class="function">
+<dt id="scripts.annotation_stats.add_column">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">add_column</tt><big>(</big><em>annotations</em>, <em>column</em>, <em>name</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#add_column"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.add_column" title="Permalink to this definition">¶</a></dt>
+<dd><p>Adds a column of the given name to the annotations. Non-destructive
+(returns a deep copy).</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="scripts.annotation_stats.ai_column_names">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">ai_column_names</tt><em class="property"> = ['id', 'label', 'priority', 'prefer_user', 'text', 'images']</em><a class="headerlink" href="#scripts.annotation_stats.ai_column_names" title="Permalink to this definition">¶</a></dt>
+<dd><p>Annotation inputs column names.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.annot_stats">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">annot_stats</tt><big>(</big><em>annotations</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#annot_stats"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.annot_stats" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes all the statistics from the given annotations.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>annotations</strong> &#8211; An annotations array.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">A dict of annotation statistics.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.annot_stats_report">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">annot_stats_report</tt><big>(</big><em>in_stats</em>, <em>latex=True</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#annot_stats_report"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.annot_stats_report" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="data">
+<dt id="scripts.annotation_stats.ao_column_names">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">ao_column_names</tt><em class="property"> = ['id', 'user', 'time', 'skipped', 'appropriate', 'inappropriate']</em><a class="headerlink" href="#scripts.annotation_stats.ao_column_names" title="Permalink to this definition">¶</a></dt>
+<dd><p>Annotation outputs column names.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.apply_on_annotations">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">apply_on_annotations</tt><big>(</big><em>annotations_array</em>, <em>column</em>, <em>operation</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#apply_on_annotations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.apply_on_annotations" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply an operation on the same column from multiple annotations.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.apply_on_columns">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">apply_on_columns</tt><big>(</big><em>annotations</em>, <em>columns</em>, <em>operation</em>, <em>**kwargs</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#apply_on_columns"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.apply_on_columns" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates an array that maps the given operation on the given columns.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.apply_on_grid">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">apply_on_grid</tt><big>(</big><em>grid</em>, <em>operation</em>, <em>**operation_kwargs</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#apply_on_grid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.apply_on_grid" title="Permalink to this definition">¶</a></dt>
+<dd><p>Applies the given operation on each grid member. The grid is assumed
+to be the output of a <tt class="docutils literal"><span class="pre">grid_on_</span></tt> method (currently implemented: only
+grid_on_intersect): a dict of dicts of lists. The operation is applied
+to each grid member. The result is again a grid.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.apply_on_grid_axis">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">apply_on_grid_axis</tt><big>(</big><em>grid</em>, <em>operation</em>, <em>**operation_kwargs</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#apply_on_grid_axis"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.apply_on_grid_axis" title="Permalink to this definition">¶</a></dt>
+<dd><p>Applies the given operation on the list of values of each top-level
+grid member (grid row).</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.apply_on_grids">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">apply_on_grids</tt><big>(</big><em>grids</em>, <em>operation</em>, <em>**operation_kwargs</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#apply_on_grids"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.apply_on_grids" title="Permalink to this definition">¶</a></dt>
+<dd><p>Analogous to apply_on_annotations - applies the given operation
+to members of grids indexed by the same label pairs. Outputs, again,
+a grid with the results of the <tt class="docutils literal"><span class="pre">operation</span></tt>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.avg_annot_fscore">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">avg_annot_fscore</tt><big>(</big><em>prediction</em>, <em>true</em>, <em>name</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#avg_annot_fscore"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.avg_annot_fscore" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.avg_annot_precision">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">avg_annot_precision</tt><big>(</big><em>prediction</em>, <em>true</em>, <em>name</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#avg_annot_precision"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.avg_annot_precision" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the average precision of the <tt class="docutils literal"><span class="pre">prediction</span></tt> annotations of
+column <tt class="docutils literal"><span class="pre">name</span></tt> against the <tt class="docutils literal"><span class="pre">true</span></tt> annotations.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.build_argument_parser">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">build_argument_parser</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#build_argument_parser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.build_argument_parser" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="data">
+<dt id="scripts.annotation_stats.c_column_names">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">c_column_names</tt><em class="property"> = ['id', 'label', 'priority', 'prefer_user', 'text', 'images', 'user', 'time', 'skipped', 'appropriate', 'inappropriate', 'combined', 'unannotated']</em><a class="headerlink" href="#scripts.annotation_stats.c_column_names" title="Permalink to this definition">¶</a></dt>
+<dd><p>Combined output column names and ordering</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.compute_agreement">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">compute_agreement</tt><big>(</big><em>annotations</em>, <em>column</em>, <em>evaluation_fn</em>, <em>print_averages_only=False</em>, <em>no_print=False</em>, <em>latex=False</em>, <em>**evaluation_fn_kwargs</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#compute_agreement"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.compute_agreement" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reports the average evaluation_fn for all pairs of annotation
+groups with non-empty intersection.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.compute_item_reward">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">compute_item_reward</tt><big>(</big><em>annotations</em>, <em>coef_appropriate=1.0</em>, <em>coef_inappropriate=1.0</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#compute_item_reward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.compute_item_reward" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the reward for individual annotated images.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.compute_reward">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">compute_reward</tt><big>(</big><em>annotations</em>, <em>coef_appropriate=1.0</em>, <em>coef_inappropriate=1.0</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#compute_reward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.compute_reward" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes how much an annotator should be paid for the given set of
+annotations.</p>
+<p>The formula:</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="n">R</span> <span class="o">=</span> <span class="n">time_reward</span> <span class="o">+</span> <span class="n">item_rewards</span> <span class="o">*</span> <span class="n">agreement_coefficient</span>
+</pre></div>
+</div>
+<p>where:</p>
+<div class="highlight-python"><div class="highlight"><pre>time_reward = # of minutes in which at least one annotation was sent
+item_rewards = sum of individual item rewards
+item_reward = dot([1 for _ in annotated_pictures], reward_vector)
+reward_vector = [1.0, 0.5, 0.5, 0.25, 0.25, 0.25, 0.25, 0., 0., 0., 0., 0.]
+agreement_coefficient = apppropriate + inappropriate agr. coef. / 2
+appropriate agr. coef. = avg. app. precision vs all users / 3rd best avg. prec.
+inappropriate agr. coef. = dtto for inapp. precision
+</pre></div>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The total reward.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.compute_time_reward">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">compute_time_reward</tt><big>(</big><em>annotations</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#compute_time_reward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.compute_time_reward" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the reward for time spent annotating.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.compute_user_orig_acc">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">compute_user_orig_acc</tt><big>(</big><em>annotations</em>, <em>originals</em>, <em>column='appropriate'</em>, <em>with_counts=False</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#compute_user_orig_acc"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.compute_user_orig_acc" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes how often are original illustrative images annotated
+as the given column.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>with_counts</strong> &#8211; Will also return the hit count.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.count_by_len">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">count_by_len</tt><big>(</big><em>annotations, name, array_names=['images', 'appropriate', 'inappropriate', 'unannotated', 'images', 'combined']</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#count_by_len"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.count_by_len" title="Permalink to this definition">¶</a></dt>
+<dd><p>Counts annotations in the given type.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>annotations</strong> &#8211; </li>
+<li><strong>name</strong> &#8211; </li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last"></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.counts_by_len">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">counts_by_len</tt><big>(</big><em>annotations, name, array_names=['images', 'appropriate', 'inappropriate', 'unannotated', 'images', 'combined']</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#counts_by_len"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.counts_by_len" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gives annotation array field lengths in the given column.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.do_join_items_by">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">do_join_items_by</tt><big>(</big><em>i1</em>, <em>i2</em>, <em>name</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#do_join_items_by"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.do_join_items_by" title="Permalink to this definition">¶</a></dt>
+<dd><p>Joins two dicts by the given member.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.filter_grid">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">filter_grid</tt><big>(</big><em>grid</em>, <em>condition</em>, <em>**condition_kwargs</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#filter_grid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.filter_grid" title="Permalink to this definition">¶</a></dt>
+<dd><p>Filters the given grid: only if the given condition holds,
+will retain the given grid member in output. Non-destructive.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.find_overlapping">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">find_overlapping</tt><big>(</big><em>annotations</em>, <em>group='text'</em>, <em>column='appropriate'</em>, <em>output_column='overlapping'</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#find_overlapping"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.find_overlapping" title="Permalink to this definition">¶</a></dt>
+<dd><p>Will add an <tt class="docutils literal"><span class="pre">output_column</span></tt> that contains images that overlap in the
+given <tt class="docutils literal"><span class="pre">column</span></tt> when annotations are grouped by <tt class="docutils literal"><span class="pre">group_by</span></tt>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.format_annotations">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">format_annotations</tt><big>(</big><em>annotations, columns=['id', 'label', 'priority', 'prefer_user', 'text', 'images', 'user', 'time', 'skipped', 'appropriate', 'inappropriate', 'combined', 'unannotated'], delimiter='\t', array_delimiter=';'</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#format_annotations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.format_annotations" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates the string to write to an annotations file.
+If the <tt class="docutils literal"><span class="pre">columns</span></tt> parameter is <tt class="docutils literal"><span class="pre">None</span></tt>, will write all columns.</p>
+<p>Will follow the column ordering.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.generate_t2i_map">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">generate_t2i_map</tt><big>(</big><em>annotations</em>, <em>column='overlapping'</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#generate_t2i_map"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.generate_t2i_map" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates the text-image map string from the given annotations.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.grid_axis_weighed_average">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">grid_axis_weighed_average</tt><big>(</big><em>grid</em>, <em>weights_grid</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#grid_axis_weighed_average"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.grid_axis_weighed_average" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the weighed average for the top-level grid member (grid row).</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.grid_on_intersection">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">grid_on_intersection</tt><big>(</big><em>grouped_annotations</em>, <em>intersect_column</em>, <em>op_column</em>, <em>operation</em>, <em>skip_identical=True</em>, <em>record_counts=True</em>, <em>**op_kwargs</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#grid_on_intersection"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.grid_on_intersection" title="Permalink to this definition">¶</a></dt>
+<dd><p>Applies the given operation on each pair of groups in the grouped
+annotation (on the given column).</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>grouped_annotations</strong> &#8211; A grouped annotations dict. Grid members will
+be pairs of groups.</li>
+<li><strong>intersect_column</strong> &#8211; The column according to which to compute the
+intersect of two annotation groups.</li>
+<li><strong>op_column</strong> &#8211; The column on which to apply the <tt class="docutils literal"><span class="pre">operation</span></tt>.</li>
+<li><strong>skip_identical</strong> &#8211; If set (default), will not include the grid
+diagonal.</li>
+<li><strong>operation</strong> &#8211; The operation which will be applied_on_annotations on the
+<tt class="docutils literal"><span class="pre">op_column</span></tt> of the intersecting annotations for each grid member.</li>
+<li><strong>record_counts</strong> &#8211; If set (default), will assume the <tt class="docutils literal"><span class="pre">column</span></tt> is an
+array column and will also record counts for items in each intersection.
+The counts will be recorded in the same structure as the results of
+the operation, in tuples <tt class="docutils literal"><span class="pre">(count_g1,</span> <span class="pre">count_g2)</span></tt>.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">A dictionary of operation results on the given <tt class="docutils literal"><span class="pre">column``s</span> <span class="pre">of</span>
+<span class="pre">the</span> <span class="pre">intersection</span> <span class="pre">of</span> <span class="pre">each</span> <span class="pre">pair</span> <span class="pre">of</span> <span class="pre">annotation</span> <span class="pre">groups.</span> <span class="pre">To</span> <span class="pre">find</span> <span class="pre">the</span> <span class="pre">result</span>
+<span class="pre">for</span> <span class="pre">(g1,</span> <span class="pre">g2),</span> <span class="pre">go</span> <span class="pre">through</span> <span class="pre">``results[g1][g2]</span></tt>. <strong>The result is a list
+of results for all members of the intersect between g1 and g2.</strong></p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.group_by">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">group_by</tt><big>(</big><em>annotations</em>, <em>name</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#group_by"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.group_by" title="Permalink to this definition">¶</a></dt>
+<dd><p>Splits the annotations into item arrays with the same name.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>annotations</strong> &#8211; The annotations array.</li>
+<li><strong>name</strong> &#8211; One of the names in <tt class="docutils literal"><span class="pre">column_names</span></tt>.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">A dict of annotations arrays. The keys are all values that occur
+in the <tt class="docutils literal"><span class="pre">name</span></tt> column, the values are the complete annotation items
+(including the <tt class="docutils literal"><span class="pre">name</span></tt> column!)</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.group_mutual_precision">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">group_mutual_precision</tt><big>(</big><em>grouped_annotations</em>, <em>name</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#group_mutual_precision"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.group_mutual_precision" title="Permalink to this definition">¶</a></dt>
+<dd><p>Measures the mutual precision in each group in the column with the given
+name. Intended mainly for measuring items grouped by text.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A dict with keys corresponding to <tt class="docutils literal"><span class="pre">grouped_annotations</span></tt> groups
+and values corresponding to mutual precision.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.human_timeframe">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">human_timeframe</tt><big>(</big><em>annotations</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#human_timeframe"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.human_timeframe" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gets the timeframe in a human-readable format.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.inner_join_by">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">inner_join_by</tt><big>(</big><em>a1</em>, <em>a2</em>, <em>name</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#inner_join_by"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.inner_join_by" title="Permalink to this definition">¶</a></dt>
+<dd><p>Inner-joins the given arrays of dicts by the column with the given
+name.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.intersect">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">intersect</tt><big>(</big><em>a1</em>, <em>a2</em>, <em>name</em>, <em>unique_key='id'</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#intersect"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.intersect" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns two lists of annotations consisting of the items from <tt class="docutils literal"><span class="pre">a1</span></tt> and
+<tt class="docutils literal"><span class="pre">a2</span></tt> that have the same value in the column <tt class="docutils literal"><span class="pre">name</span></tt>. If there is more
+than one item with the same value in the <tt class="docutils literal"><span class="pre">name</span></tt> column in one of the
+annotations, a cartesian product of each from a1 &#8211; each from a2 is
+generated.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>unique_key</strong> &#8211; If a pair of items in a1, a2 share the unique key, they
+are considered the same item and not considered in the intersection.
+This controls self-intersection behavior, when for instance measuring
+self-agreement.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.main">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">main</tt><big>(</big><em>args</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#main"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.main" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.parse_annot_item">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">parse_annot_item</tt><big>(</big><em>line</em>, <em>column_names</em>, <em>array_names</em>, <em>array_delimiter=';'</em>, <em>delimiter='\t'</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#parse_annot_item"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.parse_annot_item" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses one annotation item line into the item dict.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>line</strong> &#8211; </td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">dict with <tt class="docutils literal"><span class="pre">column_names</span></tt> keys</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.parse_annotation_inputs">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">parse_annotation_inputs</tt><big>(</big><em>filename</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#parse_annotation_inputs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.parse_annotation_inputs" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.parse_annotations">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">parse_annotations</tt><big>(</big><em>filename</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#parse_annotations"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.parse_annotations" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses the annotation file and returns the annotations data structure.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>filename</strong> &#8211; The <tt class="docutils literal"><span class="pre">annotation_outputs.csv</span></tt> file. The expected format
+is tab-separated CSV, with columns ID, Label, Preferred user, etc.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">An array of dicts.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.plot_column_in_time">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">plot_column_in_time</tt><big>(</big><em>annotations</em>, <em>name</em>, <em>**pyplot_kwargs</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#plot_column_in_time"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.plot_column_in_time" title="Permalink to this definition">¶</a></dt>
+<dd><p>Plots the development of a certain column in time.</p>
+<p>Assumes the column is numerical.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.report_agreement">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">report_agreement</tt><big>(</big><em>avg_result_over_users</em>, <em>avg_results</em>, <em>column</em>, <em>counts</em>, <em>counts_per_user</em>, <em>max_agreement</em>, <em>min_agreement</em>, <em>pivot_agreement</em>, <em>results_counts</em>, <em>w_avg_result_over_users</em>, <em>w_avg_results_per_user</em>, <em>averages_only=False</em>, <em>print_descriptor=False</em>, <em>latex=False</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#report_agreement"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.report_agreement" title="Permalink to this definition">¶</a></dt>
+<dd><p>Prints the agreement information.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.reward_coefficients">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">reward_coefficients</tt><big>(</big><em>average_agreement_by_user</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#reward_coefficients"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.reward_coefficients" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes reward coefficients based on the users&#8217; average agreement.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="scripts.annotation_stats.timeframe">
+<tt class="descclassname">scripts.annotation_stats.</tt><tt class="descname">timeframe</tt><big>(</big><em>annotations</em><big>)</big><a class="reference internal" href="_modules/scripts/annotation_stats.html#timeframe"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#scripts.annotation_stats.timeframe" title="Permalink to this definition">¶</a></dt>
+<dd><p>Outputs the minimum and maximum time of annotations as a tuple.</p>
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/scripts.annotation_stats.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

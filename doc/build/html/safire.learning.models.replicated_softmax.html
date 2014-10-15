@@ -1,0 +1,124 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.replicated_softmax module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.learning.models.replicated_softmax">
+<span id="safire-learning-models-replicated-softmax-module"></span><h1>safire.learning.models.replicated_softmax module<a class="headerlink" href="#module-safire.learning.models.replicated_softmax" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.learning.models.replicated_softmax.ReplicatedSoftmax">
+<em class="property">class </em><tt class="descclassname">safire.learning.models.replicated_softmax.</tt><tt class="descname">ReplicatedSoftmax</tt><big>(</big><em>inputs</em>, <em>n_in</em>, <em>n_out=100</em>, <em>activation=&lt;theano.tensor.elemwise.Elemwise object at 0x000000000ACAB4A8&gt;</em>, <em>backward_activation=&lt;theano.tensor.nnet.nnet.Softmax object at 0x000000000ACABDD8&gt;</em>, <em>W=None</em>, <em>b=None</em>, <em>b_hidden=None</em>, <em>b_visible=None</em>, <em>persistent=None</em>, <em>CD_k=1</em>, <em>CD_use_mean=True</em>, <em>sparsity_target=None</em>, <em>output_sparsity_target=None</em>, <em>numpy_rng=&lt;mtrand.RandomState object at 0x000000000BE2DB10&gt;</em>, <em>L1_norm=0.0</em>, <em>L2_norm=0.0</em>, <em>bias_decay=0.0</em>, <em>entropy_loss=0.0</em>, <em>centering=False</em>, <em>prefer_extremes=False</em>, <em>theano_rng=None</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/replicated_softmax.html#ReplicatedSoftmax"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.replicated_softmax.ReplicatedSoftmax" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine"><tt class="xref py py-class docutils literal"><span class="pre">safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine</span></tt></a></p>
+<dl class="method">
+<dt id="safire.learning.models.replicated_softmax.ReplicatedSoftmax.free_energy">
+<tt class="descname">free_energy</tt><big>(</big><em>visible</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/replicated_softmax.html#ReplicatedSoftmax.free_energy"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.replicated_softmax.ReplicatedSoftmax.free_energy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the free energy of the model.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>visible</strong> (<em>theano.tensor.TensorType</em>) &#8211; The state of the visible units (either 1/0, or mean -
+not important).</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">theano.tensor.var.TensorVariable</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The free energy of the model, given the visible activation.
+Computed as<span class="target" id="equation-free_energy"></span><div class="math">
+<p><span class="eqno">(1)</span><img src="_images/math/167fa46166c790e615711e4641b993a568e95cb6.png" alt="\mathcal{F}(x) = - \log \sum_h e^{-E(x,h)}"/></p>
+</div></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.learning.models.replicated_softmax.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

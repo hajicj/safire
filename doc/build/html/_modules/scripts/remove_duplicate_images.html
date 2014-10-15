@@ -1,0 +1,382 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>scripts.remove_duplicate_images &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for scripts.remove_duplicate_images</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">``remove_duplicate_images.py`` is a script that filters out duplicate images</span>
+<span class="sd">from a dataset.</span>
+
+<span class="sd">Needs to:</span>
+
+<span class="sd">* Find duplicates (based on similarity: duplicates are over 0.9999 similar)</span>
+<span class="sd">* Map all duplicates to one image ID</span>
+<span class="sd">* Change the IDs of all the duplicate images to the representant ID</span>
+<span class="sd">  * In the vtext-image-map.csv file</span>
+<span class="sd">* Filter out duplicates from the im.ftrs.csv file</span>
+
+<span class="sd">Be careful, this touches a lot of the files that map the dataset structure.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">safire.data.image_browser</span> <span class="kn">import</span> <span class="n">ImageBrowser</span>
+<span class="kn">from</span> <span class="nn">safire.data.loaders</span> <span class="kn">import</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">,</span> <span class="n">IndexLoader</span>
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+
+<span class="n">profiid_regex</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s">&#39;[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="is_profiid"><a class="viewcode-back" href="../../scripts.remove_duplicate_images.html#scripts.remove_duplicate_images.is_profiid">[docs]</a><span class="k">def</span> <span class="nf">is_profiid</span><span class="p">(</span><span class="n">iid</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">profiid_regex</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">iid</span><span class="p">)</span>
+
+
+<span class="c">##############################################################################</span>
+
+</div>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../scripts.remove_duplicate_images.html#scripts.remove_duplicate_images.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Executing remove_duplicate_images.py...&#39;</span><span class="p">)</span>
+
+    <span class="n">identity_treshold</span> <span class="o">=</span> <span class="mf">0.98</span>
+    <span class="n">profiid_identity_treshold</span> <span class="o">=</span> <span class="mf">0.9</span>
+    <span class="n">num_best</span> <span class="o">=</span> <span class="mi">200</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">profiids_only</span><span class="p">:</span> <span class="c"># We only want to find a mapping from profiid to wpid</span>
+        <span class="n">num_best</span> <span class="o">=</span> <span class="mi">20</span>
+
+    <span class="c"># Load index</span>
+    <span class="n">dloader</span> <span class="o">=</span> <span class="n">MultimodalShardedDatasetLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">iloader</span> <span class="o">=</span> <span class="n">IndexLoader</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="n">index</span> <span class="o">=</span> <span class="n">iloader</span><span class="o">.</span><span class="n">load_index</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">index_label</span><span class="p">)</span>
+    <span class="n">index</span><span class="o">.</span><span class="n">num_best</span> <span class="o">=</span> <span class="n">num_best</span> <span class="c"># We&#39;re guessing there won&#39;t be more</span>
+    <span class="c"># than 50 duplicates</span>
+
+    <span class="n">dataset</span> <span class="o">=</span> <span class="n">dloader</span><span class="o">.</span><span class="n">load_img</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">index_label</span><span class="p">)</span> <span class="c"># The dataset corresponds</span>
+                                                 <span class="c"># to the index.</span>
+    <span class="n">icorp</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">icorp</span> <span class="c"># For image no. --&gt; image ID string mapping</span>
+
+    <span class="n">image_browser</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">browser_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Building image browser from map </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">browser_map</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">browser_map</span><span class="p">)</span> <span class="k">as</span> <span class="n">image_browser_handle</span><span class="p">:</span>
+            <span class="n">image_browser</span> <span class="o">=</span> <span class="n">ImageBrowser</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">image_browser_handle</span><span class="p">)</span>
+
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Searching for duplicates...&#39;</span><span class="p">)</span>
+
+    <span class="n">imnos_found_identical</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([])</span> <span class="c"># All image IDs that should be removed.</span>
+    <span class="n">imno_mapping</span> <span class="o">=</span> <span class="p">{}</span> <span class="c"># Key: representant, Value: all IDs of identical images</span>
+    <span class="c"># (incl. representant)</span>
+
+    <span class="c"># Run similarity queries - populate id_mapping</span>
+    <span class="k">for</span> <span class="n">imno</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">dataset</span><span class="p">)):</span>
+
+        <span class="n">current_iid</span> <span class="o">=</span> <span class="n">icorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">imno</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">profiids_only</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_profiid</span><span class="p">(</span><span class="n">current_iid</span><span class="p">):</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Skipping non-profiid </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">current_iid</span><span class="p">)</span>
+            <span class="k">continue</span>
+
+        <span class="k">if</span> <span class="n">imno</span> <span class="o">%</span> <span class="mi">1000</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Querying for identicals: at imno. </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">imno</span><span class="p">)</span>
+
+        <span class="c"># Speedup</span>
+        <span class="k">if</span> <span class="n">imno</span> <span class="ow">in</span> <span class="n">imnos_found_identical</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Skipping imno </span><span class="si">%d</span><span class="s">, found in identical.&#39;</span> <span class="o">%</span> <span class="n">imno</span><span class="p">)</span>
+            <span class="k">continue</span>
+
+        <span class="n">query</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">get_sparse</span><span class="p">(</span><span class="n">imno</span><span class="p">)</span>
+        <span class="n">qresults</span> <span class="o">=</span> <span class="n">index</span><span class="p">[</span><span class="n">query</span><span class="p">]</span>
+
+        <span class="n">current_identical_imnos</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">found_itself</span> <span class="o">=</span> <span class="bp">False</span>
+
+        <span class="c"># Profiids get a lower treshold and try to find a non-profiid repr.,</span>
+        <span class="c"># may get other special treatment.</span>
+        <span class="k">for</span> <span class="n">qr_no</span><span class="p">,</span> <span class="n">qr_sim</span> <span class="ow">in</span> <span class="n">qresults</span><span class="p">:</span>
+            <span class="n">qr_iid</span> <span class="o">=</span> <span class="n">icorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">qr_no</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">is_profiid</span><span class="p">(</span><span class="n">qr_iid</span><span class="p">)</span> <span class="o">!=</span> <span class="n">is_profiid</span><span class="p">(</span><span class="n">current_iid</span><span class="p">):</span>
+                <span class="n">treshold</span> <span class="o">=</span> <span class="n">profiid_identity_treshold</span> <span class="c"># Across datasets</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">treshold</span> <span class="o">=</span> <span class="n">identity_treshold</span>
+            <span class="k">if</span> <span class="n">qr_sim</span> <span class="o">&gt;</span> <span class="n">treshold</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">qr_no</span> <span class="o">==</span> <span class="n">imno</span><span class="p">:</span>
+                    <span class="n">found_itself</span> <span class="o">=</span> <span class="bp">True</span>
+                <span class="n">current_identical_imnos</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">qr_no</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">break</span> <span class="c"># Sorted by similarity...</span>
+
+        <span class="c"># Sanity checks?</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">current_identical_imnos</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;No identical image found for </span><span class="si">%d</span><span class="s">, although at least </span><span class="si">%d</span><span class="s"> itself should have been found.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">imno</span><span class="p">,</span> <span class="n">imno</span><span class="p">))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">found_itself</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Query </span><span class="si">%d</span><span class="s"> didn</span><span class="se">\&#39;</span><span class="s">t find itself as one of the most similar.&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">imno</span><span class="p">))</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">Total: </span><span class="si">%d</span><span class="se">\n\t</span><span class="s">IDs found:</span><span class="se">\n</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">current_identical_imnos</span><span class="p">),</span>
+                                                            <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">current_identical_imnos</span><span class="p">))))</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">Most similar imnos: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="s">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="p">[</span><span class="s">&#39;/&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">i</span><span class="p">,</span><span class="n">s</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span><span class="n">s</span> <span class="ow">in</span> <span class="n">qresults</span> <span class="p">])))</span>
+            <span class="k">if</span> <span class="n">image_browser</span><span class="p">:</span>
+                <span class="n">iid</span> <span class="o">=</span> <span class="n">icorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">imno</span><span class="p">]</span>
+                <span class="n">duplicate_iids</span> <span class="o">=</span> <span class="p">[</span> <span class="n">icorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">current_identical_imnos</span> <span class="p">]</span>
+                <span class="n">image</span> <span class="o">=</span> <span class="n">image_browser</span><span class="o">.</span><span class="n">build_tiled_image</span><span class="p">([</span><span class="n">iid</span><span class="p">]</span> <span class="o">+</span> <span class="n">duplicate_iids</span><span class="p">)</span>
+                <span class="n">image</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+
+        <span class="c"># If there are duplicates:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">current_identical_imnos</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Found duplicates for imno </span><span class="si">%d</span><span class="s">: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">imno</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">current_identical_imnos</span><span class="p">)))</span>
+
+        <span class="c"># Current image number set as representant</span>
+        <span class="n">imno_mapping</span><span class="p">[</span><span class="n">imno</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_identical_imnos</span>
+        <span class="n">imnos_found_identical</span> <span class="o">=</span> <span class="n">imnos_found_identical</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="nb">set</span><span class="p">([</span><span class="n">n</span>
+                                                                 <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">current_identical_imnos</span>
+                                                                 <span class="k">if</span> <span class="n">n</span> <span class="o">!=</span> <span class="n">imno</span><span class="p">]))</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Imnos found identical status: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">imnos_found_identical</span><span class="p">))</span>
+
+        <span class="c">#if image_browser:</span>
+        <span class="c">#    iid = icorp.id2doc[imno]</span>
+        <span class="c">#    duplicate_iids = [icorp.id2doc[i] for i in current_identical_imnos]</span>
+        <span class="c">#    image = image_browser.build_tiled_image([iid] + duplicate_iids)</span>
+        <span class="c">#    image.show()</span>
+
+
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Finished querying index.&#39;</span><span class="p">)</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;imno mapping:</span><span class="se">\n</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">imno_mapping</span><span class="o">.</span><span class="n">items</span><span class="p">())))</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Total images that have duplicates: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span>
+        <span class="nb">len</span><span class="p">([</span> <span class="n">imno</span> <span class="k">for</span> <span class="n">imno</span> <span class="ow">in</span> <span class="n">imno_mapping</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">imno_mapping</span><span class="p">[</span><span class="n">imno</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="p">])))</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Translating imnos to image IDs in id_mapping, imnos_found_identical&#39;</span><span class="p">)</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;(</span><span class="si">%d</span><span class="s"> Imnos available in corpus: </span><span class="si">%s</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">icorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">icorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">)))</span>
+    <span class="n">iids_found_identical</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span> <span class="n">icorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">imno</span><span class="p">]</span>
+                                 <span class="k">for</span> <span class="n">imno</span> <span class="ow">in</span> <span class="n">imnos_found_identical</span> <span class="p">])</span>
+    <span class="n">iid_mapping</span> <span class="o">=</span> <span class="p">{</span> <span class="n">icorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">imno</span><span class="p">]</span> <span class="p">:</span> <span class="p">[</span> <span class="n">icorp</span><span class="o">.</span><span class="n">id2doc</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                                           <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">imno_mapping</span><span class="p">[</span><span class="n">imno</span><span class="p">]</span> <span class="p">]</span>
+                    <span class="k">for</span> <span class="n">imno</span> <span class="ow">in</span> <span class="n">imno_mapping</span> <span class="p">}</span>
+
+
+    <span class="c"># Potentially: change representants, using some rule?</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">ignore_profiids</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Making sure that representants are identified using web-pic &#39;</span>
+                     <span class="s">&#39;ID, not using profiid.&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">iid</span> <span class="ow">in</span> <span class="n">iid_mapping</span><span class="p">:</span>
+            <span class="n">current_iids</span> <span class="o">=</span> <span class="n">iid_mapping</span><span class="p">[</span><span class="n">iid</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">is_profiid</span><span class="p">(</span><span class="n">iid</span><span class="p">):</span>
+                <span class="c"># Find first non-profiid, use it as representant</span>
+                <span class="n">non_profiids</span> <span class="o">=</span> <span class="p">[</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">iid_mapping</span><span class="p">[</span><span class="n">iid</span><span class="p">]</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">is_profiid</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="p">]</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">non_profiids</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s">&#39;Cannot find WP-id for profiid </span><span class="si">%s</span><span class="s">. (Total IIDs: </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">iid</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">current_iids</span><span class="p">)))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">new_representant</span> <span class="o">=</span> <span class="n">non_profiids</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+                    <span class="n">iid_mapping</span><span class="p">[</span><span class="n">new_representant</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_iids</span>
+                    <span class="k">del</span> <span class="n">iid_mapping</span><span class="p">[</span><span class="n">iid</span><span class="p">]</span>
+
+                    <span class="k">if</span> <span class="n">new_representant</span> <span class="ow">in</span> <span class="n">iids_found_identical</span><span class="p">:</span>
+                        <span class="n">iids_found_identical</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">new_representant</span><span class="p">)</span>
+                        <span class="n">iids_found_identical</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">iid</span><span class="p">)</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;IID mapping:</span><span class="se">\n</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">iid_mapping</span><span class="o">.</span><span class="n">items</span><span class="p">())))</span>
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Creating reverse dict (IID --&gt; representant IID)&#39;</span><span class="p">)</span>
+    <span class="n">reverse_iid_mapping</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">iid</span> <span class="ow">in</span> <span class="n">iid_mapping</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">iid_mapping</span><span class="p">[</span><span class="n">iid</span><span class="p">]:</span>
+            <span class="n">reverse_iid_mapping</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">iid</span>
+
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">iid_map</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Writing output map to </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">args</span><span class="o">.</span><span class="n">iid_map</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">iid_map</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">iid_map_handle</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">iid</span> <span class="ow">in</span> <span class="n">reverse_iid_mapping</span><span class="p">:</span>
+                <span class="n">representant_iid</span> <span class="o">=</span> <span class="n">reverse_iid_mapping</span><span class="p">[</span><span class="n">iid</span><span class="p">]</span>
+                <span class="n">output_line</span> <span class="o">=</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">iid</span><span class="p">,</span> <span class="n">representant_iid</span><span class="p">])</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span>
+                <span class="n">iid_map_handle</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">output_line</span><span class="p">)</span>
+
+
+    <span class="c"># Read vtext-image-map</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_transform_t2i</span><span class="p">:</span>
+        <span class="n">t2i_map_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dloader</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">dloader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">textdoc2imdoc</span><span class="p">)</span>
+        <span class="n">t2i_output_map_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dloader</span><span class="o">.</span><span class="n">root</span><span class="p">,</span>
+                                           <span class="s">&#39;noduplicates.&#39;</span> <span class="o">+</span> <span class="n">dloader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">textdoc2imdoc</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Processing t2i mapping: input file </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">t2i_map_file</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">t2i_map_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">t2i_in_handle</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">t2i_output_map_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">t2i_out_handle</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">t2i_record</span> <span class="ow">in</span> <span class="n">t2i_in_handle</span><span class="p">:</span>
+                    <span class="n">text</span><span class="p">,</span> <span class="n">iid</span> <span class="o">=</span> <span class="n">t2i_record</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+                    <span class="n">representant_iid</span> <span class="o">=</span> <span class="n">reverse_iid_mapping</span><span class="p">[</span><span class="n">iid</span><span class="p">]</span>
+                    <span class="n">t2i_output_record</span> <span class="o">=</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">text</span><span class="p">,</span> <span class="n">representant_iid</span><span class="p">])</span>
+                    <span class="n">t2i_out_handle</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">t2i_output_record</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span>
+
+    <span class="c"># Read im.ftrs.csv</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_transform_imftrs</span><span class="p">:</span>
+        <span class="n">imftrs_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dloader</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">dloader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">image_vectors</span><span class="p">)</span>
+        <span class="n">output_imftrs_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">dloader</span><span class="o">.</span><span class="n">root</span><span class="p">,</span>
+                                          <span class="s">&#39;noduplicates.&#39;</span> <span class="o">+</span> <span class="n">dloader</span><span class="o">.</span><span class="n">layout</span><span class="o">.</span><span class="n">image_vectors</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Processing image features: input file </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">imftrs_file</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Will skip the following IIDs:</span><span class="se">\n</span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="n">iids_found_identical</span><span class="p">)))</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">imftrs_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">imf_in_handle</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_imftrs_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">imf_out_handle</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">imf_in_handle</span><span class="p">:</span>
+                    <span class="n">split_idx</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="p">)</span>
+                    <span class="n">iid</span> <span class="o">=</span> <span class="n">line</span><span class="p">[:</span><span class="n">split_idx</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="n">iid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">iids_found_identical</span><span class="p">:</span>
+                        <span class="n">imf_out_handle</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Skipping image vector for iid </span><span class="si">%s</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="n">iid</span><span class="p">)</span>
+
+
+
+    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s">&#39;Exiting remove_duplicate_images.py.&#39;</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="build_argument_parser"><a class="viewcode-back" href="../../scripts.remove_duplicate_images.html#scripts.remove_duplicate_images.build_argument_parser">[docs]</a><span class="k">def</span> <span class="nf">build_argument_parser</span><span class="p">():</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="n">__doc__</span><span class="p">,</span> <span class="n">add_help</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-r&#39;</span><span class="p">,</span> <span class="s">&#39;--root&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The root dataset directory, passed to Loader.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-n&#39;</span><span class="p">,</span> <span class="s">&#39;--name&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The name passed to Loader.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-i&#39;</span><span class="p">,</span> <span class="s">&#39;--index_label&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Specify which index should be used for identity&#39;</span>
+                             <span class="s">&#39; checking.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-o&#39;</span><span class="p">,</span> <span class="s">&#39;--output_name&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Specify under which name the filtered files &#39;</span>
+                             <span class="s">&#39;should be stored. [NOT IMPLEMENTED]&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-m&#39;</span><span class="p">,</span> <span class="s">&#39;--iid_map&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;The file to which the iid --&gt; representant &#39;</span>
+                             <span class="s">&#39;mapping will be written (one pair per line, first&#39;</span>
+                             <span class="s">&#39; column iid, second column representant IID).&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-b&#39;</span><span class="p">,</span> <span class="s">&#39;--browser_map&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Specify a image ID -&gt; image file map for browsing&#39;</span>
+                             <span class="s">&#39; the identical images. (For testing.)&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--ignore_profiids&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will not attempt to prefer safire iids&#39;</span>
+                             <span class="s">&#39; to profiid-based iids.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--profiids_only&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will only search for identity among &#39;</span>
+                             <span class="s">&#39;profiids, speeding up the process.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_transform_t2i&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will not process vtext-image-map.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--no_transform_imftrs&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;If set, will not filter image vectors.&#39;</span><span class="p">)</span>
+
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;-v&#39;</span><span class="p">,</span> <span class="s">&#39;--verbose&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on INFO logging messages.&#39;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s">&#39;--debug&#39;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s">&#39;store_true&#39;</span><span class="p">,</span>
+                        <span class="n">help</span><span class="o">=</span><span class="s">&#39;Turn on DEBUG logging messages. (May get very &#39;</span>
+                             <span class="s">&#39;verbose.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">parser</span>
+
+</div>
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">&#39;__main__&#39;</span><span class="p">:</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">build_argument_parser</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">verbose</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="s">&#39;</span><span class="si">%(levelname)s</span><span class="s"> : </span><span class="si">%(message)s</span><span class="s">&#39;</span><span class="p">,</span>
+                            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+    <span class="n">main</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

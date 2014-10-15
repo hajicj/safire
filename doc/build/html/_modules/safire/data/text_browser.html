@@ -1,0 +1,389 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.text_browser &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="up" title="Module code" href="../../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.data.text_browser</h1><div class="highlight"><pre>
+<span class="c">#!/usr/bin/env python</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Maps image IDs from an ImagenetCorpus to image files for exploring</span>
+<span class="sd">Safire model performance.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">codecs</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">string</span>
+<span class="kn">import</span> <span class="nn">webbrowser</span>
+<span class="kn">import</span> <span class="nn">StringIO</span>
+<span class="kn">import</span> <span class="nn">operator</span>
+<span class="kn">import</span> <span class="nn">gensim</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">safire.utils</span>
+<span class="kn">from</span> <span class="nn">safire.data</span> <span class="kn">import</span> <span class="n">VTextCorpus</span>
+<span class="kn">from</span> <span class="nn">safire.utils.transcorp</span> <span class="kn">import</span> <span class="n">id2word</span><span class="p">,</span> <span class="n">bottom_corpus</span><span class="p">,</span> <span class="n">run_transformations</span><span class="p">,</span> \
+    <span class="n">get_transformers</span>
+
+
+<span class="n">__author__</span> <span class="o">=</span> <span class="s">&#39;Jan Hajic jr.&#39;</span>
+
+
+<div class="viewcode-block" id="TextBrowser"><a class="viewcode-back" href="../../../safire.data.text_browser.html#safire.data.text_browser.TextBrowser">[docs]</a><span class="k">class</span> <span class="nc">TextBrowser</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Provides functionality for looking directly at the texts used to build</span>
+<span class="sd">    queries.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">root</span><span class="p">,</span> <span class="n">corpus</span><span class="p">,</span> <span class="n">gzipped</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">text2im</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">im2text</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                 <span class="n">first_n_sentences</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        :type root: str</span>
+<span class="sd">        :param root: Path to the directory relative to which files in the</span>
+<span class="sd">            ids2files_map are given. Used in retrieving images. Best practice:</span>
+<span class="sd">            use an absolute path.</span>
+
+<span class="sd">        :type ids2files: dict</span>
+<span class="sd">        :param ids2files: A dictionary that maps a document ID in corpus to a file</span>
+<span class="sd">            relative to root.</span>
+
+<span class="sd">        :type corpus: safire.data.vtextcorpus.VTextCorpus</span>
+<span class="sd">        :param corpus: A VTextCorpus, from which document parsing settings</span>
+<span class="sd">            will be taken. A deep copy is made, because we will be manipulating</span>
+<span class="sd">            the corpus settings during TextBrowser operation.</span>
+
+<span class="sd">        :type gzipped: Boolean</span>
+<span class="sd">        :param gzipped: If set, will consider the text files with corpus docs</span>
+<span class="sd">            gzipped.</span>
+
+<span class="sd">        :type text2im: dict</span>
+<span class="sd">        :param text2im: Optionally, a text-image mapping can be supplied.</span>
+<span class="sd">            This enables looking up image IDs for texts.</span>
+
+<span class="sd">        :type im2text: dict</span>
+<span class="sd">        :param im2text: Optionally, an image-text mapping can be supplied.</span>
+<span class="sd">            This enables looking up text IDs for images.</span>
+
+<span class="sd">        :type first_n_sentences: int</span>
+<span class="sd">        :param first_n_sentences: Only show this many first sentences from each</span>
+<span class="sd">            displayed text file.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">root</span> <span class="o">=</span> <span class="n">root</span>
+
+        <span class="c"># Loading corpus and applying browser settings</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">corpus</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">corpus</span><span class="p">)</span> <span class="c"># This may take long(-ish).</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">transformers</span> <span class="o">=</span> <span class="n">get_transformers</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">corpus</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span> <span class="o">=</span> <span class="n">bottom_corpus</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">corpus</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="p">,</span> <span class="n">VTextCorpus</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Wrong corpus type supplied: expects VTextCorpus, not </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">allow_dict_updates</span> <span class="o">=</span> <span class="bp">False</span> <span class="c"># Freeze dictionary</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">ids2files</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">id2doc</span> <span class="c"># Ref...</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">files2ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">doc2id</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">gzipped</span> <span class="o">=</span> <span class="n">gzipped</span>
+
+        <span class="c"># &quot;Bonus&quot; members: if given, a text-image mapping will be available.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text2im</span> <span class="o">=</span> <span class="n">text2im</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">im2text</span> <span class="o">=</span> <span class="n">im2text</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">first_n_sentences</span> <span class="o">=</span> <span class="n">first_n_sentences</span>
+
+        <span class="c"># Internals</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prev_temp</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">to_delete</span> <span class="o">=</span> <span class="p">[]</span> <span class="c"># Temporary files to clean up later.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">prev_docid</span> <span class="o">=</span> <span class="bp">None</span>
+
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">id_or_filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Gets the text file name, incl. path to root, if an ID is given.</span>
+<span class="sd">        If a filename is given (relative to the root), returns the corresponding</span>
+<span class="sd">        ID. Can also parse a filename given together with the root.</span>
+
+<span class="sd">        Can parse an iterable of IDs/filenames; returns the corrseponding list</span>
+<span class="sd">        (may be a mix of IDs and filenames, but that is not recommended).</span>
+
+<span class="sd">        :raises: KeyError</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">id_or_filename</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">id_or_filename</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="p">[</span><span class="n">item</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">id_or_filename</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">id_or_filename</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ids2files</span><span class="p">[</span><span class="n">id_or_filename</span><span class="p">])</span>
+            <span class="k">elif</span> <span class="n">id_or_filename</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">files2ids</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">files2ids</span><span class="p">[</span><span class="n">id_or_filename</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">id_or_filename</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">):</span>
+                <span class="n">short_filename</span> <span class="o">=</span> <span class="n">id_or_filename</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">):]</span>
+                <span class="k">if</span> <span class="n">short_filename</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">files2ids</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">files2ids</span><span class="p">[</span><span class="n">short_filename</span><span class="p">]</span>
+
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s">&#39;Image with ID or filename </span><span class="si">%s</span><span class="s"> not found.&#39;</span> <span class="o">%</span> <span class="n">id_or_filename</span><span class="p">)</span>
+
+<div class="viewcode-block" id="TextBrowser.parse"><a class="viewcode-back" href="../../../safire.data.text_browser.html#safire.data.text_browser.TextBrowser.parse">[docs]</a>    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">first_n_sentences</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;From a vtext filename, retrieves the raw text of the document, grouped</span>
+<span class="sd">        by sentence.&quot;&quot;&quot;</span>
+        <span class="n">temp_retcol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">retcol</span>
+        <span class="n">temp_retidx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">retidx</span>
+        <span class="n">temp_filter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">token_filter</span>
+
+        <span class="n">retcol</span> <span class="o">=</span> <span class="s">&#39;form&#39;</span>
+
+        <span class="k">try</span><span class="p">:</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">retcol</span> <span class="o">=</span> <span class="n">retcol</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">retidx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">colnames</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">retcol</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">token_filter</span> <span class="o">=</span> <span class="bp">None</span>
+
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">_get_doc_handle</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span> <span class="k">as</span> <span class="n">input_handle</span><span class="p">:</span>
+
+                <span class="n">sentence_buffer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">parse_sentences</span><span class="p">(</span><span class="n">input_handle</span><span class="p">)</span>
+                <span class="n">text</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">sent</span> <span class="ow">in</span> <span class="n">sentence_buffer</span><span class="p">:</span>
+                    <span class="c">### DEBUG</span>
+                    <span class="c">#for w in sent:</span>
+                    <span class="c">#    safire.utils.check_malformed_unicode(w)</span>
+
+                    <span class="n">text</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">sent</span><span class="p">)</span>
+                <span class="c">#print &#39;Text: %s&#39; % text</span>
+                <span class="n">doc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">dictionary</span><span class="o">.</span><span class="n">doc2bow</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">allow_update</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+                <span class="c">#print &#39;Doc: %s&#39; % str(doc)</span>
+
+
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">retcol</span> <span class="o">=</span> <span class="n">temp_retcol</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">retidx</span> <span class="o">=</span> <span class="n">temp_retidx</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">token_filter</span> <span class="o">=</span> <span class="n">temp_filter</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">first_n_sentences</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">first_n_sentences</span><span class="p">:</span>
+            <span class="n">first_n_sentences</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">first_n_sentences</span>
+        <span class="k">if</span> <span class="n">first_n_sentences</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">sentence_buffer</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">first_n_sentences</span><span class="p">:</span>
+                <span class="n">sentence_buffer</span> <span class="o">=</span> <span class="n">sentence_buffer</span><span class="p">[:</span><span class="n">first_n_sentences</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">doc</span><span class="p">,</span> <span class="n">sentence_buffer</span>
+</div>
+<div class="viewcode-block" id="TextBrowser.create_header"><a class="viewcode-back" href="../../../safire.data.text_browser.html#safire.data.text_browser.TextBrowser.create_header">[docs]</a>    <span class="k">def</span> <span class="nf">create_header</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Creates a header for the shown document.&quot;&quot;&quot;</span>
+        <span class="n">line1</span> <span class="o">=</span> <span class="s">&#39;Document file: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">filename</span>
+        <span class="n">line2</span> <span class="o">=</span> <span class="s">&#39;=&#39;</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">line1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">line1</span><span class="p">,</span> <span class="n">line2</span><span class="p">])</span>
+</div>
+<div class="viewcode-block" id="TextBrowser.format_text"><a class="viewcode-back" href="../../../safire.data.text_browser.html#safire.data.text_browser.TextBrowser.format_text">[docs]</a>    <span class="k">def</span> <span class="nf">format_text</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bow</span><span class="p">,</span> <span class="n">sentence_buffer</span><span class="p">,</span> <span class="n">header</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Formats the text in the sentence buffer to something printable.&quot;&quot;&quot;</span>
+        <span class="n">output_lines</span> <span class="o">=</span> <span class="p">[</span><span class="n">header</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">sentence</span> <span class="ow">in</span> <span class="n">sentence_buffer</span><span class="p">:</span>
+            <span class="n">output_line</span> <span class="o">=</span> <span class="s">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sentence</span><span class="p">)</span>
+            <span class="n">output_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">output_line</span><span class="p">)</span>
+
+        <span class="c">#output_text = &#39;\n&#39;.join((l for l in output_lines))</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">StringIO</span><span class="o">.</span><span class="n">StringIO</span><span class="p">()</span>
+        <span class="n">s</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_lines</span><span class="p">))</span>
+
+        <span class="n">output</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">getvalue</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">output</span>
+</div>
+<div class="viewcode-block" id="TextBrowser.text_to_window"><a class="viewcode-back" href="../../../safire.data.text_browser.html#safire.data.text_browser.TextBrowser.text_to_window">[docs]</a>    <span class="k">def</span> <span class="nf">text_to_window</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Opens a new window and prints the formatted text there.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_temp</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prev_temp</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prev_temp</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prev_temp</span><span class="p">):</span> <span class="c"># Deletion unsuccessful</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">to_delete</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prev_temp</span><span class="p">)</span>
+
+        <span class="n">tmp_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_tmp_filename</span><span class="p">()</span>
+
+        <span class="n">tmp_handle</span> <span class="o">=</span> <span class="n">codecs</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">tmp_file</span><span class="p">,</span> <span class="s">&#39;w&#39;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s">&#39;utf-8&#39;</span><span class="p">)</span>
+        <span class="n">tmp_handle</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">text</span> <span class="o">+</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="p">)</span>
+        <span class="n">tmp_handle</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+        <span class="n">webbrowser</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">tmp_file</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">prev_temp</span> <span class="o">=</span> <span class="n">tmp_file</span>
+</div>
+<div class="viewcode-block" id="TextBrowser.get_text"><a class="viewcode-back" href="../../../safire.data.text_browser.html#safire.data.text_browser.TextBrowser.get_text">[docs]</a>    <span class="k">def</span> <span class="nf">get_text</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">docid</span><span class="p">,</span> <span class="n">first_n_sentences</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;For the given document ID, builds the text to show.</span>
+
+<span class="sd">        If ``docid`` is an integer, will attempt to convert it to filename.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">docid</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">docid</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="n">docid</span> <span class="c"># Assumes document IDs are also filenames. This</span>
+                             <span class="c"># holds for corpora created from vtlists.</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Reading filename: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">filename</span><span class="p">)</span>
+
+        <span class="n">doc</span><span class="p">,</span> <span class="n">sentence_buffer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">first_n_sentences</span><span class="p">)</span>
+        <span class="n">header</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_header</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+        <span class="n">text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">format_text</span><span class="p">(</span><span class="n">doc</span><span class="p">,</span> <span class="n">sentence_buffer</span><span class="p">,</span> <span class="n">header</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">text</span>
+</div>
+<div class="viewcode-block" id="TextBrowser.get_multiple_texts"><a class="viewcode-back" href="../../../safire.data.text_browser.html#safire.data.text_browser.TextBrowser.get_multiple_texts">[docs]</a>    <span class="k">def</span> <span class="nf">get_multiple_texts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">docids</span><span class="p">,</span> <span class="n">first_n_sentences</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Retrieves texts for the given document IDs.&quot;&quot;&quot;</span>
+        <span class="n">texts</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">get_text</span><span class="p">(</span><span class="n">docid</span><span class="p">,</span> <span class="n">first_n_sentences</span><span class="p">)</span> <span class="k">for</span> <span class="n">docid</span> <span class="ow">in</span> <span class="n">docids</span><span class="p">]</span>
+        <span class="n">final_text</span> <span class="o">=</span> <span class="s">&#39;</span><span class="se">\n\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">texts</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">final_text</span>
+</div>
+<div class="viewcode-block" id="TextBrowser.show"><a class="viewcode-back" href="../../../safire.data.text_browser.html#safire.data.text_browser.TextBrowser.show">[docs]</a>    <span class="k">def</span> <span class="nf">show</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">docid</span><span class="p">,</span> <span class="n">first_n_sentences</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Load the given text in a separate window.&quot;&quot;&quot;</span>
+        <span class="n">text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_text</span><span class="p">(</span><span class="n">docid</span><span class="p">,</span> <span class="n">first_n_sentences</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text_to_window</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TextBrowser.show_multiple"><a class="viewcode-back" href="../../../safire.data.text_browser.html#safire.data.text_browser.TextBrowser.show_multiple">[docs]</a>    <span class="k">def</span> <span class="nf">show_multiple</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">docids</span><span class="p">,</span> <span class="n">first_n_sentences</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Load the given set of texts in a separate window.&quot;&quot;&quot;</span>
+        <span class="n">final_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_multiple_texts</span><span class="p">(</span><span class="n">docids</span><span class="p">,</span> <span class="n">first_n_sentences</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">text_to_window</span><span class="p">(</span><span class="n">final_text</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="TextBrowser.get_representation"><a class="viewcode-back" href="../../../safire.data.text_browser.html#safire.data.text_browser.TextBrowser.get_representation">[docs]</a>    <span class="k">def</span> <span class="nf">get_representation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">docid</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns how the document is represented by the corpus: the word IDs</span>
+<span class="sd">        in the document and their output values.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">docid</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">docid</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="n">docid</span>
+
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">vtcorp</span><span class="o">.</span><span class="n">_get_doc_handle</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span> <span class="k">as</span> <span class="n">doc_handle</span><span class="p">:</span>
+            <span class="n">representation</span> <span class="o">=</span> <span class="n">run_transformations</span><span class="p">(</span><span class="n">doc_handle</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">transformers</span><span class="p">)</span>
+            <span class="c">#document, sentences = self.vtcorp.parse_document_and_sentences(doc_handle)</span>
+
+        <span class="k">return</span> <span class="n">representation</span>
+</div>
+<div class="viewcode-block" id="TextBrowser.get_word_representation"><a class="viewcode-back" href="../../../safire.data.text_browser.html#safire.data.text_browser.TextBrowser.get_word_representation">[docs]</a>    <span class="k">def</span> <span class="nf">get_word_representation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">docid</span><span class="p">,</span> <span class="n">highest_scoring</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns the document representation with word IDs converted to the</span>
+<span class="sd">        original tokens.</span>
+
+<span class="sd">        If highest_scoring is given, sorts from highest to lowest freq.&quot;&quot;&quot;</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_representation</span><span class="p">(</span><span class="n">docid</span><span class="p">)</span>
+
+        <span class="c"># Need to backtrack through feature ID mappings</span>
+        <span class="n">word_doc</span> <span class="o">=</span> <span class="p">[</span> <span class="p">(</span><span class="nb">unicode</span><span class="p">(</span><span class="n">id2word</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">corpus</span><span class="p">,</span> <span class="n">w</span><span class="p">[</span><span class="mi">0</span><span class="p">])),</span> <span class="n">w</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                     <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">doc</span> <span class="p">]</span>
+
+        <span class="n">sorted_wdoc</span> <span class="o">=</span> <span class="n">word_doc</span>
+        <span class="k">if</span> <span class="n">highest_scoring</span><span class="p">:</span>
+            <span class="n">sorted_wdoc</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">word_doc</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">operator</span><span class="o">.</span><span class="n">itemgetter</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">reverse</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">highest_scoring</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">sorted_wdoc</span><span class="p">):</span>
+                <span class="n">sorted_wdoc</span> <span class="o">=</span> <span class="n">sorted_wdoc</span><span class="p">[:</span><span class="n">highest_scoring</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">sorted_wdoc</span>
+</div>
+<div class="viewcode-block" id="TextBrowser.format_representation"><a class="viewcode-back" href="../../../safire.data.text_browser.html#safire.data.text_browser.TextBrowser.format_representation">[docs]</a>    <span class="k">def</span> <span class="nf">format_representation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">word_doc</span><span class="p">,</span> <span class="n">n_cols</span><span class="o">=</span><span class="mi">3</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Returns a string for printing out the document representation.</span>
+
+<span class="sd">        :param word_doc: A document representation.</span>
+
+<span class="sd">        :param n_cols: How many columns should the output have? [NOT IMPL.]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">swdoc_pairs</span> <span class="o">=</span> <span class="p">[</span> <span class="s">&#39;</span><span class="se">\t</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">w</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">str</span><span class="p">(</span><span class="n">w</span><span class="p">[</span><span class="mi">1</span><span class="p">])])</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">word_doc</span> <span class="p">]</span>
+        <span class="n">columns</span> <span class="o">=</span> <span class="n">gensim</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">grouper</span><span class="p">(</span><span class="n">swdoc_pairs</span><span class="p">,</span>
+                                       <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">swdoc_pairs</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">n_cols</span><span class="p">)))</span>
+        <span class="n">swdoc_row_tuples</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">columns</span><span class="p">))</span>
+
+        <span class="n">swdoc_rows</span> <span class="o">=</span> <span class="p">[</span> <span class="s">&#39;</span><span class="se">\t\t</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">swdoc_row_tuples</span><span class="p">]</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="s">&#39;</span><span class="se">\n</span><span class="s">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">swdoc_rows</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">output</span>
+
+</div>
+    <span class="k">def</span> <span class="nf">_generate_tmp_filename</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">code</span> <span class="o">=</span> <span class="s">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">string</span><span class="o">.</span><span class="n">ascii_uppercase</span> <span class="o">+</span> <span class="n">string</span><span class="o">.</span><span class="n">digits</span><span class="p">)</span>
+                       <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">16</span><span class="p">))</span>
+        <span class="k">return</span> <span class="s">&#39;text.&#39;</span> <span class="o">+</span> <span class="n">code</span> <span class="o">+</span> <span class="s">&#39;.tmp.txt&#39;</span>
+
+    <span class="k">def</span> <span class="nf">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_temp</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prev_temp</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">prev_temp</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_delete</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

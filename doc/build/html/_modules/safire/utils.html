@@ -1,0 +1,708 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.utils &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="../../_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../../',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="../../index.html" />
+    <link rel="up" title="Module code" href="../index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for safire.utils</h1><div class="highlight"><pre>
+<span class="sd">&quot;&quot;&quot; This file contains different utility functions that are not connected</span>
+<span class="sd">in anyway to the networks presented in the tutorials, but rather help in</span>
+<span class="sd">processing the outputs into a more understandable way.</span>
+
+<span class="sd">For example ``tile_raster_images`` helps in generating a easy to grasp</span>
+<span class="sd">image from a set of samples or weights.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">cProfile</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">import</span> <span class="nn">StringIO</span>
+<span class="kn">import</span> <span class="nn">pdb</span>
+<span class="kn">import</span> <span class="nn">pstats</span>
+<span class="kn">import</span> <span class="nn">random</span>
+
+<span class="kn">import</span> <span class="nn">matplotlib.gridspec</span> <span class="kn">as</span> <span class="nn">gridspec</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">Image</span>
+<span class="kn">import</span> <span class="nn">numpy</span>
+<span class="kn">import</span> <span class="nn">theano</span>
+<span class="kn">import</span> <span class="nn">theano.ifelse</span>
+
+<span class="kn">import</span> <span class="nn">math</span>
+
+<div class="viewcode-block" id="check_kwargs"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.check_kwargs">[docs]</a><span class="k">def</span> <span class="nf">check_kwargs</span><span class="p">(</span><span class="n">kwargs</span><span class="p">,</span> <span class="n">names</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Checks that all \&#39;names\&#39; are in the \&#39;dictionary\&#39;.</span>
+<span class="sd">    Throws a TypeError if they aren&#39;t.</span>
+
+<span class="sd">    :type dictionary: dict</span>
+<span class="sd">    :param dictionary: kwargs dictionary object.</span>
+
+<span class="sd">    :type names: iterable</span>
+<span class="sd">    :param names: argument names that should be in the dictionary.</span>
+
+<span class="sd">    :raises: TypeError</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s">&#39;Missing required kwarg </span><span class="se">\&#39;</span><span class="si">%s</span><span class="se">\&#39;</span><span class="s">.&#39;</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="shared_shape"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.shared_shape">[docs]</a><span class="k">def</span> <span class="nf">shared_shape</span><span class="p">(</span><span class="n">shared_var</span><span class="p">,</span> <span class="n">axis</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns the shape of the shared variable along the given axis.</span>
+
+<span class="sd">    :type shared_var: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">    :param shared_var: The shared variable of which we want the shape.</span>
+
+<span class="sd">    :type axis: int</span>
+<span class="sd">    :param axis: Along which axis to compute the shape. 0 means rows,</span>
+<span class="sd">                 1 means columns.</span>
+
+<span class="sd">    :returns: The shape of ``shared_var`` along the given axis ``axis``.</span>
+<span class="sd">    :rtype: int</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">shared_var</span><span class="o">.</span><span class="n">get_value</span><span class="p">(</span><span class="n">borrow</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span>
+
+</div>
+<div class="viewcode-block" id="random_shared_var"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.random_shared_var">[docs]</a><span class="k">def</span> <span class="nf">random_shared_var</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">rbound</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="n">numpy</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">()):</span>
+    <span class="sd">&quot;&quot;&quot;Creates a Theano shared variaable with the specified</span>
+<span class="sd">    shape, with values drawn uniformly from the interval</span>
+<span class="sd">    ``[lbound, rbound]``.</span>
+
+<span class="sd">    :type name: str</span>
+<span class="sd">    :param name: The name of the shared variable. Has to be supplied.</span>
+<span class="sd">                 (This is an internal safety measure: if you are creating</span>
+<span class="sd">                 shared variables, you&#39;d better know what they are!)</span>
+
+<span class="sd">    :type shape:</span>
+<span class="sd">    :param shape: The desired shape of the shared variable.</span>
+
+<span class="sd">    :type lbound: theano.config.floatX</span>
+<span class="sd">    :param lbound: The lower bound of the values with which</span>
+<span class="sd">                   to initialize the shared variable.</span>
+
+<span class="sd">    :type rbound: theano.config.floatX</span>
+<span class="sd">    :param rbound: The upper bound of the values with which</span>
+<span class="sd">                   to initialize the shared variable.</span>
+
+<span class="sd">    :type rng: numpy.random.RandomState</span>
+<span class="sd">    :param rng: Optionaly supply a random number generator.</span>
+<span class="sd">                If ``None`` (default), creates a new one with</span>
+<span class="sd">                a random seed.</span>
+
+<span class="sd">    :rtype: theano.tensor.sharedvar.TensorSharedVariable</span>
+<span class="sd">    :returns: A shared variable initialized with random values</span>
+<span class="sd">              drawn uniformly from the interval ``[lbound, rbound]``</span>
+<span class="sd">              of type theano.config.floatX</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">values</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">rng</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="n">low</span> <span class="o">=</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">high</span> <span class="o">=</span> <span class="n">rbound</span><span class="p">,</span>
+                                       <span class="n">size</span> <span class="o">=</span> <span class="n">shape</span><span class="p">),</span>
+                                       <span class="n">dtype</span> <span class="o">=</span> <span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">theano</span><span class="o">.</span><span class="n">shared</span><span class="p">(</span><span class="n">value</span> <span class="o">=</span> <span class="n">values</span><span class="p">,</span> <span class="n">name</span> <span class="o">=</span> <span class="n">name</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="scale_to_unit_interval"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.scale_to_unit_interval">[docs]</a><span class="k">def</span> <span class="nf">scale_to_unit_interval</span><span class="p">(</span><span class="n">ndar</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-8</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Scales all values in the ndarray ndar to be between 0 and 1 &quot;&quot;&quot;</span>
+    <span class="n">ndar</span> <span class="o">=</span> <span class="n">ndar</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">ndar</span> <span class="o">-=</span> <span class="n">ndar</span><span class="o">.</span><span class="n">min</span><span class="p">()</span>
+    <span class="n">ndar</span> <span class="o">*=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="p">(</span><span class="n">ndar</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">+</span> <span class="n">eps</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ndar</span>
+
+</div>
+<div class="viewcode-block" id="tile_raster_images"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.tile_raster_images">[docs]</a><span class="k">def</span> <span class="nf">tile_raster_images</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">img_shape</span><span class="p">,</span> <span class="n">tile_shape</span><span class="p">,</span> <span class="n">tile_spacing</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+                       <span class="n">scale_rows_to_unit_interval</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                       <span class="n">output_pixel_vals</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Transform an array with one flattened image per row, into an array in</span>
+<span class="sd">    which images are reshaped and layed out like tiles on a floor.</span>
+
+<span class="sd">    This function is useful for visualizing datasets whose rows are images,</span>
+<span class="sd">    and also columns of matrices for transforming those rows</span>
+<span class="sd">    (such as the first layer of a neural net).</span>
+
+<span class="sd">    :type X: a 2-D ndarray or a tuple of 4 channels, elements of which can</span>
+<span class="sd">    be 2-D ndarrays or None;</span>
+<span class="sd">    :param X: a 2-D array in which every row is a flattened image.</span>
+
+<span class="sd">    :type img_shape: tuple; (height, width)</span>
+<span class="sd">    :param img_shape: the original shape of each image</span>
+
+<span class="sd">    :type tile_shape: tuple; (rows, cols)</span>
+<span class="sd">    :param tile_shape: the number of images to tile (rows, cols)</span>
+
+<span class="sd">    :param output_pixel_vals: if output should be pixel values (i.e. int8</span>
+<span class="sd">    values) or floats</span>
+
+<span class="sd">    :param scale_rows_to_unit_interval: if the values need to be scaled before</span>
+<span class="sd">    being plotted to [0,1] or not</span>
+
+
+<span class="sd">    :returns: array suitable for viewing as an image.</span>
+<span class="sd">    (See:`PIL.Image.fromarray`.)</span>
+<span class="sd">    :rtype: a 2-d array with same dtype as X.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">img_shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">tile_shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">tile_spacing</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
+
+    <span class="c"># The expression below can be re-written in a more C style as</span>
+    <span class="c"># follows :</span>
+    <span class="c">#</span>
+    <span class="c"># out_shape    = [0,0]</span>
+    <span class="c"># out_shape[0] = (img_shape[0]+tile_spacing[0])*tile_shape[0] -</span>
+    <span class="c">#                tile_spacing[0]</span>
+    <span class="c"># out_shape[1] = (img_shape[1]+tile_spacing[1])*tile_shape[1] -</span>
+    <span class="c">#                tile_spacing[1]</span>
+    <span class="n">out_shape</span> <span class="o">=</span> <span class="p">[(</span><span class="n">ishp</span> <span class="o">+</span> <span class="n">tsp</span><span class="p">)</span> <span class="o">*</span> <span class="n">tshp</span> <span class="o">-</span> <span class="n">tsp</span> <span class="k">for</span> <span class="n">ishp</span><span class="p">,</span> <span class="n">tshp</span><span class="p">,</span> <span class="n">tsp</span>
+                        <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">img_shape</span><span class="p">,</span> <span class="n">tile_shape</span><span class="p">,</span> <span class="n">tile_spacing</span><span class="p">)]</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">)</span> <span class="o">==</span> <span class="mi">4</span>
+        <span class="c"># Create an output numpy ndarray to store the image</span>
+        <span class="k">if</span> <span class="n">output_pixel_vals</span><span class="p">:</span>
+            <span class="n">out_array</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">out_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">out_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="mi">4</span><span class="p">),</span>
+                                    <span class="n">dtype</span><span class="o">=</span><span class="s">&#39;uint8&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">out_array</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">out_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">out_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="mi">4</span><span class="p">),</span>
+                                    <span class="n">dtype</span><span class="o">=</span><span class="n">X</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+
+        <span class="c">#colors default to 0, alpha defaults to 1 (opaque)</span>
+        <span class="k">if</span> <span class="n">output_pixel_vals</span><span class="p">:</span>
+            <span class="n">channel_defaults</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">channel_defaults</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.</span><span class="p">,</span> <span class="mf">0.</span><span class="p">,</span> <span class="mf">0.</span><span class="p">,</span> <span class="mf">1.</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="mi">4</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="c"># if channel is None, fill it with zeros of the correct</span>
+                <span class="c"># dtype</span>
+                <span class="n">dt</span> <span class="o">=</span> <span class="n">out_array</span><span class="o">.</span><span class="n">dtype</span>
+                <span class="k">if</span> <span class="n">output_pixel_vals</span><span class="p">:</span>
+                    <span class="n">dt</span> <span class="o">=</span> <span class="s">&#39;uint8&#39;</span>
+                <span class="n">out_array</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">out_shape</span><span class="p">,</span>
+                        <span class="n">dtype</span><span class="o">=</span><span class="n">dt</span><span class="p">)</span> <span class="o">+</span> <span class="n">channel_defaults</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c"># use a recurrent call to compute the channel and store it</span>
+                <span class="c"># in the output</span>
+                <span class="n">out_array</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">tile_raster_images</span><span class="p">(</span>
+                    <span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">img_shape</span><span class="p">,</span> <span class="n">tile_shape</span><span class="p">,</span> <span class="n">tile_spacing</span><span class="p">,</span>
+                    <span class="n">scale_rows_to_unit_interval</span><span class="p">,</span> <span class="n">output_pixel_vals</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">out_array</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c"># if we are dealing with only one channel</span>
+        <span class="n">H</span><span class="p">,</span> <span class="n">W</span> <span class="o">=</span> <span class="n">img_shape</span>
+        <span class="n">Hs</span><span class="p">,</span> <span class="n">Ws</span> <span class="o">=</span> <span class="n">tile_spacing</span>
+
+        <span class="c"># generate a matrix to store the output</span>
+        <span class="n">dt</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">dtype</span>
+        <span class="k">if</span> <span class="n">output_pixel_vals</span><span class="p">:</span>
+            <span class="n">dt</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span> <span class="c">### ???</span>
+        <span class="n">out_array</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">out_shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dt</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">tile_row</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">tile_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+            <span class="k">for</span> <span class="n">tile_col</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">tile_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+                <span class="k">if</span> <span class="n">tile_row</span> <span class="o">*</span> <span class="n">tile_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">tile_col</span> <span class="o">&lt;</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+                    <span class="n">this_x</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="n">tile_row</span> <span class="o">*</span> <span class="n">tile_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">tile_col</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="n">scale_rows_to_unit_interval</span><span class="p">:</span>
+                        <span class="c"># if we should scale values to be between 0 and 1</span>
+                        <span class="c"># do this by calling the `scale_to_unit_interval`</span>
+                        <span class="c"># function</span>
+                        <span class="n">this_img</span> <span class="o">=</span> <span class="n">scale_to_unit_interval</span><span class="p">(</span>
+                            <span class="n">this_x</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">img_shape</span><span class="p">))</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">this_img</span> <span class="o">=</span> <span class="n">this_x</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">img_shape</span><span class="p">)</span>
+                    <span class="c"># add the slice to the corresponding position in the</span>
+                    <span class="c"># output array</span>
+                    <span class="n">c</span> <span class="o">=</span> <span class="mi">1</span>
+                    <span class="k">if</span> <span class="n">output_pixel_vals</span><span class="p">:</span>
+                        <span class="n">c</span> <span class="o">=</span> <span class="mi">255</span>
+                    <span class="n">out_array</span><span class="p">[</span>
+                        <span class="n">tile_row</span> <span class="o">*</span> <span class="p">(</span><span class="n">H</span> <span class="o">+</span> <span class="n">Hs</span><span class="p">):</span> <span class="n">tile_row</span> <span class="o">*</span> <span class="p">(</span><span class="n">H</span> <span class="o">+</span> <span class="n">Hs</span><span class="p">)</span> <span class="o">+</span> <span class="n">H</span><span class="p">,</span>
+                        <span class="n">tile_col</span> <span class="o">*</span> <span class="p">(</span><span class="n">W</span> <span class="o">+</span> <span class="n">Ws</span><span class="p">):</span> <span class="n">tile_col</span> <span class="o">*</span> <span class="p">(</span><span class="n">W</span> <span class="o">+</span> <span class="n">Ws</span><span class="p">)</span> <span class="o">+</span> <span class="n">W</span>
+                        <span class="p">]</span> <span class="o">=</span> <span class="n">this_img</span> <span class="o">*</span> <span class="n">c</span>
+        <span class="k">return</span> <span class="n">out_array</span>
+
+</div>
+<div class="viewcode-block" id="isqrt"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.isqrt">[docs]</a><span class="k">def</span> <span class="nf">isqrt</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes the highest integer whose square is less than n.</span>
+<span class="sd">    Returns this integer and True/False depending on whether this integer</span>
+<span class="sd">    is actually the square root of n.&quot;&quot;&quot;</span>
+    <span class="n">root</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+    <span class="n">iroot</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
+    <span class="n">is_equal</span> <span class="o">=</span> <span class="p">(</span><span class="n">root</span> <span class="o">==</span> <span class="nb">float</span><span class="p">(</span><span class="n">iroot</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">iroot</span><span class="p">,</span> <span class="n">is_equal</span>
+
+</div>
+<div class="viewcode-block" id="profile_run"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.profile_run">[docs]</a><span class="k">def</span> <span class="nf">profile_run</span><span class="p">(</span><span class="n">function</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Profile an arbitrary function. Returns the results as a StringIO stream</span>
+<span class="sd">    object.&quot;&quot;&quot;</span>
+    <span class="n">pr</span> <span class="o">=</span> <span class="n">cProfile</span><span class="o">.</span><span class="n">Profile</span><span class="p">()</span>
+    <span class="n">pr</span><span class="o">.</span><span class="n">enable</span><span class="p">()</span>
+
+    <span class="n">retval</span> <span class="o">=</span> <span class="n">function</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="n">pr</span><span class="o">.</span><span class="n">disable</span><span class="p">()</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">StringIO</span><span class="o">.</span><span class="n">StringIO</span><span class="p">()</span>
+    <span class="n">sortby</span><span class="o">=</span><span class="s">&#39;tottime&#39;</span>
+    <span class="n">ps</span> <span class="o">=</span> <span class="n">pstats</span><span class="o">.</span><span class="n">Stats</span><span class="p">(</span><span class="n">pr</span><span class="p">,</span> <span class="n">stream</span> <span class="o">=</span> <span class="n">s</span><span class="p">)</span><span class="o">.</span><span class="n">sort_stats</span><span class="p">(</span><span class="n">sortby</span><span class="p">)</span>
+    <span class="n">ps</span><span class="o">.</span><span class="n">print_stats</span><span class="p">(</span><span class="o">.</span><span class="mi">33</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">s</span><span class="p">,</span> <span class="n">retval</span>
+
+<span class="c">##############################################################################</span>
+
+<span class="c">### Various interesting activation functions</span>
+</div>
+<div class="viewcode-block" id="mask_ReLU"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.mask_ReLU">[docs]</a><span class="k">def</span> <span class="nf">mask_ReLU</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Rectified Linear Unit activation function.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">X</span> <span class="o">*</span> <span class="p">(</span><span class="n">X</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">))</span>
+
+</div>
+<div class="viewcode-block" id="ReLU"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.ReLU">[docs]</a><span class="k">def</span> <span class="nf">ReLU</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="mf">0.0001</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="cappedReLU"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.cappedReLU">[docs]</a><span class="k">def</span> <span class="nf">cappedReLU</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">cap</span><span class="o">=</span><span class="mf">2.0</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="mf">0.0001</span><span class="p">),</span> <span class="n">cap</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="build_cappedReLU"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.build_cappedReLU">[docs]</a><span class="k">class</span> <span class="nc">build_cappedReLU</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cap</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cap</span> <span class="o">=</span> <span class="n">cap</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="mf">0.0001</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">cap</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="abstanh"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.abstanh">[docs]</a><span class="k">def</span> <span class="nf">abstanh</span><span class="p">(</span><span class="n">X</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">abs_</span><span class="p">(</span><span class="n">theano</span><span class="o">.</span><span class="n">tensor</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">X</span><span class="p">))</span>
+
+<span class="c">##############################################################################</span>
+</div>
+<div class="viewcode-block" id="detect_nan"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.detect_nan">[docs]</a><span class="k">def</span> <span class="nf">detect_nan</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">fn</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Debugging theano.&quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">output</span> <span class="ow">in</span> <span class="n">fn</span><span class="o">.</span><span class="n">outputs</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">numpy</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+                <span class="k">print</span> <span class="s">&#39;*** NaN detected ***&#39;</span>
+                <span class="n">theano</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">debugprint</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+                <span class="k">print</span> <span class="s">&#39;Inputs : </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">[</span><span class="nb">input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="nb">input</span> <span class="ow">in</span> <span class="n">fn</span><span class="o">.</span><span class="n">inputs</span><span class="p">]</span>
+                <span class="k">print</span> <span class="s">&#39;Outputs: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">[</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">output</span> <span class="ow">in</span> <span class="n">fn</span><span class="o">.</span><span class="n">outputs</span><span class="p">]</span>
+                <span class="n">pdb</span><span class="o">.</span><span class="n">set_trace</span><span class="p">()</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Found NaN in computation!&#39;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&#39;Couldn</span><span class="se">\&#39;</span><span class="s">t check node for NaN:&#39;</span>
+            <span class="n">theano</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">debugprint</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="merciless_print"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.merciless_print">[docs]</a><span class="k">def</span> <span class="nf">merciless_print</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">fn</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Debugging theano. Prints inputs and outputs at every point.&quot;&quot;&quot;</span>
+    <span class="k">print</span> <span class="s">&#39;&#39;</span>
+    <span class="k">print</span> <span class="s">&#39;-------------------------------------------------------&#39;</span>
+    <span class="k">print</span> <span class="s">&#39;Node </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+    <span class="n">theano</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">debugprint</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+    <span class="k">print</span> <span class="s">&#39;Inputs : </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">[</span><span class="nb">input</span> <span class="k">for</span> <span class="nb">input</span> <span class="ow">in</span> <span class="n">fn</span><span class="o">.</span><span class="n">inputs</span><span class="p">]</span>
+    <span class="k">print</span> <span class="s">&#39;Outputs: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">[</span><span class="n">output</span> <span class="k">for</span> <span class="n">output</span> <span class="ow">in</span> <span class="n">fn</span><span class="o">.</span><span class="n">outputs</span><span class="p">]</span>
+    <span class="k">print</span> <span class="s">&#39;Node:&#39;</span>
+    <span class="k">for</span> <span class="n">output</span> <span class="ow">in</span> <span class="n">fn</span><span class="o">.</span><span class="n">outputs</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">numpy</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+                <span class="k">print</span> <span class="s">&#39;*** NaN detected ***&#39;</span>
+                <span class="n">theano</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">debugprint</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+                <span class="k">print</span> <span class="s">&#39;Inputs : </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">[</span><span class="nb">input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="nb">input</span> <span class="ow">in</span> <span class="n">fn</span><span class="o">.</span><span class="n">inputs</span><span class="p">]</span>
+                <span class="k">print</span> <span class="s">&#39;Outputs: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">[</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">output</span> <span class="ow">in</span> <span class="n">fn</span><span class="o">.</span><span class="n">outputs</span><span class="p">]</span>
+                <span class="n">pdb</span><span class="o">.</span><span class="n">set_trace</span><span class="p">()</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Found NaN in computation!&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">numpy</span><span class="o">.</span><span class="n">isposinf</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="ow">or</span> <span class="n">numpy</span><span class="o">.</span><span class="n">isneginf</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+                <span class="k">print</span> <span class="s">&#39;*** Inf detected ***&#39;</span>
+                <span class="n">theano</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">debugprint</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+                <span class="k">print</span> <span class="s">&#39;Inputs : </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">[</span><span class="nb">input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="nb">input</span> <span class="ow">in</span> <span class="n">fn</span><span class="o">.</span><span class="n">inputs</span><span class="p">]</span>
+                <span class="k">print</span> <span class="s">&#39;Outputs: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">[</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">output</span> <span class="ow">in</span> <span class="n">fn</span><span class="o">.</span><span class="n">outputs</span><span class="p">]</span>
+                <span class="n">pdb</span><span class="o">.</span><span class="n">set_trace</span><span class="p">()</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Found Inf in computation!&#39;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&#39;Couldn</span><span class="se">\&#39;</span><span class="s">t check node for NaN/Inf:&#39;</span>
+            <span class="n">theano</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">debugprint</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="shuffle_together"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.shuffle_together">[docs]</a><span class="k">def</span> <span class="nf">shuffle_together</span><span class="p">(</span><span class="o">*</span><span class="n">lists</span><span class="p">):</span>
+
+    <span class="n">zipped_lists</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">lists</span><span class="p">)</span>
+    <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">zipped_lists</span><span class="p">)</span>
+    <span class="n">unzipped_lists</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">zipped_lists</span><span class="p">))</span>
+
+    <span class="k">print</span> <span class="n">unzipped_lists</span>
+
+    <span class="k">return</span> <span class="n">unzipped_lists</span>
+
+</div>
+<div class="viewcode-block" id="iter_sample_fast"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.iter_sample_fast">[docs]</a><span class="k">def</span> <span class="nf">iter_sample_fast</span><span class="p">(</span><span class="n">iterable</span><span class="p">,</span> <span class="n">samplesize</span><span class="p">):</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">iterator</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="n">iterable</span><span class="p">)</span>
+    <span class="c"># Fill in the first samplesize elements:</span>
+    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">samplesize</span><span class="p">):</span>
+        <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">iterator</span><span class="o">.</span><span class="n">next</span><span class="p">())</span>
+    <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>  <span class="c"># Randomize their positions</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">iterator</span><span class="p">,</span> <span class="n">samplesize</span><span class="p">):</span>
+        <span class="n">r</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">r</span> <span class="o">&lt;</span> <span class="n">samplesize</span><span class="p">:</span>
+            <span class="n">results</span><span class="p">[</span><span class="n">r</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>  <span class="c"># at a decreasing rate, replace random items</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">samplesize</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&quot;Sample larger than population.&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">results</span>
+
+</div>
+<div class="viewcode-block" id="uniform_steps"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.uniform_steps">[docs]</a><span class="k">def</span> <span class="nf">uniform_steps</span><span class="p">(</span><span class="n">iterable</span><span class="p">,</span> <span class="n">k</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Chooses K items from the iterable so that they are a constant step size</span>
+<span class="sd">    from each other. The last member is chosen&quot;&quot;&quot;</span>
+    <span class="n">stepsize</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">iterable</span><span class="p">)</span> <span class="o">/</span> <span class="n">k</span>
+    <span class="k">if</span> <span class="n">stepsize</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s">&#39;Too many steps, stepsize 0 (iterable length: </span><span class="si">%d</span><span class="s">, steps: </span><span class="si">%d</span><span class="s">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">iterable</span><span class="p">),</span> <span class="n">k</span><span class="p">))</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="p">[</span> <span class="n">iterable</span><span class="p">[</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">iterable</span><span class="p">),</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="n">stepsize</span><span class="p">)</span> <span class="p">]</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="p">[:</span><span class="n">k</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">output</span>
+
+</div>
+<div class="viewcode-block" id="random_steps"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.random_steps">[docs]</a><span class="k">def</span> <span class="nf">random_steps</span><span class="p">(</span><span class="n">iterable</span><span class="p">,</span> <span class="n">k</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Chooses K items uniformly from the iterable.&quot;&quot;&quot;</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">iterable</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">output</span>
+
+</div>
+<div class="viewcode-block" id="parse_csv_map"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.parse_csv_map">[docs]</a><span class="k">def</span> <span class="nf">parse_csv_map</span><span class="p">(</span><span class="n">t2i_handle</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Given a two-column csv file, returns the forward and backward dicts.&quot;&quot;&quot;</span>
+    <span class="n">t2i</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">i2t</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">t2i_handle</span><span class="p">:</span>
+        <span class="n">t</span><span class="p">,</span> <span class="n">i</span> <span class="o">=</span> <span class="n">l</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">t2i</span><span class="p">:</span>
+            <span class="n">t2i</span><span class="p">[</span><span class="n">t</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">t2i</span><span class="p">[</span><span class="n">t</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">i2t</span><span class="p">:</span>
+            <span class="n">i2t</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">i2t</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">t2i</span><span class="p">,</span> <span class="n">i2t</span>
+
+<span class="c">###############################################################################</span>
+
+<span class="c"># Image drawing functions</span>
+</div>
+<div class="viewcode-block" id="compute_column_thumbnail_size"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.compute_column_thumbnail_size">[docs]</a><span class="k">def</span> <span class="nf">compute_column_thumbnail_size</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="n">total_size</span><span class="p">,</span> <span class="n">margin</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes the thumbnail size for images so that they all fit into the</span>
+<span class="sd">    given size. Assumes the images will be arranged underneath each other</span>
+<span class="sd">    with the given margin around each image (between images, there will be</span>
+<span class="sd">    two margins).&quot;&quot;&quot;</span>
+
+    <span class="n">th_width</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">total_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">margin</span><span class="p">))</span>
+    <span class="n">th_height</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">((</span><span class="n">total_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">images</span><span class="p">)</span> <span class="o">*</span> <span class="n">margin</span><span class="p">)</span>
+                               <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">images</span><span class="p">)))</span>
+
+    <span class="k">return</span> <span class="n">th_width</span><span class="p">,</span> <span class="n">th_height</span>
+</div>
+<div class="viewcode-block" id="compute_row_thumbnail_size"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.compute_row_thumbnail_size">[docs]</a><span class="k">def</span> <span class="nf">compute_row_thumbnail_size</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="n">total_size</span><span class="p">,</span> <span class="n">margin</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Computes the thumbnail size for images so that they all fit into the</span>
+<span class="sd">    given size. Assumes the images will be arranged next to each other</span>
+<span class="sd">    with the given margin around each image (between images, there will be</span>
+<span class="sd">    two margins).&quot;&quot;&quot;</span>
+
+    <span class="n">th_width</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">((</span><span class="n">total_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">images</span><span class="p">)</span> <span class="o">*</span> <span class="n">margin</span><span class="p">)</span>
+                               <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">images</span><span class="p">)))</span>
+    <span class="n">th_height</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">total_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">margin</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">th_width</span><span class="p">,</span> <span class="n">th_height</span>
+
+<span class="c"># Image tiling functions:</span></div>
+<div class="viewcode-block" id="images_to_column"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.images_to_column">[docs]</a><span class="k">def</span> <span class="nf">images_to_column</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="n">margin</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Tiles images underneath each other.&quot;&quot;&quot;</span>
+
+    <span class="c"># Compute output image size</span>
+    <span class="n">image_sizes</span> <span class="o">=</span> <span class="p">[</span><span class="n">image</span><span class="o">.</span><span class="n">size</span> <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">images</span><span class="p">]</span>
+    <span class="n">max_width</span> <span class="o">=</span> <span class="nb">max</span><span class="p">([</span><span class="n">isize</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">isize</span> <span class="ow">in</span> <span class="n">image_sizes</span><span class="p">])</span>
+
+    <span class="n">total_width</span> <span class="o">=</span> <span class="n">max_width</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">margin</span>
+    <span class="n">total_height</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">([</span><span class="n">isize</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">isize</span> <span class="ow">in</span> <span class="n">image_sizes</span><span class="p">])</span> \
+                   <span class="o">+</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">image_sizes</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">margin</span>
+
+    <span class="n">output_image</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="s">&#39;RGB&#39;</span><span class="p">,</span> <span class="p">(</span><span class="n">total_width</span><span class="p">,</span> <span class="n">total_height</span><span class="p">))</span>
+
+    <span class="c"># Compute box positions</span>
+    <span class="n">upper_left_corners</span> <span class="o">=</span> <span class="p">[(</span><span class="n">margin</span><span class="p">,</span> <span class="n">margin</span><span class="p">)]</span>
+    <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">images</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+        <span class="n">upper_left_corners</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">margin</span><span class="p">,</span>
+                                   <span class="n">upper_left_corners</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">margin</span><span class="p">))</span>
+
+    <span class="c"># Paste images to boxes</span>
+    <span class="k">for</span> <span class="n">image</span><span class="p">,</span> <span class="n">upper_left_corner</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="n">upper_left_corners</span><span class="p">):</span>
+        <span class="n">output_image</span><span class="o">.</span><span class="n">paste</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">upper_left_corner</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">output_image</span>
+</div>
+<div class="viewcode-block" id="images_to_row"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.images_to_row">[docs]</a><span class="k">def</span> <span class="nf">images_to_row</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="n">margin</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Tiles images next to each other.&quot;&quot;&quot;</span>
+
+    <span class="c"># Compute output image size</span>
+    <span class="n">image_sizes</span> <span class="o">=</span> <span class="p">[</span><span class="n">image</span><span class="o">.</span><span class="n">size</span> <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">images</span><span class="p">]</span>
+    <span class="n">max_height</span> <span class="o">=</span> <span class="nb">max</span><span class="p">([</span><span class="n">isize</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">isize</span> <span class="ow">in</span> <span class="n">image_sizes</span><span class="p">])</span>
+
+    <span class="n">total_height</span> <span class="o">=</span> <span class="n">max_height</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">margin</span>
+    <span class="n">total_width</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">([</span><span class="n">isize</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">isize</span> <span class="ow">in</span> <span class="n">image_sizes</span><span class="p">])</span> \
+                   <span class="o">+</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">image_sizes</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">margin</span>
+
+    <span class="n">output_image</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="s">&#39;RGB&#39;</span><span class="p">,</span> <span class="p">(</span><span class="n">total_width</span><span class="p">,</span> <span class="n">total_height</span><span class="p">))</span>
+
+    <span class="c"># Compute box positions</span>
+    <span class="n">upper_left_corners</span> <span class="o">=</span> <span class="p">[(</span><span class="n">margin</span><span class="p">,</span> <span class="n">margin</span><span class="p">)]</span>
+    <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">images</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+        <span class="n">upper_left_corners</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">upper_left_corners</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">margin</span><span class="p">,</span>
+                                  <span class="n">margin</span><span class="p">))</span>
+
+    <span class="c"># Paste images to boxes</span>
+    <span class="k">for</span> <span class="n">image</span><span class="p">,</span> <span class="n">upper_left_corner</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="n">upper_left_corners</span><span class="p">):</span>
+        <span class="n">output_image</span><span class="o">.</span><span class="n">paste</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">upper_left_corner</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">output_image</span>
+</div>
+<div class="viewcode-block" id="images_to_thumbnails"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.images_to_thumbnails">[docs]</a><span class="k">def</span> <span class="nf">images_to_thumbnails</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Returns a list of image thumbnails of the given size.&quot;&quot;&quot;</span>
+    <span class="n">thumbnails</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">images</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">th</span> <span class="ow">in</span> <span class="n">thumbnails</span><span class="p">:</span>
+        <span class="n">th</span><span class="o">.</span><span class="n">thumbnail</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">thumbnails</span>
+</div>
+<div class="viewcode-block" id="image_comparison_report"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.image_comparison_report">[docs]</a><span class="k">def</span> <span class="nf">image_comparison_report</span><span class="p">(</span><span class="n">images_1</span><span class="p">,</span> <span class="n">images_2</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">600</span><span class="p">,</span> <span class="mi">800</span><span class="p">),</span> <span class="n">margin</span><span class="o">=</span><span class="mi">20</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Draws the two sets of images as columns side-by-side.&quot;&quot;&quot;</span>
+    <span class="n">colwidth</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">((</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">margin</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">))</span>
+    <span class="n">colheight</span> <span class="o">=</span> <span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">margin</span>
+
+    <span class="n">image_th</span> <span class="o">=</span> <span class="n">compute_column_thumbnail_size</span><span class="p">(</span><span class="n">images_1</span><span class="p">,</span> <span class="p">(</span><span class="n">colwidth</span><span class="p">,</span> <span class="n">colheight</span><span class="p">))</span>
+
+    <span class="n">thumbnails_1</span> <span class="o">=</span> <span class="n">images_to_thumbnails</span><span class="p">(</span><span class="n">images_1</span><span class="p">,</span> <span class="n">image_th</span><span class="p">)</span>
+    <span class="n">thumbnails_2</span> <span class="o">=</span> <span class="n">images_to_thumbnails</span><span class="p">(</span><span class="n">images_2</span><span class="p">,</span> <span class="n">image_th</span><span class="p">)</span>
+
+    <span class="n">cols_1</span> <span class="o">=</span> <span class="n">images_to_column</span><span class="p">(</span><span class="n">thumbnails_1</span><span class="p">)</span>
+    <span class="n">cols_2</span> <span class="o">=</span> <span class="n">images_to_column</span><span class="p">(</span><span class="n">thumbnails_2</span><span class="p">)</span>
+
+    <span class="n">output</span> <span class="o">=</span> <span class="n">images_to_row</span><span class="p">([</span><span class="n">cols_1</span><span class="p">,</span> <span class="n">cols_2</span><span class="p">],</span> <span class="n">margin</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">output</span>
+</div>
+<div class="viewcode-block" id="add_header_image"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.add_header_image">[docs]</a><span class="k">def</span> <span class="nf">add_header_image</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">header_image</span><span class="p">,</span> <span class="n">header_size</span><span class="o">=</span><span class="p">(</span><span class="mi">300</span><span class="p">,</span><span class="mi">200</span><span class="p">),</span> <span class="n">margin</span><span class="o">=</span><span class="mi">20</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Given an image and a header image, pastes the header image in the</span>
+<span class="sd">    middle of the input image above the former top of the input image:</span>
+
+<span class="sd">    +-----------+                            +----+</span>
+<span class="sd">    |           |      +----+                |    |</span>
+<span class="sd">    |           |   +  |    |    ==&gt;         +----+</span>
+<span class="sd">    +-----------+      +----+             +-----------+</span>
+<span class="sd">                                          |           |</span>
+<span class="sd">                                          |           |</span>
+<span class="sd">                                          +-----------+</span>
+
+<span class="sd">    Resizes the header image to the given thumbnail size.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">header_image</span><span class="o">.</span><span class="n">thumbnail</span><span class="p">(</span><span class="n">header_size</span><span class="p">)</span>
+
+    <span class="n">h_image_size</span> <span class="o">=</span> <span class="n">header_image</span><span class="o">.</span><span class="n">size</span>
+    <span class="n">h_strip_size</span> <span class="o">=</span> <span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">h_image_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">margin</span><span class="p">)</span>
+
+    <span class="n">output_image</span> <span class="o">=</span> <span class="n">Image</span><span class="o">.</span><span class="n">new</span><span class="p">(</span><span class="s">&#39;RGB&#39;</span><span class="p">,</span> <span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                                     <span class="n">image</span><span class="o">.</span><span class="n">size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">h_strip_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+
+    <span class="n">h_image_position</span> <span class="o">=</span> <span class="p">((</span><span class="n">h_strip_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">h_image_size</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span><span class="p">,</span>
+                         <span class="n">margin</span><span class="p">)</span>
+    <span class="n">output_image</span><span class="o">.</span><span class="n">paste</span><span class="p">(</span><span class="n">header_image</span><span class="p">,</span> <span class="n">h_image_position</span><span class="p">)</span>
+    <span class="n">output_image</span><span class="o">.</span><span class="n">paste</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">h_strip_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+
+    <span class="k">return</span> <span class="n">output_image</span>
+
+<span class="c">##############################################################################</span>
+
+<span class="c"># Matplotlib plotting</span>
+
+</div>
+<div class="viewcode-block" id="heatmap_matrix"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.heatmap_matrix">[docs]</a><span class="k">def</span> <span class="nf">heatmap_matrix</span><span class="p">(</span><span class="n">matrix</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s">&#39;&#39;</span><span class="p">,</span> <span class="n">with_average</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>
+                   <span class="n">colormap</span><span class="o">=</span><span class="s">&#39;coolwarm&#39;</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+                   <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="n">matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="mf">0.002</span><span class="p">,</span><span class="n">matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="mf">0.02</span><span class="p">),</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">160</span><span class="p">,</span>
+               <span class="n">facecolor</span><span class="o">=</span><span class="s">&#39;white&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">with_average</span><span class="p">:</span>
+        <span class="n">gs</span> <span class="o">=</span> <span class="n">gridspec</span><span class="o">.</span><span class="n">GridSpec</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="n">height_ratios</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">])</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="n">gs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s">&#39;Average activations&#39;</span><span class="p">)</span>
+
+        <span class="c"># Computing column averages</span>
+        <span class="n">avgs</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">matrix</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">/</span> <span class="n">matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="c"># Sliding window average</span>
+        <span class="n">avg_windowsize</span> <span class="o">=</span> <span class="mi">20</span>
+        <span class="n">vscale</span><span class="o">=</span><span class="mf">2.0</span>
+        <span class="n">wavgs</span> <span class="o">=</span> <span class="p">[</span> <span class="nb">sum</span><span class="p">(</span><span class="n">avgs</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span><span class="o">+</span><span class="n">avg_windowsize</span><span class="p">])</span><span class="o">*</span><span class="n">vscale</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">avg_windowsize</span><span class="p">)</span>
+                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">avg_windowsize</span><span class="p">)</span> <span class="p">]</span>
+        <span class="n">wavgs</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="n">avgs</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">xrange</span><span class="p">(</span><span class="n">avg_windowsize</span><span class="p">)])</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="n">title</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">avgs</span><span class="p">,</span> <span class="s">&#39;r,&#39;</span><span class="p">)</span>
+        <span class="c">#plt.plot(wavgs, &#39;b-&#39;)</span>
+
+        <span class="c"># Hide x-axis ticks</span>
+        <span class="n">frame1</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">xlabel_i</span> <span class="ow">in</span> <span class="n">frame1</span><span class="o">.</span><span class="n">axes</span><span class="o">.</span><span class="n">get_xticklabels</span><span class="p">():</span>
+            <span class="n">xlabel_i</span><span class="o">.</span><span class="n">set_visible</span><span class="p">(</span><span class="bp">False</span><span class="p">)</span>
+            <span class="n">xlabel_i</span><span class="o">.</span><span class="n">set_fontsize</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+
+        <span class="c">#plt.xlim([0, matrix.shape[1]])</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="n">gs</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span><span class="n">matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]])</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span><span class="n">matrix</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">pcolormesh</span><span class="p">(</span><span class="n">matrix</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">colormap</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=</span><span class="n">vmin</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="n">vmax</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">with_average</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="n">title</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+<span class="c">##############################################################################</span>
+</div>
+<div class="viewcode-block" id="Noop"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.Noop">[docs]</a><span class="k">class</span> <span class="nc">Noop</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Doesn&#39;t do anything on getitem and call.&quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">item</span>
+
+    <span class="k">def</span> <span class="nf">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">item</span>
+
+
+<span class="c">##############################</span>
+</div>
+<div class="viewcode-block" id="point_vector"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.point_vector">[docs]</a><span class="k">def</span> <span class="nf">point_vector</span><span class="p">(</span><span class="n">length</span><span class="p">,</span> <span class="n">point</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Creates a numpy ndarray of dimension 1, with the given ``length``, all 0s</span>
+<span class="sd">    except for position indicated by ``point``, where a 1.0 will be.&quot;&quot;&quot;</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">numpy</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">length</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">)</span>
+
+</div>
+<div class="viewcode-block" id="n_max"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.n_max">[docs]</a><span class="k">def</span> <span class="nf">n_max</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Find n maximum elements and their indices in a numpy array.&quot;&quot;&quot;</span>
+    <span class="n">indices</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span><span class="o">.</span><span class="n">argsort</span><span class="p">()[</span><span class="o">-</span><span class="n">n</span><span class="p">:]</span>
+    <span class="n">indices</span> <span class="o">=</span> <span class="p">(</span><span class="n">numpy</span><span class="o">.</span><span class="n">unravel_index</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">arr</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">[(</span><span class="n">arr</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">]</span>
+</div>
+<div class="viewcode-block" id="squish_array"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.squish_array">[docs]</a><span class="k">def</span> <span class="nf">squish_array</span><span class="p">(</span><span class="n">array</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Recomputes array values so that no difference is bigger than 1. Assumes</span>
+<span class="sd">    the array is sorted.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">array</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">array</span>
+    <span class="n">new_array</span> <span class="o">=</span> <span class="p">[</span><span class="n">array</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+    <span class="n">offset</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">array</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>
+        <span class="n">theoretical_new_item</span> <span class="o">=</span> <span class="n">item</span> <span class="o">-</span> <span class="n">offset</span>
+        <span class="n">diff</span> <span class="o">=</span> <span class="n">theoretical_new_item</span> <span class="o">-</span> <span class="n">new_array</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">diff</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">offset</span> <span class="o">+=</span> <span class="p">(</span><span class="n">diff</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">new_array</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span> <span class="o">-</span> <span class="n">offset</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">new_array</span>
+
+<span class="c">##################################</span>
+</div>
+<div class="viewcode-block" id="check_malformed_unicode"><a class="viewcode-back" href="../../safire.utils.html#safire.utils.check_malformed_unicode">[docs]</a><span class="k">def</span> <span class="nf">check_malformed_unicode</span><span class="p">(</span><span class="n">string</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Raises a UnicodeError if the given string cannot be decoded as unicode.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">letter</span> <span class="ow">in</span> <span class="n">string</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">ul</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">letter</span><span class="p">)</span>
+            <span class="k">print</span> <span class="n">ul</span><span class="o">.</span><span class="n">__repr__</span><span class="p">()</span>
+            <span class="n">ul</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s">&#39;raw_unicode_escape&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s">&#39;utf-8&#39;</span><span class="p">)</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="k">print</span> <span class="s">&#39;Problem encoding as unicode: </span><span class="si">%s</span><span class="s">&#39;</span> <span class="o">%</span> <span class="n">letter</span>
+            <span class="k">raise</span>
+</pre></div></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+          <li><a href="../index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

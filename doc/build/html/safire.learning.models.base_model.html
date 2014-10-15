@@ -1,0 +1,225 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.learning.models.base_model module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.learning.models.base_model">
+<span id="safire-learning-models-base-model-module"></span><h1>safire.learning.models.base_model module<a class="headerlink" href="#module-safire.learning.models.base_model" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="safire.learning.models.base_model.BaseModel">
+<em class="property">class </em><tt class="descclassname">safire.learning.models.base_model.</tt><tt class="descname">BaseModel</tt><big>(</big><em>inputs</em>, <em>n_in</em>, <em>**model_init_kwargs</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/base_model.html#BaseModel"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.base_model.BaseModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<dl class="method">
+<dt id="safire.learning.models.base_model.BaseModel.error">
+<tt class="descname">error</tt><big>(</big><em>y</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/base_model.html#BaseModel.error"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.base_model.BaseModel.error" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns some measure of model error, to be used in validation
+and testing to check on training progress.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>y</strong> (<em>theano.tensor.TensorType</em>) &#8211; A response vector in supervised models &#8211; and something
+else in unsupervised ones (most often the data).</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raises:</th><td class="field-body">NotImplementedError()</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="safire.learning.models.base_model.BaseModel.load">
+<em class="property">classmethod </em><tt class="descname">load</tt><big>(</big><em>filename</em>, <em>load_any=False</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/base_model.html#BaseModel.load"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.base_model.BaseModel.load" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads a saved model.</p>
+<p>When explicitly loading a model, we should know the class in advance,
+so it is not necessary to process the <tt class="docutils literal"><span class="pre">class</span></tt> member of the pickled
+dict. However, at least a warning is given if the pickled class and
+load()-calling class do not agree.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>load_any</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#bool" title="(in Python v2.7)"><em>bool</em></a>) &#8211; If set to <tt class="docutils literal"><span class="pre">True</span></tt>, will return an object of the type
+saved in the <tt class="docutils literal"><span class="pre">class</span></tt> member of the pickled dict. If False, will
+load the caller model class. Set to True if you want a factory-like
+behavior of BaseModel.load() (Useful for situations where you do
+not know the class in advance, such as resuming in learners.)</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.base_model.BaseModel.save">
+<tt class="descname">save</tt><big>(</big><em>filename</em>, <em>protocol=-1</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/base_model.html#BaseModel.save"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.base_model.BaseModel.save" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves the model in the form of an init kwarg dict, since not all
+attributes of the instance can be pickled. Upon loading, the saved
+model kwarg dict will be used as <tt class="docutils literal"><span class="pre">**kwargs</span></tt> (the <tt class="docutils literal"><span class="pre">load</span></tt> method
+is a classmethod) for an initialization of the model.</p>
+<p><strong>The _init_args_snapshot() method needs to be overriden by each model
+to provide a dict of init args.</strong></p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>filename</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The name of the file to which the model parameters
+should be stored.</li>
+<li><strong>protocol</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The cPickle protocol to use (default: -1)</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.learning.models.base_model.BaseModel.save_layer">
+<tt class="descname">save_layer</tt><big>(</big><em>layer</em>, <em>filename</em>, <em>protocol=-1</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/base_model.html#BaseModel.save_layer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.base_model.BaseModel.save_layer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves one layer from the current model to the given file.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>layer</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The index of the layer to save (starting from 0).</li>
+<li><strong>filename</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#str" title="(in Python v2.7)"><em>str</em></a>) &#8211; The file to which to save the layer model.</li>
+<li><strong>protocol</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The pickling protocol to use (default: highest).</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="safire.learning.models.base_model.BaseModel.setup">
+<em class="property">classmethod </em><tt class="descname">setup</tt><big>(</big><em>data</em>, <em>model=None</em>, <em>batch_size=500</em>, <em>learning_rate=0.13</em>, <em>**model_init_kwargs</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/base_model.html#BaseModel.setup"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.base_model.BaseModel.setup" title="Permalink to this definition">¶</a></dt>
+<dd><p>Prepares the train_model, validate_model and test_model methods
+on the given dataset and with the given parameters.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">In this base class, all this method does is raise 
+a <tt class="docutils literal"><span class="pre">NotImplementedError</span></tt>. To successfully run the setup, we need
+to know whether the model is in an unsupervised or supervised (or
+some other mixed) setting.</p>
+</div>
+<p>It is a CLASS METHOD, which during its run actually creates
+an instance of the model. It is called as</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">model_handle</span> <span class="o">=</span> <span class="n">ModelClass</span><span class="o">.</span><span class="n">setup</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">params</span><span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>data</strong> (<em>Dataset</em>) &#8211; The dataset on which the model will be run.</li>
+<li><strong>model</strong> (<em>BaseModel</em>) &#8211; A model instance that the setup should use.</li>
+<li><strong>batch_size</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; how many data items will be in one minibatch
+(the data is split to minibatches for training,
+validation and testing)</li>
+<li><strong>model_init_kwargs</strong> (<em>kwargs</em>) &#8211; Various keyword arguments that get passed
+to the model constructor. See constructor
+argument documentation.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Raises:</th><td class="field-body"><p class="first last">NotImplementedError</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.learning.models.base_model.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

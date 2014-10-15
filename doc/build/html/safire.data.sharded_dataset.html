@@ -1,0 +1,280 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.sharded_dataset module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.data.sharded_dataset">
+<span id="safire-data-sharded-dataset-module"></span><h1>safire.data.sharded_dataset module<a class="headerlink" href="#module-safire.data.sharded_dataset" title="Permalink to this headline">¶</a></h1>
+<p>Implements a dataset class that stores its data in separate files called
+&#8220;shards&#8221;. This is a compromise between speed (keeping the whole dataset
+in memory) and memory footprint (keeping the data on disk and reading from it
+on demand).</p>
+<dl class="class">
+<dt id="safire.data.sharded_dataset.ShardedDataset">
+<em class="property">class </em><tt class="descclassname">safire.data.sharded_dataset.</tt><tt class="descname">ShardedDataset</tt><big>(</big><em>output_prefix</em>, <em>corpus</em>, <em>dim=None</em>, <em>test_p=0.1</em>, <em>devel_p=0.1</em>, <em>shardsize=4096</em>, <em>overwrite=False</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="safire.data.unsupervised_dataset.html#safire.data.unsupervised_dataset.UnsupervisedDataset" title="safire.data.unsupervised_dataset.UnsupervisedDataset"><tt class="xref py py-class docutils literal"><span class="pre">safire.data.unsupervised_dataset.UnsupervisedDataset</span></tt></a></p>
+<p>A dataset that stores its data in separate files called
+&#8220;shards&#8221;. This is a compromise between speed (keeping the whole dataset
+in memory) and memory footprint (keeping the data on disk and reading from
+it on demand). All saving/loading is done using the cPickle mechanism.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The dataset is <strong>read-only</strong>, there is - as opposed to gensim&#8217;s Similarity
+class, which works similarly - no way of adding documents to the dataset
+for now.</p>
+</div>
+<p>On initialization, will read from a corpus and build the dataset. This only
+needs to be done once (and it may take quite a long time):</p>
+<div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">icorp</span> <span class="o">=</span> <span class="n">data_loader</span><span class="o">.</span><span class="n">load_image_corpus</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sdata</span> <span class="o">=</span> <span class="n">ShardedDataset</span><span class="p">(</span><span class="n">output_prefix</span><span class="p">,</span> <span class="n">icorp</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <tt class="docutils literal"><span class="pre">output_prefix</span></tt> gives the path to the dataset file. The individual
+shareds are saved as <tt class="docutils literal"><span class="pre">output_prefix.0</span></tt>, <tt class="docutils literal"><span class="pre">output_prefix.1</span></tt>, etc.</p>
+<p>On further initialization with the same <tt class="docutils literal"><span class="pre">output_prefix</span></tt> (more precisely:
+the output prefix leading to the same file), will load the already built
+dataset unless the <tt class="docutils literal"><span class="pre">override</span></tt> option is given.</p>
+<p>Internally, to retrieve data, the dataset keeps track of which shard is
+currently open and on a __getitem__ request, either returns an item from
+the current shard, or opens a new one. The shard size is constant, except
+for the last shard.</p>
+<p>TODO: Supports slice notation. [NOT IMPLEMENTED]</p>
+<dl class="method">
+<dt id="safire.data.sharded_dataset.ShardedDataset.get_by_offset">
+<tt class="descname">get_by_offset</tt><big>(</big><em>offset</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.get_by_offset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.get_by_offset" title="Permalink to this definition">¶</a></dt>
+<dd><p>As opposed to getitem, this one only accepts ints as offsets.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.sharded_dataset.ShardedDataset.in_current">
+<tt class="descname">in_current</tt><big>(</big><em>offset</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.in_current"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.in_current" title="Permalink to this definition">¶</a></dt>
+<dd><p>Determines whether the given offset falls within the current
+shard.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.sharded_dataset.ShardedDataset.in_next">
+<tt class="descname">in_next</tt><big>(</big><em>offset</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.in_next"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.in_next" title="Permalink to this definition">¶</a></dt>
+<dd><p>Determines whether the given offset falls within the next shard.
+This is a very small speedup: typically, we will be iterating through
+the data forward. Could save considerable time with a very large number
+of smaller shards.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.sharded_dataset.ShardedDataset.init_by_clone">
+<tt class="descname">init_by_clone</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.init_by_clone"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.init_by_clone" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initializes by copying over attributes of another ShardedDataset
+instance saved to the output_prefix given at __init__().</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.sharded_dataset.ShardedDataset.init_shards">
+<tt class="descname">init_shards</tt><big>(</big><em>output_prefix</em>, <em>corpus</em>, <em>shardsize=4096</em>, <em>dtype='float32'</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.init_shards"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.init_shards" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initializes the shards from the corpus.</p>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="safire.data.sharded_dataset.ShardedDataset.load">
+<em class="property">classmethod </em><tt class="descname">load</tt><big>(</big><em>output_prefix</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.load"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.load" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="safire.data.sharded_dataset.ShardedDataset.load_shard">
+<tt class="descname">load_shard</tt><big>(</big><em>n</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.load_shard"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.load_shard" title="Permalink to this definition">¶</a></dt>
+<dd><p>Loads (unpickles) the n-th shard as the &#8220;live&#8221; part of the dataset
+into the Dataset object.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.sharded_dataset.ShardedDataset.n_devel_batches">
+<tt class="descname">n_devel_batches</tt><big>(</big><em>batch_size</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.n_devel_batches"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.n_devel_batches" title="Permalink to this definition">¶</a></dt>
+<dd><p>Determines how many batches of given size the training data will
+be split into.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>batch_size</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The intended size of one batch of the data.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The number of batches the training data will be split into
+for the given <tt class="docutils literal"><span class="pre">batch_size</span></tt>.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.sharded_dataset.ShardedDataset.n_test_batches">
+<tt class="descname">n_test_batches</tt><big>(</big><em>batch_size</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.n_test_batches"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.n_test_batches" title="Permalink to this definition">¶</a></dt>
+<dd><p>Determines how many batches of given size the training data will
+be split into.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>batch_size</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The intended size of one batch of the data.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The number of batches the training data will be split into
+for the given <tt class="docutils literal"><span class="pre">batch_size</span></tt>.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.sharded_dataset.ShardedDataset.n_train_batches">
+<tt class="descname">n_train_batches</tt><big>(</big><em>batch_size</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.n_train_batches"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.n_train_batches" title="Permalink to this definition">¶</a></dt>
+<dd><p>Determines how many batches of given size the training data will
+be split into.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>batch_size</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The intended size of one batch of the data.</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">The number of batches the training data will be split into
+for the given <tt class="docutils literal"><span class="pre">batch_size</span></tt>.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.sharded_dataset.ShardedDataset.reset">
+<tt class="descname">reset</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.reset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.reset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Resets to no shard at all. Used for saving.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.sharded_dataset.ShardedDataset.resize_shards">
+<tt class="descname">resize_shards</tt><big>(</big><em>shardsize</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.resize_shards"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.resize_shards" title="Permalink to this definition">¶</a></dt>
+<dd><p>Re-process the dataset to new shard size. This may take pretty long.
+Also, note that you need some space on disk for this one (we&#8217;re
+assuming there is enough disk space for double the size of the dataset
+and that there is enough memory for old + new shardsize).</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>shardsize</strong> (<a class="reference external" href="http://docs.python.org/library/functions.html#int" title="(in Python v2.7)"><em>int</em></a>) &#8211; The new shard size.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.sharded_dataset.ShardedDataset.save">
+<tt class="descname">save</tt><big>(</big><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.save"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.save" title="Permalink to this definition">¶</a></dt>
+<dd><p>Saves itself in clean state (after calling reset()) to the
+output_prefix file.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.sharded_dataset.ShardedDataset.save_shard">
+<tt class="descname">save_shard</tt><big>(</big><em>shard</em>, <em>n=None</em>, <em>filename=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.save_shard"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.save_shard" title="Permalink to this definition">¶</a></dt>
+<dd><p>Pickles the given shard. If n is not given, will consider the shard
+a new one.</p>
+<p>If <tt class="docutils literal"><span class="pre">filename</span></tt> is given, will use that file name instead of generating
+one.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.sharded_dataset.ShardedDataset.shard_by_offset">
+<tt class="descname">shard_by_offset</tt><big>(</big><em>offset</em><big>)</big><a class="reference internal" href="_modules/safire/data/sharded_dataset.html#ShardedDataset.shard_by_offset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.sharded_dataset.ShardedDataset.shard_by_offset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Determines which shard the given offset belongs to. If the offset
+is greater than the number of available documents, raises a
+ValueError.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.data.sharded_dataset.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>

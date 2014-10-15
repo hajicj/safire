@@ -1,0 +1,189 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>safire.data.text_browser module &mdash; Safire 0.0.8 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.0.8',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="module-safire.data.text_browser">
+<span id="safire-data-text-browser-module"></span><h1>safire.data.text_browser module<a class="headerlink" href="#module-safire.data.text_browser" title="Permalink to this headline">¶</a></h1>
+<p>Maps image IDs from an ImagenetCorpus to image files for exploring
+Safire model performance.</p>
+<dl class="class">
+<dt id="safire.data.text_browser.TextBrowser">
+<em class="property">class </em><tt class="descclassname">safire.data.text_browser.</tt><tt class="descname">TextBrowser</tt><big>(</big><em>root</em>, <em>corpus</em>, <em>gzipped=True</em>, <em>text2im=None</em>, <em>im2text=None</em>, <em>first_n_sentences=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/text_browser.html#TextBrowser"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.text_browser.TextBrowser" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<p>Provides functionality for looking directly at the texts used to build
+queries.</p>
+<dl class="method">
+<dt id="safire.data.text_browser.TextBrowser.create_header">
+<tt class="descname">create_header</tt><big>(</big><em>filename</em><big>)</big><a class="reference internal" href="_modules/safire/data/text_browser.html#TextBrowser.create_header"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.text_browser.TextBrowser.create_header" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates a header for the shown document.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.text_browser.TextBrowser.format_representation">
+<tt class="descname">format_representation</tt><big>(</big><em>word_doc</em>, <em>n_cols=3</em><big>)</big><a class="reference internal" href="_modules/safire/data/text_browser.html#TextBrowser.format_representation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.text_browser.TextBrowser.format_representation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a string for printing out the document representation.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>word_doc</strong> &#8211; A document representation.</li>
+<li><strong>n_cols</strong> &#8211; How many columns should the output have? [NOT IMPL.]</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.text_browser.TextBrowser.format_text">
+<tt class="descname">format_text</tt><big>(</big><em>bow</em>, <em>sentence_buffer</em>, <em>header</em><big>)</big><a class="reference internal" href="_modules/safire/data/text_browser.html#TextBrowser.format_text"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.text_browser.TextBrowser.format_text" title="Permalink to this definition">¶</a></dt>
+<dd><p>Formats the text in the sentence buffer to something printable.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.text_browser.TextBrowser.get_multiple_texts">
+<tt class="descname">get_multiple_texts</tt><big>(</big><em>docids</em>, <em>first_n_sentences</em><big>)</big><a class="reference internal" href="_modules/safire/data/text_browser.html#TextBrowser.get_multiple_texts"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.text_browser.TextBrowser.get_multiple_texts" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieves texts for the given document IDs.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.text_browser.TextBrowser.get_representation">
+<tt class="descname">get_representation</tt><big>(</big><em>docid</em><big>)</big><a class="reference internal" href="_modules/safire/data/text_browser.html#TextBrowser.get_representation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.text_browser.TextBrowser.get_representation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns how the document is represented by the corpus: the word IDs
+in the document and their output values.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.text_browser.TextBrowser.get_text">
+<tt class="descname">get_text</tt><big>(</big><em>docid</em>, <em>first_n_sentences=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/text_browser.html#TextBrowser.get_text"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.text_browser.TextBrowser.get_text" title="Permalink to this definition">¶</a></dt>
+<dd><p>For the given document ID, builds the text to show.</p>
+<p>If <tt class="docutils literal"><span class="pre">docid</span></tt> is an integer, will attempt to convert it to filename.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.text_browser.TextBrowser.get_word_representation">
+<tt class="descname">get_word_representation</tt><big>(</big><em>docid</em>, <em>highest_scoring=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/text_browser.html#TextBrowser.get_word_representation"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.text_browser.TextBrowser.get_word_representation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the document representation with word IDs converted to the
+original tokens.</p>
+<p>If highest_scoring is given, sorts from highest to lowest freq.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.text_browser.TextBrowser.parse">
+<tt class="descname">parse</tt><big>(</big><em>filename</em>, <em>first_n_sentences=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/text_browser.html#TextBrowser.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.text_browser.TextBrowser.parse" title="Permalink to this definition">¶</a></dt>
+<dd><p>From a vtext filename, retrieves the raw text of the document, grouped
+by sentence.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.text_browser.TextBrowser.show">
+<tt class="descname">show</tt><big>(</big><em>docid</em>, <em>first_n_sentences=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/text_browser.html#TextBrowser.show"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.text_browser.TextBrowser.show" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load the given text in a separate window.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.text_browser.TextBrowser.show_multiple">
+<tt class="descname">show_multiple</tt><big>(</big><em>docids</em>, <em>first_n_sentences=None</em><big>)</big><a class="reference internal" href="_modules/safire/data/text_browser.html#TextBrowser.show_multiple"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.text_browser.TextBrowser.show_multiple" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load the given set of texts in a separate window.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="safire.data.text_browser.TextBrowser.text_to_window">
+<tt class="descname">text_to_window</tt><big>(</big><em>text</em><big>)</big><a class="reference internal" href="_modules/safire/data/text_browser.html#TextBrowser.text_to_window"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.text_browser.TextBrowser.text_to_window" title="Permalink to this definition">¶</a></dt>
+<dd><p>Opens a new window and prints the formatted text there.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/safire.data.text_browser.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Jan Hajic jr..
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
