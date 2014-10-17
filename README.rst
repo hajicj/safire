@@ -17,7 +17,7 @@ All questions, comments, problems, etc. should be thrown, bowled, harpooned or o
 
   hajicj@ufal.mff.cuni.cz
   
-
+**A disclaimer: the library is not a mature software product.** Quite some refactoring needs to be done and tests added/fixed. I wouldn't encourage anyone to quite start using it yet. (Developers, on the other hand, are welcome!)
 
 Requirements
 --------------
