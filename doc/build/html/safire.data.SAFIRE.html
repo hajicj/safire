@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>safire.data.SAFIRE module &mdash; Safire 0.0.8 documentation</title>
+    <title>safire.data.SAFIRE module &mdash; Safire 0.0.1r2 documentation</title>
     
     <link rel="stylesheet" href="_static/default.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -14,7 +14,7 @@
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    './',
-        VERSION:     '0.0.8',
+        VERSION:     '0.0.1r2',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  true
@@ -23,7 +23,10 @@
     <script type="text/javascript" src="_static/jquery.js"></script>
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
-    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+    <link rel="top" title="Safire 0.0.1r2 documentation" href="index.html" />
+    <link rel="up" title="safire.data package" href="safire.data.html" />
+    <link rel="next" title="safire.data.corpus_dataset module" href="safire.data.corpus_dataset.html" />
+    <link rel="prev" title="safire.data.MNIST module" href="safire.data.MNIST.html" /> 
   </head>
   <body>
     <div class="related">
@@ -35,7 +38,15 @@
         <li class="right" >
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+        <li class="right" >
+          <a href="safire.data.corpus_dataset.html" title="safire.data.corpus_dataset module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="safire.data.MNIST.html" title="safire.data.MNIST module"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Safire 0.0.1r2 documentation</a> &raquo;</li>
+          <li><a href="safire.html" >safire package</a> &raquo;</li>
+          <li><a href="safire.data.html" accesskey="U">safire.data package</a> &raquo;</li> 
       </ul>
     </div>  
 
@@ -49,7 +60,7 @@
 <dl class="class">
 <dt id="safire.data.SAFIRE.DataDirLayout">
 <em class="property">class </em><tt class="descclassname">safire.data.SAFIRE.</tt><tt class="descname">DataDirLayout</tt><big>(</big><em>name</em><big>)</big><a class="reference internal" href="_modules/safire/data/SAFIRE.html#DataDirLayout"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.SAFIRE.DataDirLayout" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<dd><p>Bases: <a class="reference external" href="http://docs.python.org/library/functions.html#object" title="(in Python v2.7)"><tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></a></p>
 <p>A static class that holds constants that define the layout of a
 dataset root dir. For specific layouts, override the <tt class="docutils literal"><span class="pre">name</span></tt> attribute.</p>
 </dd></dl>
@@ -57,7 +68,7 @@ dataset root dir. For specific layouts, override the <tt class="docutils literal
 <dl class="class">
 <dt id="safire.data.SAFIRE.MultimodalDatasetLoader">
 <em class="property">class </em><tt class="descclassname">safire.data.SAFIRE.</tt><tt class="descname">MultimodalDatasetLoader</tt><big>(</big><em>root</em>, <em>name</em>, <em>sentences=False</em>, <em>text_loader=&lt;class 'safire.data.vtextcorpus.VTextCorpus'&gt;</em>, <em>img_loader=&lt;class 'safire.data.imagenetcorpus.ImagenetCorpus'&gt;</em><big>)</big><a class="reference internal" href="_modules/safire/data/SAFIRE.html#MultimodalDatasetLoader"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.data.SAFIRE.MultimodalDatasetLoader" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<dd><p>Bases: <a class="reference external" href="http://docs.python.org/library/functions.html#object" title="(in Python v2.7)"><tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></a></p>
 <p>A class that works as an interface for loading a SAFIRE dataset.</p>
 <p>The loading itself may take a shortcut through a <tt class="docutils literal"><span class="pre">load</span></tt> class method:</p>
 <div class="highlight-python"><div class="highlight"><pre><span class="gp">&gt;&gt;&gt; </span><span class="n">safire_multimodal_dataset</span> <span class="o">=</span> <span class="n">SAFIRE</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s">&#39;/path/to/safire/root&#39;</span><span class="p">)</span>
@@ -124,6 +135,12 @@ raises a ValueError.</p>
       </div>
       <div class="sphinxsidebar">
         <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="safire.data.MNIST.html"
+                        title="previous chapter">safire.data.MNIST module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="safire.data.corpus_dataset.html"
+                        title="next chapter">safire.data.corpus_dataset module</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
     <li><a href="_sources/safire.data.SAFIRE.txt"
@@ -155,7 +172,15 @@ raises a ValueError.</p>
         <li class="right" >
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+        <li class="right" >
+          <a href="safire.data.corpus_dataset.html" title="safire.data.corpus_dataset module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="safire.data.MNIST.html" title="safire.data.MNIST module"
+             >previous</a> |</li>
+        <li><a href="index.html">Safire 0.0.1r2 documentation</a> &raquo;</li>
+          <li><a href="safire.html" >safire package</a> &raquo;</li>
+          <li><a href="safire.data.html" >safire.data package</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">

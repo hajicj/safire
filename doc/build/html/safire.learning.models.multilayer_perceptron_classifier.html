@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>safire.learning.models.multilayer_perceptron_classifier module &mdash; Safire 0.0.8 documentation</title>
+    <title>safire.learning.models.multilayer_perceptron_classifier module &mdash; Safire 0.0.1r2 documentation</title>
     
     <link rel="stylesheet" href="_static/default.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -14,7 +14,7 @@
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    './',
-        VERSION:     '0.0.8',
+        VERSION:     '0.0.1r2',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  true
@@ -23,7 +23,10 @@
     <script type="text/javascript" src="_static/jquery.js"></script>
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
-    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+    <link rel="top" title="Safire 0.0.1r2 documentation" href="index.html" />
+    <link rel="up" title="safire.learning.models package" href="safire.learning.models.html" />
+    <link rel="next" title="safire.learning.models.replicated_softmax module" href="safire.learning.models.replicated_softmax.html" />
+    <link rel="prev" title="safire.learning.models.multilayer_perceptron module" href="safire.learning.models.multilayer_perceptron.html" /> 
   </head>
   <body>
     <div class="related">
@@ -35,7 +38,16 @@
         <li class="right" >
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+        <li class="right" >
+          <a href="safire.learning.models.replicated_softmax.html" title="safire.learning.models.replicated_softmax module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="safire.learning.models.multilayer_perceptron.html" title="safire.learning.models.multilayer_perceptron module"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Safire 0.0.1r2 documentation</a> &raquo;</li>
+          <li><a href="safire.html" >safire package</a> &raquo;</li>
+          <li><a href="safire.learning.html" >safire.learning package</a> &raquo;</li>
+          <li><a href="safire.learning.models.html" accesskey="U">safire.learning.models package</a> &raquo;</li> 
       </ul>
     </div>  
 
@@ -48,7 +60,7 @@
 <span id="safire-learning-models-multilayer-perceptron-classifier-module"></span><h1>safire.learning.models.multilayer_perceptron_classifier module<a class="headerlink" href="#module-safire.learning.models.multilayer_perceptron_classifier" title="Permalink to this headline">¶</a></h1>
 <dl class="class">
 <dt id="safire.learning.models.multilayer_perceptron_classifier.MultilayerPerceptron">
-<em class="property">class </em><tt class="descclassname">safire.learning.models.multilayer_perceptron_classifier.</tt><tt class="descname">MultilayerPerceptron</tt><big>(</big><em>inputs</em>, <em>n_in</em>, <em>n_out</em>, <em>n_layers</em>, <em>n_hidden_list</em>, <em>hidden_activation=&lt;theano.tensor.elemwise.Elemwise object at 0x000000000AAB2240&gt;</em>, <em>rng=&lt;mtrand.RandomState object at 0x000000000D0B5420&gt;</em>, <em>L1_w=0.0</em>, <em>L2_w=0.0</em>, <em>hidden_layer_params=None</em>, <em>log_regression_params=None</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/multilayer_perceptron_classifier.html#MultilayerPerceptron"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.multilayer_perceptron_classifier.MultilayerPerceptron" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><tt class="descclassname">safire.learning.models.multilayer_perceptron_classifier.</tt><tt class="descname">MultilayerPerceptron</tt><big>(</big><em>inputs</em>, <em>n_in</em>, <em>n_out</em>, <em>n_layers</em>, <em>n_hidden_list</em>, <em>hidden_activation=&lt;theano.tensor.elemwise.Elemwise object at 0x000000000AFC2438&gt;</em>, <em>rng=&lt;mtrand.RandomState object at 0x000000000D7D87C8&gt;</em>, <em>L1_w=0.0</em>, <em>L2_w=0.0</em>, <em>hidden_layer_params=None</em>, <em>log_regression_params=None</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/multilayer_perceptron_classifier.html#MultilayerPerceptron"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.multilayer_perceptron_classifier.MultilayerPerceptron" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="safire.learning.models.base_supervised_model.html#safire.learning.models.base_supervised_model.BaseSupervisedModel" title="safire.learning.models.base_supervised_model.BaseSupervisedModel"><tt class="xref py py-class docutils literal"><span class="pre">safire.learning.models.base_supervised_model.BaseSupervisedModel</span></tt></a></p>
 <p>Basic multi-layer perceptron class.</p>
 <p>A multilayer perceptron is a feedforward artificial neural network
@@ -138,6 +150,12 @@ the model.</td>
       </div>
       <div class="sphinxsidebar">
         <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="safire.learning.models.multilayer_perceptron.html"
+                        title="previous chapter">safire.learning.models.multilayer_perceptron module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="safire.learning.models.replicated_softmax.html"
+                        title="next chapter">safire.learning.models.replicated_softmax module</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
     <li><a href="_sources/safire.learning.models.multilayer_perceptron_classifier.txt"
@@ -169,7 +187,16 @@ the model.</td>
         <li class="right" >
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+        <li class="right" >
+          <a href="safire.learning.models.replicated_softmax.html" title="safire.learning.models.replicated_softmax module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="safire.learning.models.multilayer_perceptron.html" title="safire.learning.models.multilayer_perceptron module"
+             >previous</a> |</li>
+        <li><a href="index.html">Safire 0.0.1r2 documentation</a> &raquo;</li>
+          <li><a href="safire.html" >safire package</a> &raquo;</li>
+          <li><a href="safire.learning.html" >safire.learning package</a> &raquo;</li>
+          <li><a href="safire.learning.models.html" >safire.learning.models package</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">

@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>safire.utils package &mdash; Safire 0.0.8 documentation</title>
+    <title>safire.utils package &mdash; Safire 0.0.1r2 documentation</title>
     
     <link rel="stylesheet" href="_static/default.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -14,7 +14,7 @@
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    './',
-        VERSION:     '0.0.8',
+        VERSION:     '0.0.1r2',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  true
@@ -23,7 +23,10 @@
     <script type="text/javascript" src="_static/jquery.js"></script>
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
-    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+    <link rel="top" title="Safire 0.0.1r2 documentation" href="index.html" />
+    <link rel="up" title="safire package" href="safire.html" />
+    <link rel="next" title="safire.utils.matutils module" href="safire.utils.matutils.html" />
+    <link rel="prev" title="safire.learning.models.stacked_denoising_autoencoder module" href="safire.learning.models.stacked_denoising_autoencoder.html" /> 
   </head>
   <body>
     <div class="related">
@@ -35,7 +38,14 @@
         <li class="right" >
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+        <li class="right" >
+          <a href="safire.utils.matutils.html" title="safire.utils.matutils module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="safire.learning.models.stacked_denoising_autoencoder.html" title="safire.learning.models.stacked_denoising_autoencoder module"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Safire 0.0.1r2 documentation</a> &raquo;</li>
+          <li><a href="safire.html" accesskey="U">safire package</a> &raquo;</li> 
       </ul>
     </div>  
 
@@ -66,7 +76,7 @@ image from a set of samples or weights.</p>
 <dl class="class">
 <dt id="safire.utils.Noop">
 <em class="property">class </em><tt class="descclassname">safire.utils.</tt><tt class="descname">Noop</tt><a class="reference internal" href="_modules/safire/utils.html#Noop"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.Noop" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<dd><p>Bases: <a class="reference external" href="http://docs.python.org/library/functions.html#object" title="(in Python v2.7)"><tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></a></p>
 <p>Doesn&#8217;t do anything on getitem and call.</p>
 </dd></dl>
 
@@ -107,7 +117,7 @@ middle of the input image above the former top of the input image:</p>
 <dl class="class">
 <dt id="safire.utils.build_cappedReLU">
 <em class="property">class </em><tt class="descclassname">safire.utils.</tt><tt class="descname">build_cappedReLU</tt><big>(</big><em>cap</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#build_cappedReLU"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.build_cappedReLU" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></p>
+<dd><p>Bases: <a class="reference external" href="http://docs.python.org/library/functions.html#object" title="(in Python v2.7)"><tt class="xref py py-class docutils literal"><span class="pre">object</span></tt></a></p>
 </dd></dl>
 
 <dl class="function">
@@ -249,7 +259,7 @@ object.</p>
 
 <dl class="function">
 <dt id="safire.utils.random_shared_var">
-<tt class="descclassname">safire.utils.</tt><tt class="descname">random_shared_var</tt><big>(</big><em>name</em>, <em>shape</em>, <em>lbound</em>, <em>rbound</em>, <em>rng=&lt;mtrand.RandomState object at 0x00000000091ED0F0&gt;</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#random_shared_var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.random_shared_var" title="Permalink to this definition">¶</a></dt>
+<tt class="descclassname">safire.utils.</tt><tt class="descname">random_shared_var</tt><big>(</big><em>name</em>, <em>shape</em>, <em>lbound</em>, <em>rbound</em>, <em>rng=&lt;mtrand.RandomState object at 0x000000000466D138&gt;</em><big>)</big><a class="reference internal" href="_modules/safire/utils.html#random_shared_var"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.utils.random_shared_var" title="Permalink to this definition">¶</a></dt>
 <dd><p>Creates a Theano shared variaable with the specified
 shape, with values drawn uniformly from the interval
 <tt class="docutils literal"><span class="pre">[lbound,</span> <span class="pre">rbound]</span></tt>.</p>
@@ -409,6 +419,12 @@ from each other. The last member is chosen</p>
 </li>
 </ul>
 
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="safire.learning.models.stacked_denoising_autoencoder.html"
+                        title="previous chapter">safire.learning.models.stacked_denoising_autoencoder module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="safire.utils.matutils.html"
+                        title="next chapter">safire.utils.matutils module</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
     <li><a href="_sources/safire.utils.txt"
@@ -440,7 +456,14 @@ from each other. The last member is chosen</p>
         <li class="right" >
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+        <li class="right" >
+          <a href="safire.utils.matutils.html" title="safire.utils.matutils module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="safire.learning.models.stacked_denoising_autoencoder.html" title="safire.learning.models.stacked_denoising_autoencoder module"
+             >previous</a> |</li>
+        <li><a href="index.html">Safire 0.0.1r2 documentation</a> &raquo;</li>
+          <li><a href="safire.html" >safire package</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">

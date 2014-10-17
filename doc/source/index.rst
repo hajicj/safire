@@ -16,6 +16,82 @@ library for experiment management. Apart from the library modules, there
 is the ``scripts`` component which uses the library to run and evaluate
 experiments.
 
+.. warning::
+
+  This library is NOT a mature software product; I do not recommend anyone to
+  use it in their research yet. With hindsight, there are multiple suboptimal
+  design decisions and refactoring will occur.
+
+.. warning::
+
+  While I'm not looking for users, I'm certainly looking for developers. :)
+
+Architecture
+============
+
+We will describe the architecture from the inside out, starting from the deep
+learning models and working outwards through datasets and filters to loaders
+and layouts. This is the direction in which the library grew.
+
+.. note::
+
+  As I learned how to work with Theano, what seemed to be like a good design
+  decision in the beginning turned into bad design decisions. Changes that I
+  believe should be made are marked in a **TODO** box in the appropriate place.
+  Of course, should additional developers arise, these things are up for
+  discussion.
+
+Models
+------
+
+At the heart of a deep learning experiment lies a *model*. A model is just a set
+of equations: it is a *definition* of what should be trained. The most important
+part of a model is a cost function to optimize and the dimension of input and
+output. Other methods can be define how to sample from the model.
+
+All model classes are derived from the :class:`BaseModel` class. This class
+defines the common interface and implements common functionality for random
+parameter initialization and persistence.
+
+Models fall into two broad categories: *supervised* and *unsupervised*. The
+difference is minimal: while supervised models define their cost function with
+respect to some input and output variables, unsupervised models define their
+cost function with respect to inputs only. This means that the output dimension
+of an unsupervised model has to be specified explicitly, while for a supervised
+model it can (and should!) be derived from the dimension of the output.
+
+A base class for each model category is also implemented. As opposed to
+:class:`BaseModel`, these classes already implement important functionality:
+the ``setup()`` class method. **This is the preferred method for creating new
+models.** This method does not directly return a model instance, as calling
+``__init__`` would. Instead, it returns a *model handle*, which is the subject
+of the next section.
+
+Model classes also define their parameter updates for training. These updates
+are used during setup and merged together with updates coming from the supplied
+``updater`` class.
+
+.. note::
+
+  Because parameters of a model are public instance attributes, the whole
+  parameter update business should be moved to an Updater, outside the model.
+
+Model handles
+-------------
+
+The model classes only implements a definition. In order to *use* a model for
+something, a *model handle* has to be instantiated. Model handle is a way of
+making the model do something. For example, the :class:`ModelHandle` class
+provides a method for training, validating and running a feedforward network on
+a dataset. Other handles are available that perform backward sampling and
+clamped sampling of a joint multimodal layer.
+
+As a rule of thumb, models should not be accessed directly.
+
+
+
+Models provide
+
 .. toctree::
    :maxdepth: 2
 

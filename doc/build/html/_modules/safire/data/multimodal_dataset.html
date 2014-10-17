@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>safire.data.multimodal_dataset &mdash; Safire 0.0.8 documentation</title>
+    <title>safire.data.multimodal_dataset &mdash; Safire 0.0.1r2 documentation</title>
     
     <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
     <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
@@ -14,7 +14,7 @@
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    '../../../',
-        VERSION:     '0.0.8',
+        VERSION:     '0.0.1r2',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  true
@@ -23,7 +23,7 @@
     <script type="text/javascript" src="../../../_static/jquery.js"></script>
     <script type="text/javascript" src="../../../_static/underscore.js"></script>
     <script type="text/javascript" src="../../../_static/doctools.js"></script>
-    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="top" title="Safire 0.0.1r2 documentation" href="../../../index.html" />
     <link rel="up" title="Module code" href="../../index.html" /> 
   </head>
   <body>
@@ -36,7 +36,7 @@
         <li class="right" >
           <a href="../../../py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+        <li><a href="../../../index.html">Safire 0.0.1r2 documentation</a> &raquo;</li>
           <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
       </ul>
     </div>  
@@ -49,11 +49,12 @@
   <h1>Source code for safire.data.multimodal_dataset</h1><div class="highlight"><pre>
 <span class="c">#!/usr/bin/env python</span>
 <span class="c"># -*- coding: utf-8 -*-</span>
-<span class="kn">import</span> <span class="nn">operator</span>
 <span class="kn">import</span> <span class="nn">logging</span>
 <span class="kn">from</span> <span class="nn">gensim.corpora</span> <span class="kn">import</span> <span class="n">MmCorpus</span>
 <span class="kn">import</span> <span class="nn">numpy</span>
-
+<span class="kn">import</span> <span class="nn">operator</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
 <span class="kn">import</span> <span class="nn">theano</span>
 
 <span class="kn">from</span> <span class="nn">gensim</span> <span class="kn">import</span> <span class="n">matutils</span>
@@ -263,6 +264,9 @@
                         <span class="c"># simply doesn&#39;t throw away anything.</span>
                         <span class="c"># Cache keys are tuples (b_index, b_size).</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">cache_size</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cache_max_nbytes</span> <span class="o">=</span> <span class="mi">5000000000</span> <span class="c"># Maximum cache size - 5 * 10^9 B,</span>
+                                           <span class="c"># should be set better according to</span>
+                                           <span class="c"># some sys.max_mem_param or whatever.</span>
 
 
 <div class="viewcode-block" id="MultimodalDataset.n_train_batches"><a class="viewcode-back" href="../../../safire.data.multimodal_dataset.html#safire.data.multimodal_dataset.MultimodalDataset.n_train_batches">[docs]</a>    <span class="k">def</span> <span class="nf">n_train_batches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">):</span>
@@ -400,6 +404,14 @@
 
         <span class="k">return</span> <span class="n">result</span>
 
+    <span class="k">def</span> <span class="nf">_add_to_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">result</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_multimodal</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_full</span><span class="p">()</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span>
+        <span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache_size</span> <span class="o">+=</span> <span class="n">result</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">result</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s">&#39;Adding to mm. cache: (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">[(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)]</span> <span class="o">=</span> <span class="n">result</span>
+
     <span class="k">def</span> <span class="nf">_build_multimodal_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span>
                                 <span class="n">dtype</span><span class="o">=</span><span class="n">theano</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">floatX</span><span class="p">,</span>
                                 <span class="n">text_first</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
@@ -453,10 +465,7 @@
 
         <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_multimodal</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_full</span><span class="p">()</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">cache_size</span> <span class="o">+=</span> <span class="n">result</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">result</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-            <span class="n">logging</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s">&#39;Adding to mm. cache: (</span><span class="si">%d</span><span class="s">, </span><span class="si">%d</span><span class="s">)&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">))</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">[(</span><span class="n">lbound</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)]</span> <span class="o">=</span> <span class="n">result</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_add_to_cache</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">lbound</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">result</span>
 
@@ -642,7 +651,10 @@
         <span class="k">return</span> <span class="n">sorted_text2im</span>
 
 <div class="viewcode-block" id="MultimodalDataset.cache_full"><a class="viewcode-back" href="../../../safire.data.multimodal_dataset.html#safire.data.multimodal_dataset.MultimodalDataset.cache_full">[docs]</a>    <span class="k">def</span> <span class="nf">cache_full</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="bp">False</span> <span class="c"># Currently assumes that everything fits into the cache.</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_max_nbytes</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">False</span> <span class="c"># Max cache size: self.cache_max_nbytes bytes</span>
 </div>
     <span class="k">def</span> <span class="nf">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_text2im_list</span><span class="p">)</span></div>
@@ -679,7 +691,7 @@
         <li class="right" >
           <a href="../../../py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+        <li><a href="../../../index.html">Safire 0.0.1r2 documentation</a> &raquo;</li>
           <li><a href="../../index.html" >Module code</a> &raquo;</li> 
       </ul>
     </div>

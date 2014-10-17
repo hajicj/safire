@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>safire.learning.models.replicated_softmax module &mdash; Safire 0.0.8 documentation</title>
+    <title>safire.learning.models.replicated_softmax module &mdash; Safire 0.0.1r2 documentation</title>
     
     <link rel="stylesheet" href="_static/default.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -14,7 +14,7 @@
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    './',
-        VERSION:     '0.0.8',
+        VERSION:     '0.0.1r2',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  true
@@ -23,7 +23,10 @@
     <script type="text/javascript" src="_static/jquery.js"></script>
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
-    <link rel="top" title="Safire 0.0.8 documentation" href="index.html" /> 
+    <link rel="top" title="Safire 0.0.1r2 documentation" href="index.html" />
+    <link rel="up" title="safire.learning.models package" href="safire.learning.models.html" />
+    <link rel="next" title="safire.learning.models.restricted_boltzmann_machine module" href="safire.learning.models.restricted_boltzmann_machine.html" />
+    <link rel="prev" title="safire.learning.models.multilayer_perceptron_classifier module" href="safire.learning.models.multilayer_perceptron_classifier.html" /> 
   </head>
   <body>
     <div class="related">
@@ -35,7 +38,16 @@
         <li class="right" >
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+        <li class="right" >
+          <a href="safire.learning.models.restricted_boltzmann_machine.html" title="safire.learning.models.restricted_boltzmann_machine module"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="safire.learning.models.multilayer_perceptron_classifier.html" title="safire.learning.models.multilayer_perceptron_classifier module"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Safire 0.0.1r2 documentation</a> &raquo;</li>
+          <li><a href="safire.html" >safire package</a> &raquo;</li>
+          <li><a href="safire.learning.html" >safire.learning package</a> &raquo;</li>
+          <li><a href="safire.learning.models.html" accesskey="U">safire.learning.models package</a> &raquo;</li> 
       </ul>
     </div>  
 
@@ -48,7 +60,7 @@
 <span id="safire-learning-models-replicated-softmax-module"></span><h1>safire.learning.models.replicated_softmax module<a class="headerlink" href="#module-safire.learning.models.replicated_softmax" title="Permalink to this headline">¶</a></h1>
 <dl class="class">
 <dt id="safire.learning.models.replicated_softmax.ReplicatedSoftmax">
-<em class="property">class </em><tt class="descclassname">safire.learning.models.replicated_softmax.</tt><tt class="descname">ReplicatedSoftmax</tt><big>(</big><em>inputs</em>, <em>n_in</em>, <em>n_out=100</em>, <em>activation=&lt;theano.tensor.elemwise.Elemwise object at 0x000000000ACAB4A8&gt;</em>, <em>backward_activation=&lt;theano.tensor.nnet.nnet.Softmax object at 0x000000000ACABDD8&gt;</em>, <em>W=None</em>, <em>b=None</em>, <em>b_hidden=None</em>, <em>b_visible=None</em>, <em>persistent=None</em>, <em>CD_k=1</em>, <em>CD_use_mean=True</em>, <em>sparsity_target=None</em>, <em>output_sparsity_target=None</em>, <em>numpy_rng=&lt;mtrand.RandomState object at 0x000000000BE2DB10&gt;</em>, <em>L1_norm=0.0</em>, <em>L2_norm=0.0</em>, <em>bias_decay=0.0</em>, <em>entropy_loss=0.0</em>, <em>centering=False</em>, <em>prefer_extremes=False</em>, <em>theano_rng=None</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/replicated_softmax.html#ReplicatedSoftmax"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.replicated_softmax.ReplicatedSoftmax" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><tt class="descclassname">safire.learning.models.replicated_softmax.</tt><tt class="descname">ReplicatedSoftmax</tt><big>(</big><em>inputs</em>, <em>n_in</em>, <em>n_out=100</em>, <em>activation=&lt;theano.tensor.elemwise.Elemwise object at 0x000000000B22AD30&gt;</em>, <em>backward_activation=&lt;theano.tensor.nnet.nnet.Softmax object at 0x000000000B2306A0&gt;</em>, <em>W=None</em>, <em>b=None</em>, <em>b_hidden=None</em>, <em>b_visible=None</em>, <em>persistent=None</em>, <em>CD_k=1</em>, <em>CD_use_mean=True</em>, <em>sparsity_target=None</em>, <em>output_sparsity_target=None</em>, <em>numpy_rng=&lt;mtrand.RandomState object at 0x000000000C2158B8&gt;</em>, <em>L1_norm=0.0</em>, <em>L2_norm=0.0</em>, <em>bias_decay=0.0</em>, <em>entropy_loss=0.0</em>, <em>centering=False</em>, <em>prefer_extremes=False</em>, <em>theano_rng=None</em><big>)</big><a class="reference internal" href="_modules/safire/learning/models/replicated_softmax.html#ReplicatedSoftmax"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#safire.learning.models.replicated_softmax.ReplicatedSoftmax" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="safire.learning.models.restricted_boltzmann_machine.html#safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine" title="safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine"><tt class="xref py py-class docutils literal"><span class="pre">safire.learning.models.restricted_boltzmann_machine.RestrictedBoltzmannMachine</span></tt></a></p>
 <dl class="method">
 <dt id="safire.learning.models.replicated_softmax.ReplicatedSoftmax.free_energy">
@@ -82,6 +94,12 @@ Computed as<span class="target" id="equation-free_energy"></span><div class="mat
       </div>
       <div class="sphinxsidebar">
         <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="safire.learning.models.multilayer_perceptron_classifier.html"
+                        title="previous chapter">safire.learning.models.multilayer_perceptron_classifier module</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="safire.learning.models.restricted_boltzmann_machine.html"
+                        title="next chapter">safire.learning.models.restricted_boltzmann_machine module</a></p>
   <h3>This Page</h3>
   <ul class="this-page-menu">
     <li><a href="_sources/safire.learning.models.replicated_softmax.txt"
@@ -113,7 +131,16 @@ Computed as<span class="target" id="equation-free_energy"></span><div class="mat
         <li class="right" >
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li><a href="index.html">Safire 0.0.8 documentation</a> &raquo;</li> 
+        <li class="right" >
+          <a href="safire.learning.models.restricted_boltzmann_machine.html" title="safire.learning.models.restricted_boltzmann_machine module"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="safire.learning.models.multilayer_perceptron_classifier.html" title="safire.learning.models.multilayer_perceptron_classifier module"
+             >previous</a> |</li>
+        <li><a href="index.html">Safire 0.0.1r2 documentation</a> &raquo;</li>
+          <li><a href="safire.html" >safire package</a> &raquo;</li>
+          <li><a href="safire.learning.html" >safire.learning package</a> &raquo;</li>
+          <li><a href="safire.learning.models.html" >safire.learning.models package</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">

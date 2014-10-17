@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>safire.data.sharded_multimodal_dataset &mdash; Safire 0.0.8 documentation</title>
+    <title>safire.data.sharded_multimodal_dataset &mdash; Safire 0.0.1r2 documentation</title>
     
     <link rel="stylesheet" href="../../../_static/default.css" type="text/css" />
     <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
@@ -14,7 +14,7 @@
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    '../../../',
-        VERSION:     '0.0.8',
+        VERSION:     '0.0.1r2',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  true
@@ -23,7 +23,7 @@
     <script type="text/javascript" src="../../../_static/jquery.js"></script>
     <script type="text/javascript" src="../../../_static/underscore.js"></script>
     <script type="text/javascript" src="../../../_static/doctools.js"></script>
-    <link rel="top" title="Safire 0.0.8 documentation" href="../../../index.html" />
+    <link rel="top" title="Safire 0.0.1r2 documentation" href="../../../index.html" />
     <link rel="up" title="Module code" href="../../index.html" /> 
   </head>
   <body>
@@ -36,7 +36,7 @@
         <li class="right" >
           <a href="../../../py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+        <li><a href="../../../index.html">Safire 0.0.1r2 documentation</a> &raquo;</li>
           <li><a href="../../index.html" accesskey="U">Module code</a> &raquo;</li> 
       </ul>
     </div>  
@@ -127,11 +127,14 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">shared</span> <span class="o">=</span> <span class="n">shared</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">cache</span> <span class="o">=</span> <span class="p">{}</span> <span class="c"># Caches some requested batches. Assumes the dataset</span>
-                        <span class="c"># will be iterated over, so when the cache is full,</span>
-                        <span class="c"># simply doesn&#39;t throw away anything.</span>
-                        <span class="c"># Cache keys are tuples (b_index, b_size).</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">cache_size</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="c"># self.cache = {} # Caches some requested batches. Assumes the dataset</span>
+        <span class="c">#                 # will be iterated over, so when the cache is full,</span>
+        <span class="c">#                 # simply doesn&#39;t throw away anything.</span>
+        <span class="c">#                 # Cache keys are tuples (b_index, b_size).</span>
+        <span class="c"># self.cache_size = 0</span>
+        <span class="c"># self.cache_max_nbytes = 5000000000 # Maximum cache size - 5 * 10^9 B,</span>
+        <span class="c">#                                    # should be set better according to</span>
+        <span class="c">#                                    # some sys.max_mem_param or whatever.</span>
 </div>
 <div class="viewcode-block" id="UnsupervisedShardedCorpusDataset"><a class="viewcode-back" href="../../../safire.data.sharded_multimodal_dataset.html#safire.data.sharded_multimodal_dataset.UnsupervisedShardedCorpusDataset">[docs]</a><span class="k">class</span> <span class="nc">UnsupervisedShardedCorpusDataset</span><span class="p">(</span><span class="n">UnsupervisedCorpusDataset</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;A version of UnsupervisedCorpusDataset built around a ShardedDataset</span>
@@ -295,7 +298,7 @@
         <li class="right" >
           <a href="../../../py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li><a href="../../../index.html">Safire 0.0.8 documentation</a> &raquo;</li>
+        <li><a href="../../../index.html">Safire 0.0.1r2 documentation</a> &raquo;</li>
           <li><a href="../../index.html" >Module code</a> &raquo;</li> 
       </ul>
     </div>
