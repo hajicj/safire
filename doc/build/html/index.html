@@ -58,6 +58,16 @@ in the rest of the library, especially in the <tt class="docutils literal"><span
 library for experiment management. Apart from the library modules, there
 is the <tt class="docutils literal"><span class="pre">scripts</span></tt> component which uses the library to run and evaluate
 experiments.</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">This library is NOT a mature software product; I do not recommend anyone to
+use it in their research yet. With hindsight, there are multiple suboptimal
+design decisions and refactoring will occur.</p>
+</div>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">While I&#8217;m not looking for users, I&#8217;m certainly looking for developers. :)</p>
+</div>
 </div>
 <div class="section" id="architecture">
 <h1>Architecture<a class="headerlink" href="#architecture" title="Permalink to this headline">¶</a></h1>
@@ -96,6 +106,20 @@ of the next section.</p>
 <p>Model classes also define their parameter updates for training. These updates
 are used during setup and merged together with updates coming from the supplied
 <tt class="docutils literal"><span class="pre">updater</span></tt> class.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last"><strong>TODO</strong> Because parameters of a model are public instance attributes, the whole
+parameter update business should be moved to an Updater, outside the model.</p>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p><strong>TODO</strong> It is still questionable whether the model should have the init/setup
+dichotomy. Maybe the setup functionality should be moved to handle
+initialization.</p>
+<p class="last">If we think about the CD problem: what if we relaxed the requirement that all
+models had a differentiable cost function? This is a more general question:
+<em>how much should the model class know about its training?</em></p>
+</div>
 </div>
 <div class="section" id="model-handles">
 <h2>Model handles<a class="headerlink" href="#model-handles" title="Permalink to this headline">¶</a></h2>
@@ -104,8 +128,18 @@ something, a <em>model handle</em> has to be instantiated. Model handle is a way
 making the model do something. For example, the <tt class="xref py py-class docutils literal"><span class="pre">ModelHandle</span></tt> class
 provides a method for training, validating and running a feedforward network on
 a dataset. Other handles are available that perform backward sampling and
-clamped sampling of a joint multimodal layer.</p>
-<p>As a rule of thumb, models should not be accessed directly.</p>
+clamped sampling of a joint multimodal layer. Generally, the &#8220;action&#8221; of
+a handle is defined by its <tt class="docutils literal"><span class="pre">run()</span></tt> method.</p>
+<p>Handles can be <em>cloned</em>: if you need to use the model differently, for instance
+you want to sample backwards from it after training it in a feedforward manner,
+you can initialize a handle that does just that by cloning the existing handle.</p>
+<p>As a rule of thumb, models are not intended to be initialized directly. Rather,
+a handle should be created using the <tt class="docutils literal"><span class="pre">setup</span></tt> method of the model class.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last"><strong>TODO</strong> Could various methods of training, e.g. Contrastive Divergence, be
+delegated to handles? The problem is that we do not have</p>
+</div>
 <p>Models provide</p>
 <div class="toctree-wrapper compound">
 <ul>
