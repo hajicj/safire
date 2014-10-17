@@ -73,8 +73,18 @@ are used during setup and merged together with updates coming from the supplied
 
 .. note::
 
-  Because parameters of a model are public instance attributes, the whole
+  **TODO** Because parameters of a model are public instance attributes, the whole
   parameter update business should be moved to an Updater, outside the model.
+
+.. note::
+
+  **TODO** It is still questionable whether the model should have the init/setup
+  dichotomy. Maybe the setup functionality should be moved to handle
+  initialization.
+
+  If we think about the CD problem: what if we relaxed the requirement that all
+  models had a differentiable cost function? This is a more general question:
+  *how much should the model class know about its training?*
 
 Model handles
 -------------
@@ -84,9 +94,20 @@ something, a *model handle* has to be instantiated. Model handle is a way of
 making the model do something. For example, the :class:`ModelHandle` class
 provides a method for training, validating and running a feedforward network on
 a dataset. Other handles are available that perform backward sampling and
-clamped sampling of a joint multimodal layer.
+clamped sampling of a joint multimodal layer. Generally, the "action" of
+a handle is defined by its ``run()`` method.
 
-As a rule of thumb, models should not be accessed directly.
+Handles can be *cloned*: if you need to use the model differently, for instance
+you want to sample backwards from it after training it in a feedforward manner,
+you can initialize a handle that does just that by cloning the existing handle.
+
+As a rule of thumb, models are not intended to be initialized directly. Rather,
+a handle should be created using the ``setup`` method of the model class.
+
+.. note::
+
+  **TODO** Could various methods of training, e.g. Contrastive Divergence, be
+  delegated to handles? The problem is that we do not have
 
 
 
