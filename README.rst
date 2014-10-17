@@ -1,4 +1,4 @@
-(c) Jan Hajic, jr., 2014
+Copyright: Jan Hajic, jr., 2014
 
 LEGAL NOTICE: Released as supplementary material for the Master thesis **Matching Images to Texts** of Jan Hajic jr. from the CEMI multimodal systems research group at the Institute of Formal and Applied Linguistics at the Faculty of Mathematics and Physics, Charles University. (The thesis itself is available
 under ``misc/hajicj-msc-thesis.pdf``.) THE APPROPRIATE COPYRIGHT APPLIES.
@@ -73,7 +73,7 @@ Installation
 
 Currently, a standard ``setuptools`` installation is available. To install, run ``python setup.py install``. The alternative way to start using Safire is to put this directory into the ``PYTHONPATH`` environmental variable and to use the srcipt suite from anywhere on your system, simply add the ``scripts/`` directory to your ``PATH``.
 
-You can run tests using the ``nose`` package. Run ``nosetests`` in this directory.
+You can run tests using the ``nose`` package. Run ``nosetests`` in this directory. (Run individually, they should work; when run in a suite, however, they will probably fail, as some last-minute changes were done in the experiment management component that caused problems in how the test use shared test data files. This will get fixed ASAP, as soon as a decent documentation front page is done.)
 
 Getting started
 ------------------- 
