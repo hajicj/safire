@@ -187,8 +187,8 @@ class UnsupervisedShardedVTextCorpusDataset(UnsupervisedShardedCorpusDataset):
             logging.debug('Setting text dataset dimension to %d' % dim)
 
         super(UnsupervisedShardedVTextCorpusDataset, self).__init__(output_prefix,
-                                                                    dim, test_p, devel_p, serializer, mm_corpus_filename, shardsize,
-                                                                    overwrite)
+                dim, test_p, devel_p, serializer, mm_corpus_filename, shardsize,
+                overwrite)
 
 
 class UnsupervisedShardedImagenetCorpusDataset(UnsupervisedShardedCorpusDataset):

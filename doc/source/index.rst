@@ -91,7 +91,7 @@ Model handles
 
 The model classes only implements a definition. In order to *use* a model for
 something, a *model handle* has to be instantiated. Model handle is a way of
-making the model do something. For example, the :class:`ModelHandle` class
+making the model do something. For example, the base :class:`ModelHandle` class
 provides a method for training, validating and running a feedforward network on
 a dataset. Other handles are available that perform backward sampling and
 clamped sampling of a joint multimodal layer. Generally, the "action" of
@@ -107,7 +107,92 @@ a handle should be created using the ``setup`` method of the model class.
 .. note::
 
   **TODO** Could various methods of training, e.g. Contrastive Divergence, be
-  delegated to handles? The problem is that we do not have
+  delegated to handles?
+
+
+Updaters
+--------
+
+Updater classes are a way of separating the parameter update equations for
+training from the model class. Updaters are stuck between a rock and a hard
+place: they should implement things independently on underlying models (i.e.:
+momentum can be used for any model), but they still need access to the model's
+parameters and gradients to get the updates.
+
+The updater is used during the model's ``setup()`` classmethod. It uses a
+modified visitor pattern: it gets passed to the model's ``_training_updates()`` method,
+where the model computes its gradients and passes them and their respective
+model parameters to the updater. The updater then creates the dictionary of
+updates that should be passed to ``theano.function()`` as the ``updates``
+argument when compiling the training function.
+
+The updater should hold all the shared variables that are used during training
+but not a part of the model, like the previous velocities for each parameter
+when using momentum, or the current step matrices during resillient backprop.
+
+.. note::
+
+   **TODO** I haven't figured out yet how to get updaters to actually do this
+   last thing properly; some kind of Theano magic is involved there.
+
+
+Learners
+--------
+
+Learner classes are the place where training happens. They take a model handle
+and a dataset and control the training process. They do *not* control the training
+algorithm. They train models only through calling a handle's ``train()`` method
+(and ``validate()``), monitor progress, decide when to stop, track parameter
+changes, etc. Learners are the "managers" of training.
+
+.. note::
+
+   Keeping the training algorithm hidden from the learner means that
+   the name :class:`BaseSGDLearner`` is wrong; the learner has no idea whether
+   it is really training the model using stochastic gradient descent.
+
+.. note::
+
+   **TODO** It needs to be determined whether having a learner agnostic to the
+   training algorithm is a good thing. For example, what about monitoring
+   the auxilliary variables for more complex training algorithms like rprop?
+   Maybe updater functionality should somehow be merged into an inheritance
+   hierarchy of learners. This would complicate ``setup()``, as we couldn't say
+   at setup-time what the actual updates are. On the other hand, maybe this is
+   a way of getting rid of ``setup()`` completely: delegate the *entire*
+   training setup to learner initialization. Which would break the idea
+   of handles?
+
+Datasets
+--------
+
+Datasets are classes that provide input for a model. Datasets return *batches*:
+sets of training examples of a given size. Each batch is a dense matrix.
+The dataset internally keeps a train-devel-test split (which is, of course,
+persistent), so it can answer queries like "give me the 88th training batch of
+size 1000".
+
+Datasets are also split into supervised and unsupervised. Unsupervised datasets
+can only respond to queries for input variables, supervised datasets can provide
+both input and response variables.
+
+There is a somewhat complex hierarchy of datasets available in safire, in order
+to cover all types of modality queries. The pinnacle of this hierarchy is the
+:class:`ShardedMultimodalDataset`` class, which provides access to any
+combination of text and image data as input or response, constant memory usage,
+simple caching, access to underlying information about the text and image data
+and of course persistence.
+
+Datasets are not gensim-style corpora: they have to support random access,
+in order to be able to randomize training example order. However, some of the
+more high-level datasets *contain* corpora in order to answer queries like
+"what are the IDs of the texts I'm processing". These capabilities are added to
+enable more in-depth tracking of the experiments; primarily during evaluation,
+rather than during training.
+
+.. note::
+
+  **TODO** Support using sparse matrices in models.
 
 
 

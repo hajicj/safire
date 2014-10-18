@@ -402,7 +402,7 @@ class BaseUnsupervisedModel(BaseModel):
 
         # Just nudging it a little...
         #updater = safire.learning.learners.ResilientBackpropUpdater(model.params)
-        updater = safire.learning.learners.StandardSGDUpdater(learning_rate)
+        updater = safire.learning.learners.updaters.StandardSGDUpdater(learning_rate)
 
         updates = model._training_updates(updater=updater,
                                           cost=bound_cost)

@@ -356,6 +356,12 @@ class MultimodalDataset(SupervisedDataset):
         return result
 
     def _add_to_cache(self, batch_size, lbound, result):
+        """Checks whether the given batch can be added to the cache and if yes,
+        adds it. Cache keys are ``(lbound, batch_size)`` tuples.
+
+        :type result: numpy.ndarray
+        :param result: The batch to cache.
+        """
         if self.cache_multimodal and not self.cache_full() and not (
         lbound, batch_size) in self.cache:
             self.cache_size += result.shape[0] * result.shape[1]
