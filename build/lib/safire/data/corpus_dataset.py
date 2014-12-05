@@ -281,7 +281,7 @@ class UnsupervisedCorpusDataset(UnsupervisedDataset):
         """Iterates through the corpus inside, yielding the sparse vectors."""
         for i in xrange(len(self)):
             doc = self.get_sparse(i)
-            return doc
+            yield doc
 
     def __iter__(self):
         """Iterate through the corpus inside, yielding dense data items."""

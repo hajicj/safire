@@ -903,7 +903,7 @@ class RestrictedBoltzmannMachine(BaseUnsupervisedModel):
                                             'local_elemwise_fusion', 'inplace')
 
         dummy_inputs = data.train_X_batch(0, 2).astype(theano.config.floatX)
-        print dummy_inputs
+        #print dummy_inputs
         X.tag.test_value = dummy_inputs
 
         #print 'Dummy inputs:', X.tag.test_value

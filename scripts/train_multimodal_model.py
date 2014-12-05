@@ -5,13 +5,15 @@ and index. Intended to be run from the safire/source directory."""
 import argparse
 import copy
 import logging
-import safire
 
-from gensim.similarities import Similarity
 import theano
+
+import safire
+from safire.learning.models import check_model_dataset_compatibility
+
 theano.config.exception_verbosity = 'high'
 
-from safire.data.loaders import MultimodalDatasetLoader, MultimodalShardedDatasetLoader
+from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.loaders import ModelLoader
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
 from safire.learning.interfaces.safire_transformer import SafireTransformer
@@ -43,6 +45,7 @@ def _create_transformer(*args, **kwargs):
 
 # Functions for loading individual layers
 
+
 def layer_loading_infixes(load_layers):
     """Parses the layers-to-load infixes. Returns a dict such that
     i-th layer infix has key i."""
@@ -51,6 +54,7 @@ def layer_loading_infixes(load_layers):
         if ll != 'None':
             output_infixes[i] = ll
     return output_infixes
+
 
 def layer_loading_init_args(layer_infixes, model_loader):
     """Loads for each layer with infix specified by layer_infixes the
@@ -64,6 +68,7 @@ def layer_loading_init_args(layer_infixes, model_loader):
 
 ###################################################
 
+
 def set_dataset_mode(args, dataset):
 
     if args.mode == 'unsupervised':
@@ -76,14 +81,9 @@ def set_dataset_mode(args, dataset):
     else:
         raise ValueError('Incorrect mode set: %s' % args.mode)
 
-def check_model_dataset_compatibility(dataset, model_class):
-    if issubclass(model_class, models.BaseSupervisedModel):
-        if dataset.mode == 0:
-            raise ValueError('Cannot run supervised training with unsupervised'+
-                             ' dataset mode. (Model %s, dataset mode %s' %
-                             (str(model_class), str(dataset.mode)))
 
 ###############################################################################
+
 
 def parse_model_init_args(args):
     """Creates a dict that can be passed like kwargs to the model's setup()
@@ -123,11 +123,11 @@ def parse_model_init_args(args):
     if hasattr(args, 'L2_w'):
         init_args['L1_w'] = args.L2_w
 
-
     return init_args
 
-
 ###############################################################################
+
+
 def main(args):
 
     logging.info('Initializing loaders (root: %s, name: %s)' % (

@@ -40,7 +40,7 @@ from safire.data.sharded_multimodal_dataset import ShardedMultimodalDataset, \
 from safire.learning.interfaces import ModelHandle
 from safire.learning.interfaces.safire_transformer import SafireTransformer
 from safire.learning.learners import BaseSGDLearner
-from safire.learning.models import BaseModel
+from safire.learning.models.base_model import BaseModel
 
 from .vtextcorpus import VTextCorpus
 from .imagenetcorpus import ImagenetCorpus

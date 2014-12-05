@@ -22,11 +22,10 @@ from safire.data.loaders import MultimodalShardedDatasetLoader, ModelLoader, \
 from safire.learning.interfaces import SafireTransformer
 from safire.learning.learners import BaseSGDLearner
 import safire.learning.models as models
+from safire.learning.models import check_model_dataset_compatibility
 from safire.utils import ReLU, cappedReLU, build_cappedReLU
 
 print theano.config.compute_test_value
-
-from train_multimodal_model import check_model_dataset_compatibility
 
 __author__ = 'Jan Hajic jr.'
 

@@ -30,7 +30,7 @@ class TestClampedSampler(unittest.TestCase):
         logging.info('Initializing sampler...')
 
         cls.sampler = MultimodalClampedSampler(cls.model_handle.model_instance,
-                                               dataset)
+                                               dataset.dim_text, dataset.dim_img)
 
     @classmethod
     def tearDownClass(cls):

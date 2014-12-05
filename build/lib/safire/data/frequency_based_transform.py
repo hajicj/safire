@@ -86,8 +86,6 @@ class FrequencyBasedTransformer(TransformationABC):
                                                 for f in self.allowed_features
             }
 
-
-
     def _build_freqdict(self, corpus):
         """Builds a dictionary of feature frequencies in the input corpus.
 
@@ -115,7 +113,6 @@ class FrequencyBasedTransformer(TransformationABC):
         sorted_triplets = sorted(triplets, key=operator.itemgetter(2),
                                  reverse=True)
         return sorted_triplets
-
 
     def __getitem__(self, bow):
         """Apply transformation from one space to another. In our case: from
@@ -168,13 +165,11 @@ class FrequencyBasedTransformer(TransformationABC):
             if hasattr(transformed_corpus, 'allow_dict_updates'):
                 transformed_corpus.allow_dict_updates = False
 
-
         if hasattr(corpus, 'label'):
             if corpus.label:
                 transformed_corpus.label = corpus.label + self.label
             else:
                 transformed_corpus.label = self.label
-
 
         logging.info('Transformed corpus dictonary has %i features.' % len(transformed_corpus.dictionary))
 

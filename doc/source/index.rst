@@ -195,8 +195,14 @@ rather than during training.
   **TODO** Support using sparse matrices in models.
 
 
+SafireTransformer
+-----------------
 
-Models provide
+This class is the link between the safire deep learning components and gensim's
+corpus-transformer-index architecture. It is a wrapper for a model (model handle)
+that implements gensim's ``TransformationABC`` interface. Initializing the
+transformer additionally with a dataset and learner will perform training (again
+in line with gensim's train-at-init architecture).
 
 .. toctree::
    :maxdepth: 2

@@ -15,6 +15,7 @@ import random
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 
+
 try:
     import Image
 except ImportError:
@@ -241,7 +242,7 @@ def profile_run(function, *args, **kwargs):
 
     pr.disable()
     s = StringIO.StringIO()
-    sortby='tottime'
+    sortby = 'tottime'
     ps = pstats.Stats(pr, stream = s).sort_stats(sortby)
     ps.print_stats(.33)
 
@@ -401,6 +402,7 @@ def compute_column_thumbnail_size(images, total_size, margin=10):
 
     return th_width, th_height
 
+
 def compute_row_thumbnail_size(images, total_size, margin=10):
     """Computes the thumbnail size for images so that they all fit into the
     given size. Assumes the images will be arranged next to each other
@@ -412,6 +414,7 @@ def compute_row_thumbnail_size(images, total_size, margin=10):
     th_height = int(math.floor(total_size[1] - 2 * margin))
 
     return th_width, th_height
+
 
 # Image tiling functions:
 def images_to_column(images, margin=10):
@@ -439,6 +442,7 @@ def images_to_column(images, margin=10):
 
     return output_image
 
+
 def images_to_row(images, margin=10):
     """Tiles images next to each other."""
 
@@ -464,6 +468,7 @@ def images_to_row(images, margin=10):
 
     return output_image
 
+
 def images_to_thumbnails(images, size):
     """Returns a list of image thumbnails of the given size."""
     thumbnails = copy.copy(images)
@@ -472,6 +477,7 @@ def images_to_thumbnails(images, size):
         th.thumbnail(size)
 
     return thumbnails
+
 
 def image_comparison_report(images_1, images_2, size=(600, 800), margin=20):
     """Draws the two sets of images as columns side-by-side."""
@@ -489,6 +495,7 @@ def image_comparison_report(images_1, images_2, size=(600, 800), margin=20):
     output = images_to_row([cols_1, cols_2], margin)
 
     return output
+
 
 def add_header_image(image, header_image, header_size=(300,200), margin=20):
     """Given an image and a header image, pastes the header image in the
@@ -568,6 +575,7 @@ def heatmap_matrix(matrix, title='', with_average=False,
 
 ##############################################################################
 
+
 class Noop(object):
     """Doesn't do anything on getitem and call."""
     def __getitem__(self, item):
@@ -591,6 +599,7 @@ def n_max(arr, n):
     indices = (numpy.unravel_index(i, arr.shape) for i in indices)
     return [(arr[i], i) for i in indices]
 
+
 def squish_array(array):
     """Recomputes array values so that no difference is bigger than 1. Assumes
     the array is sorted."""
@@ -608,6 +617,7 @@ def squish_array(array):
 
 ##################################
 
+
 def check_malformed_unicode(string):
     """Raises a UnicodeError if the given string cannot be decoded as unicode.
     """
@@ -619,4 +629,7 @@ def check_malformed_unicode(string):
         except:
             print 'Problem encoding as unicode: %s' % letter
             raise
+
+
+
 

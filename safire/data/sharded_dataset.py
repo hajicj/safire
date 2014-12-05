@@ -20,6 +20,7 @@ __author__ = 'Jan Hajic jr.'
 
 from safire.data.unsupervised_dataset import UnsupervisedDataset
 
+
 class ShardedDataset(UnsupervisedDataset):
     """
     A dataset that stores its data in separate files called

@@ -90,6 +90,8 @@ class TestSafireTransformer(unittest.TestCase):
 
         transformed_item = applied_corpus.__iter__().next()
 
+        print transformed_item ### DEBUG
+
         self.assertEqual(transformer.n_out, len(transformed_item))
 
     def test_applied_saveload(self):

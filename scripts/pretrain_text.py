@@ -16,14 +16,14 @@ __author__ = 'Jan Hajic jr.'
 import argparse
 import logging
 import safire.learning.models as models
-from safire.learning.models import DenoisingAutoencoder
+from safire.learning.models import DenoisingAutoencoder, \
+    check_model_dataset_compatibility
 from safire.data.loaders import MultimodalDatasetLoader, \
     MultimodalShardedDatasetLoader
 from safire.data.loaders import ModelLoader
 from safire.learning.interfaces import SafireTransformer
 from safire.learning.learners import BaseSGDLearner
 
-from train_multimodal_model import check_model_dataset_compatibility
 
 def _build_argument_parser():
 

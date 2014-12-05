@@ -5,7 +5,6 @@ descent.
 A **Learner** is a class that gets a model handle and a dataset and optimizes
 the model parameters.
 """
-
 import logging
 import os
 import random
@@ -14,14 +13,14 @@ import gensim
 
 import numpy
 import theano
-import matplotlib.pyplot as plt
-#from safire.data.loaders import ModelLoader # Was a circular import
-from safire.learning.interfaces.model_handle import BackwardModelHandle
-from safire.learning.models import BaseModel
+#import matplotlib.pyplot as plt
 
+from safire.learning.interfaces.model_handle import BackwardModelHandle
+from safire.learning.models.base_model import BaseModel
 from safire.learning.models.base_supervised_model import BaseSupervisedModel
 from safire.learning.models.base_unsupervised_model import BaseUnsupervisedModel
 from safire.data.supervised_dataset import SupervisedDataset
+
 import safire.utils
 
 
@@ -64,7 +63,7 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                  patience=5000, patience_increase=100,
                  improvement_threshold=0.995, validation_frequency=None,
                  track_weights=False, track_weights_change=False,
-                 monitoring=True, shuffle_batches=False,
+                 monitoring=True, shuffle_batches=True,
                  plot_transformation=False, plot_weights=False,
                  plot_every=10, plot_on_init=False):
         """Initialize the learner.
@@ -228,7 +227,6 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
         if not self.validation_frequency:
             self.validation_frequency = min(n_train_batches, self.patience / 2)
 
-
         best_params = None
         best_validation_loss = numpy.inf
         best_test_loss = numpy.inf
@@ -272,6 +270,7 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
         # Run training, use validation
         while not done_looping and epoch < max_epoch:
 
+            # Randomize batch order
             batch_ordering = range(n_train_batches)
             if self.shuffle_batches:
                 random.shuffle(batch_ordering)

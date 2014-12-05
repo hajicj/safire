@@ -27,8 +27,7 @@ class TestVTextCorpus(unittest.TestCase):
 
         cls.vtlist_file = os.path.join(cls.data_root, 'test-data.vtlist')
         with open(cls.vtlist_file) as vtlist_handle:
-            cls.vtlist = [ os.path.join('test-data', line.strip())
-                           for line in open(cls.vtlist_file)]
+            cls.vtlist = [ line.strip() for line in open(cls.vtlist_file)]
 
         cls.token_filter = PositionalTagTokenFilter(['N', 'A', 'D', 'V'], 0)
 
@@ -50,7 +49,7 @@ class TestVTextCorpus(unittest.TestCase):
 
     def test_parse_sentences(self):
 
-        with gzip.open(self.vtlist[0]) as document_handle:
+        with gzip.open(os.path.join(self.data_root, self.vtlist[0])) as document_handle:
 
             sentences = self.corpus.parse_sentences(document_handle)
             self.assertEqual(25, len(sentences))
@@ -58,7 +57,7 @@ class TestVTextCorpus(unittest.TestCase):
 
         # Testing with filtering. Specific numbers according to
         # test-data/text/idn-00000.vt.txt.gz
-        with gzip.open(self.vtlist[0]) as document_handle:
+        with gzip.open(os.path.join(self.data_root, self.vtlist[0])) as document_handle:
 
             f_sentences = self.filtered_corpus.parse_sentences(document_handle)
 
@@ -116,11 +115,11 @@ class TestVTextCorpus(unittest.TestCase):
                                    pfilter=0.3,
                                    pfilter_full_freqs=True)
 
-        with gzip.open(self.vtlist[0]) as document_handle:
+        with gzip.open(os.path.join(self.data_root, self.vtlist[0])) as document_handle:
             tdoc, tsentences = tfidf_corpus.parse_document_and_sentences(
                 document_handle)
             tbow = tfidf_corpus.doc2bow(tdoc)
-        with gzip.open(self.vtlist[0]) as document_handle:
+        with gzip.open(os.path.join(self.data_root, self.vtlist[0])) as document_handle:
             doc, sentences = self.pfiltered_corpus.parse_document_and_sentences(
                 document_handle)
             bow = self.pfiltered_corpus.doc2bow(doc)
@@ -133,7 +132,7 @@ class TestVTextCorpus(unittest.TestCase):
         dloader.save_text_corpus(tfidf_corpus, tcorp_infix)
 
         loaded_tcorp = dloader.load_text_corpus(tcorp_infix)
-        with gzip.open(self.vtlist[0]) as document_handle:
+        with gzip.open(os.path.join(self.data_root, self.vtlist[0])) as document_handle:
             doc, sentences = loaded_tcorp.parse_document_and_sentences(
                 document_handle)
             ltbow = loaded_tcorp.doc2bow(doc)
@@ -149,7 +148,7 @@ class TestVTextCorpus(unittest.TestCase):
         self.corpus.dry_run()
 
         try:
-            with gzip.open(self.vtlist[0]) as vt_handle:
+            with gzip.open(os.path.join(self.data_root, self.vtlist[0])) as vt_handle:
 
                 output = self.corpus[vt_handle]
 

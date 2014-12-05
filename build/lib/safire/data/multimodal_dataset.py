@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import operator
 import logging
 from gensim.corpora import MmCorpus
 import numpy
-
+import operator
+import os
+import sys
 import theano
 
 from gensim import matutils
@@ -214,6 +215,9 @@ class MultimodalDataset(SupervisedDataset):
                         # simply doesn't throw away anything.
                         # Cache keys are tuples (b_index, b_size).
         self.cache_size = 0
+        self.cache_max_nbytes = 5000000000 # Maximum cache size - 5 * 10^9 B,
+                                           # should be set better according to
+                                           # some sys.max_mem_param or whatever.
 
 
     def n_train_batches(self, batch_size):
@@ -351,6 +355,20 @@ class MultimodalDataset(SupervisedDataset):
 
         return result
 
+    def _add_to_cache(self, batch_size, lbound, result):
+        """Checks whether the given batch can be added to the cache and if yes,
+        adds it. Cache keys are ``(lbound, batch_size)`` tuples.
+
+        :type result: numpy.ndarray
+        :param result: The batch to cache.
+        """
+        if self.cache_multimodal and not self.cache_full() and not (
+        lbound, batch_size) in self.cache:
+            self.cache_size += result.shape[0] * result.shape[1]
+            logging.debug(
+                'Adding to mm. cache: (%d, %d)' % (lbound, batch_size))
+            self.cache[(lbound, batch_size)] = result
+
     def _build_multimodal_batch(self, lbound, batch_size,
                                 dtype=theano.config.floatX,
                                 text_first=True):
@@ -404,10 +422,7 @@ class MultimodalDataset(SupervisedDataset):
 
         result = result.astype(dtype)
 
-        if self.cache_multimodal and not self.cache_full() and not (lbound, batch_size) in self.cache:
-            self.cache_size += result.shape[0] * result.shape[1]
-            logging.debug('Adding to mm. cache: (%d, %d)' % (lbound, batch_size))
-            self.cache[(lbound, batch_size)] = result
+        self._add_to_cache(batch_size, lbound, result)
 
         return result
 
@@ -593,7 +608,10 @@ class MultimodalDataset(SupervisedDataset):
         return sorted_text2im
 
     def cache_full(self):
-        return False # Currently assumes that everything fits into the cache.
+        if len(self.cache) > self.cache_max_nbytes:
+            return True
+        else:
+            return False # Max cache size: self.cache_max_nbytes bytes
 
     def __len__(self):
         return len(self._text2im_list)

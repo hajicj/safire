@@ -15,12 +15,14 @@ from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.sharded_dataset import ShardedDataset
 from safire.data.sharded_multimodal_dataset import \
     UnsupervisedShardedVTextCorpusDataset
+from safire.data.word2vec_transformer import Word2VecTransformer
 
 import safire.utils
 from safire.data.vtextcorpus import VTextCorpus
 from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.data.frequency_based_transform import FrequencyBasedTransformer
+from safire.utils.transcorp import bottom_corpus, get_id2word_obj
 from safire.utils.transformers import GlobalUnitScalingTransform, \
     LeCunnVarianceScalingTransform, GeneralFunctionTransform, \
     NormalizationTransform, CappedNormalizationTransform
@@ -133,6 +135,10 @@ def build_argument_parser():
     parser.add_argument('--filter_capital', action='store_true',
                         help='If set, will filter out all words starting with '
                              'capital letters.')
+    parser.add_argument('--word2vec', action='store',
+                        help='If set, will apply word2vec embeddings from the'
+                             ' given file. (Path given relative to current'
+                             ' directory.)')
 
     parser.add_argument('--no_shdat', action='store_true',
                         help='If set, will NOT automatically create the '
@@ -345,15 +351,25 @@ def main(args):
         corpus_to_serialize = tanh_transform[corpus_to_serialize]
 
     if args.capped_normalize is not None:
-            logging.info('Normalizing each data point to max. value %f' % args.capped_normalize)
-            cnorm_transform = CappedNormalizationTransform(corpus_to_serialize,
-                                                          args.capped_normalize)
-            corpus_to_serialize = cnorm_transform[corpus_to_serialize]
+        logging.info('Normalizing each data point to max. value %f' % args.capped_normalize)
+        cnorm_transform = CappedNormalizationTransform(corpus_to_serialize,
+                                                        args.capped_normalize)
+        corpus_to_serialize = cnorm_transform[corpus_to_serialize]
 
     if args.normalize is not None:
-            logging.info('Normalizing each data point to %f' % args.normalize)
-            norm_transform = NormalizationTransform(args.normalize)
-            corpus_to_serialize = norm_transform[corpus_to_serialize]
+        logging.info('Normalizing each data point to %f' % args.normalize)
+        norm_transform = NormalizationTransform(args.normalize)
+        corpus_to_serialize = norm_transform[corpus_to_serialize]
+
+    if args.word2vec is not None:
+        logging.info('Applying word2vec transformation with embeddings '
+                     '%s' % args.word2vec)
+        w2v_dictionary = get_id2word_obj(corpus_to_serialize)
+        # Extracting dictionary from FrequencyBasedTransform supported
+        # through utils.transcorp.KeymapDict
+        word2vec = Word2VecTransformer(args.word2vec,
+                                       w2v_dictionary)
+        corpus_to_serialize = word2vec[corpus_to_serialize]
 
     logging.info('Serializing...')
     cnames = loader.layout.required_text_corpus_names(args.label)

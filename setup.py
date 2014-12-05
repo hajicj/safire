@@ -37,6 +37,7 @@ PACKAGES = ['test',
             'safire.learning',
             'safire.learning.models',
             'safire.learning.learners',
+            'safire.learning.updaters',
             'safire.learning.interfaces']
 
 PACKAGE_DATA = { 'test' : walk_tail_dir('test/test-data') }

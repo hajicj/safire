@@ -22,11 +22,10 @@ from safire.data.loaders import MultimodalShardedDatasetLoader, ModelLoader, \
 from safire.learning.interfaces import SafireTransformer
 from safire.learning.learners import BaseSGDLearner
 import safire.learning.models as models
+from safire.learning.models import check_model_dataset_compatibility
 from safire.utils import ReLU, cappedReLU, build_cappedReLU, abstanh
 
 print theano.config.compute_test_value
-
-from train_multimodal_model import check_model_dataset_compatibility
 
 __author__ = 'Jan Hajic jr.'
 
@@ -134,10 +133,6 @@ def _build_argument_parser():
     parser.add_argument('--CD_use_sample', action='store_true',
                         help='Use the sample as the negative gradient particle,'
                              'not the mean.')
-    parser.add_argument('--L1_norm', type=float, default=None,
-                        help='Weight of L1-regularization.')
-    parser.add_argument('--L2_norm', type=float, default=None,
-                        help='Weight of L2-regularization.')
     parser.add_argument('--prefer_extremes', type=float,
                         help='Adds an extremes-preference cost: negative log'
                              'of 2 * distance from 0.5 (so that this cost is 0'
@@ -150,6 +145,10 @@ def _build_argument_parser():
     parser.add_argument('--bias_decay', type=float, default=0.0,
                         help='A decay coefficient for bias parameters only '
                              '(weights stay untouched).')
+    parser.add_argument('--L1_norm', type=float, default=None,
+                        help='Weight of L1-regularization.')
+    parser.add_argument('--L2_norm', type=float, default=None,
+                        help='Weight of L2-regularization.')
 
     parser.add_argument('--feature_centering', action='store_true',
                         help='If set, will initialize a centering parameter'
@@ -219,12 +218,14 @@ def _build_argument_parser():
 
 def main(args):
 
+    # Initializing loaders
     logging.info('Initializing loaders with root %s, name %s' % (
         args.root, args.name))
 
     mdloader = MultimodalShardedDatasetLoader(args.root, args.name)
     mloader = ModelLoader(args.root, args.name)
 
+    # Loading datasets
     if args.img_label and args.text_label:
         raise ValueError('Can only specify one of text and image label.')
     if not args.img_label and not args.text_label:
@@ -240,6 +241,7 @@ def main(args):
     logging.info('Setting up %s handle with output dimension %d' % (args.model,
                                                                     args.n_out))
 
+    # Loading model class
     try:
         model_class = getattr(models, args.model)
     except AttributeError:
@@ -247,6 +249,7 @@ def main(args):
 
     check_model_dataset_compatibility(dataset, model_class)
 
+    # Setting up model initialization arguments
     activation = init_activation(args.activation)
     if not args.backward_activation:
         args.backward_activation = args.activation
@@ -275,6 +278,7 @@ def main(args):
         model_init_args['L2_norm'] = args.L2_norm
         model_init_args['noisy_input'] = args.noisy_input
 
+    # Set up model
     model_handle = model_class.setup(dataset, n_out=args.n_out,
                                      **model_init_args)
 
@@ -314,9 +318,12 @@ def main(args):
 
     logging.info('Setting up and training transformer...')
 
+    # Training starts here.
     transformer = SafireTransformer(model_handle, dataset, learner,
                                     attempt_resume=args.resume,
                                     profile_training=args.profile_training)
+
+    # Training is done at this point.
 
     if args.no_save:
         args.no_corpus_transform = True

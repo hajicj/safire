@@ -78,11 +78,14 @@ class ShardedMultimodalDataset(MultimodalDataset):
 
         self.shared = shared
 
-        self.cache = {} # Caches some requested batches. Assumes the dataset
-                        # will be iterated over, so when the cache is full,
-                        # simply doesn't throw away anything.
-                        # Cache keys are tuples (b_index, b_size).
-        self.cache_size = 0
+        # self.cache = {} # Caches some requested batches. Assumes the dataset
+        #                 # will be iterated over, so when the cache is full,
+        #                 # simply doesn't throw away anything.
+        #                 # Cache keys are tuples (b_index, b_size).
+        # self.cache_size = 0
+        # self.cache_max_nbytes = 5000000000 # Maximum cache size - 5 * 10^9 B,
+        #                                    # should be set better according to
+        #                                    # some sys.max_mem_param or whatever.
 
 class UnsupervisedShardedCorpusDataset(UnsupervisedCorpusDataset):
     """A version of UnsupervisedCorpusDataset built around a ShardedDataset
@@ -184,8 +187,8 @@ class UnsupervisedShardedVTextCorpusDataset(UnsupervisedShardedCorpusDataset):
             logging.debug('Setting text dataset dimension to %d' % dim)
 
         super(UnsupervisedShardedVTextCorpusDataset, self).__init__(output_prefix,
-                                                                    dim, test_p, devel_p, serializer, mm_corpus_filename, shardsize,
-                                                                    overwrite)
+                dim, test_p, devel_p, serializer, mm_corpus_filename, shardsize,
+                overwrite)
 
 
 class UnsupervisedShardedImagenetCorpusDataset(UnsupervisedShardedCorpusDataset):

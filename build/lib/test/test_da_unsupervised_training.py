@@ -24,7 +24,7 @@ class TestUnsupervisedTraining(unittest.TestCase):
         cls.data_root = os.path.join(cls.testdir, 'test-data')
         cls.loader = MultimodalShardedDatasetLoader(cls.data_root, 'test-data')
 
-        dataset = cls.loader.load_img('.sc4.0')
+        dataset = cls.loader.load_img()
 
         # Let's compress the dataset to 10 dimensions, for testing speed.
         # (Testing will take long anyway, due to compilation.)
@@ -50,7 +50,7 @@ class TestUnsupervisedTraining(unittest.TestCase):
         param_before = self.model_handle.model_instance.W.get_value()[0,0]
         print "Weight [0,0] before training: %f" % param_before
 
-        dataset = self.loader.load_img('.sc4.0')
+        dataset = self.loader.load_img()
         best_validation_loss = self.learner.run(self.model_handle, dataset)
         print  'Best validation loss: %f' % best_validation_loss
 

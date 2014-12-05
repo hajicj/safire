@@ -1,8 +1,6 @@
-# !/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 #
-
 import codecs
 import time
 import logging
@@ -18,7 +16,6 @@ import itertools
 from gensim.models import TfidfModel
 
 import filters.positional_filters as pfilters
-import safire.utils
 
 logger = logging.getLogger(__name__)
 

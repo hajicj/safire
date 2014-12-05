@@ -9,6 +9,7 @@ from gensim.models import TfidfModel
 from safire.data import FrequencyBasedTransformer, VTextCorpus
 from safire.data.dataset import Dataset
 from safire.data.imagenetcorpus import ImagenetCorpus
+from safire.data.word2vec_transformer import Word2VecTransformer
 
 __author__ = "Jan Hajic jr."
 
@@ -25,16 +26,33 @@ def id2word(corpus, wid):
     if isinstance(corpus, TransformedCorpus):
         if isinstance(corpus.obj, FrequencyBasedTransformer):
             orig_wid = corpus.obj.transformed2orig[wid]
-            #print 'Running id2word through FrequencyBasedTransformer: from %d to %d' % (wid, orig_wid)
+            logging.debug('Running id2word through FrequencyBasedTransformer: from %d to %d' % (wid, orig_wid))
             return unicode(id2word(corpus.corpus, orig_wid))
         else:
             #print 'Running id2word through TransformedCorpus: staying at %d' % wid
             return unicode(id2word(corpus.corpus, wid))
     elif hasattr(corpus, 'dictionary'):
-        #print 'Found corpus with dictionary, wid: %d' % wid
+        logging.debug('Found corpus with dictionary, wid: %d' % wid)
         return unicode(corpus.dictionary[wid])
     else:
         raise ValueError('Cannot backtrack through corpus type %s' % str(type(corpus)))
+
+
+def get_id2word_obj(corpus):
+    """Retrieves the valid id2word object that can handle ``__getitem__``
+    requests on word IDs to return the words themselves."""
+    if isinstance(corpus, VTextCorpus):
+        return corpus.dictionary
+    elif isinstance(corpus, TransformedCorpus):
+        if isinstance(corpus.obj, FrequencyBasedTransformer):
+            return KeymapDict(get_id2word_obj(corpus.corpus),
+                              corpus.obj.transformed2orig)
+        elif isinstance(corpus.obj, Word2VecTransformer):
+            return corpus.obj.id2word
+        else:
+            return get_id2word_obj(corpus.corpus)
+
+    raise NotImplementedError()
 
 
 def bottom_corpus(corpus):
@@ -56,6 +74,12 @@ def dimension(corpus):
         return len(current_corpus.dictionary)
     if isinstance(current_corpus, ImagenetCorpus):
         return current_corpus.dim
+
+    # This is the "magic". There's no unified mechanism for providing output
+    # corpus dimension in gensim, so we have to deal with it case-by-case.
+    # Stuff that is in safire usually has an 'n_out' attribute (or, in other
+    # words: whenever something in safire has the 'n_out' attribute, it means
+    # the output dimension).
     if isinstance(current_corpus, TransformedCorpus):
         if isinstance(current_corpus.obj, FrequencyBasedTransformer):
             return current_corpus.obj.k - current_corpus.obj.discard_top
@@ -94,6 +118,7 @@ def get_transformers(corpus):
     tr.reverse()
     return tr
 
+
 def reset_vtcorp_input(corpus, filename, input_root=None, lock=True,
                        inplace=True):
     """Resets the inputs for the VTextCorpus at the bottom of the
@@ -106,3 +131,13 @@ def reset_vtcorp_input(corpus, filename, input_root=None, lock=True,
     if not isinstance(vtcorp, VTextCorpus):
         raise ValueError('Bottom corpus %s instead of VTextCorpus.' % type(vtcorp))
     vtcorp.reset_input(filename, input_root=input_root, lock=lock)
+
+
+class KeymapDict(object):
+    """Implements a dict wrapped in a key mapping."""
+    def __init__(self, dict, keymap):
+        self.dict = dict
+        self.keymap = keymap
+
+    def __getitem__(self, item):
+        return self.dict[self.keymap[item]]

@@ -3,17 +3,18 @@
 #
 # Logistic regression using Theano
 #
-from copy import deepcopy
 
 import numpy
 import theano
 import theano.tensor as TT
-import safire
 
+import safire
 from safire.utils import check_kwargs
 from safire.learning.models.base_model import BaseModel
 from safire.learning.interfaces.model_handle import ModelHandle
 from safire.learning.interfaces.pretraining_model_handle import PretrainingModelHandle
+from safire.learning.updaters import StandardSGDUpdater
+
 
 # TODO: Rewrite setup() as instance method??? Is it even possible?
 #       Why: so that a learner will only get a model instance, not
@@ -31,6 +32,7 @@ from safire.learning.interfaces.pretraining_model_handle import PretrainingModel
 #         ...which presupposes that there is Model.setup_train(), setup_test(),
 #            setup_devel() which can be called separately with only the given
 #            data.
+
 
 class BaseUnsupervisedModel(BaseModel):
 
@@ -402,7 +404,7 @@ class BaseUnsupervisedModel(BaseModel):
 
         # Just nudging it a little...
         #updater = safire.learning.learners.ResilientBackpropUpdater(model.params)
-        updater = safire.learning.learners.updaters.StandardSGDUpdater(learning_rate)
+        updater = StandardSGDUpdater(learning_rate)
 
         updates = model._training_updates(updater=updater,
                                           cost=bound_cost)
