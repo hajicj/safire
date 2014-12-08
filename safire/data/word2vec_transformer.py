@@ -5,6 +5,7 @@ import codecs
 import logging
 import itertools
 import numpy
+import re
 import sys
 import time
 
@@ -17,6 +18,9 @@ from gensim.interfaces import TransformationABC, TransformedCorpus
 from safire.utils import total_size
 
 __author__ = "Jan Hajic jr."
+
+#: Used in stripping lemmatization artifacts from queries.
+deUFALize_regex = re.compile('\-[0-9]+$')
 
 
 class Word2VecTransformer(TransformationABC):
@@ -73,9 +77,10 @@ class Word2VecTransformer(TransformationABC):
         if isinstance(embeddings, str):
             with codecs.open(embeddings, 'r', 'utf-8') as embeddings_handle:
                 self.embeddings, self.n_out = self.parse_embeddings(
-                    embeddings_handle)
+                    embeddings_handle, lowercase=lowercase)
         elif isinstance(embeddings, file):
-            self.embeddings, self.n_out = self.parse_embeddings(embeddings)
+            self.embeddings, self.n_out = self.parse_embeddings(
+                embeddings, lowercase=lowercase)
         else:
             raise TypeError('Invalid embeddings type: %s' % type(embeddings))
 
@@ -89,6 +94,7 @@ class Word2VecTransformer(TransformationABC):
 
         self.lowercase = lowercase
         self.dense = dense
+        self.deUFALize = deUFALize
 
         self.oov = 0.0
         self.total_processed = 0.0
@@ -96,6 +102,7 @@ class Word2VecTransformer(TransformationABC):
         self.log_oov_at = 1000  # Each log_oov_at calls to getitem, the OOV
                                 # statistics are logged using logging.info()
         self.oov_collector = set()
+        self.emptydocs = 0 # How many documents had no hit whatsoever
 
     def __getitem__(self, bow):
         """Transforms a given item from a list of words to an embedding vector.
@@ -121,18 +128,24 @@ class Word2VecTransformer(TransformationABC):
 
         embeddings = numpy.zeros((len(bow), self.n_out))
         for i, item in enumerate(bow):
+            has_hit = False
             wid = item[0]
             word = self.id2word[wid]
             if self.lowercase:
                 word = unicode(word).lower()
+            if self.deUFALize:
+                word = Word2VecTransformer.deUFALize(word)
             try:
                 embedding = self.embeddings[word]
                 #logging.info('Embedding: %s with shape %s' % (
                 #    type(embedding), str(embedding.shape)))
                 embeddings[i, :] = embedding
+                has_hit = True
             except KeyError:
                 self.oov += 1.0
                 self.oov_collector.add((wid, word))
+            if not has_hit:
+                self.emptydocs += 1
 
         self.total_processed += len(bow)
         self.oov_rate = self.oov / self.total_processed
@@ -171,17 +184,18 @@ class Word2VecTransformer(TransformationABC):
         """Reports the OOV rate using the INFO logging level.
         """
         logging.info("Word2Vec OOV report: "
-                     "total %f, oov %f, rate %f, unique %f" % (
-            self.total_processed, self.oov, self.oov_rate,
-            len(self.oov_collector)))
+                     "total %d, oov %d, rate %f, unique %d, empty %d" % (
+            int(self.total_processed), int(self.oov), self.oov_rate,
+            len(self.oov_collector), int(self.emptydocs)))
 
     def report_oov(self):
         """Generates a report of queries that were in the id2word mapping but
         without an embedding."""
         oov_report = '\n'.join(["%d : %s" % (wid, word)
                                 for (wid, word) in self.oov_collector])
-        oov_report_header = '\nOOV report for word2vec'
-        return oov_report
+        oov_report_header = '\nOOV report for word2vec\n' \
+                              '=======================\n'
+        return oov_report_header + oov_report
 
     def __len__(self):
         """The length of the word2vec object is the vocabulary size."""
@@ -189,7 +203,7 @@ class Word2VecTransformer(TransformationABC):
 
     @staticmethod
     #@profile
-    def parse_embeddings(input_handle):
+    def parse_embeddings(input_handle, lowercase=False):
         """Builds the embeddings data structure.
 
         :param input_handle: The handle from which to read the dict.
@@ -199,6 +213,8 @@ class Word2VecTransformer(TransformationABC):
 
             Additionally, the first line of the file contains two fields:
             the size of the vocabulary and the dimension of the embedding.
+
+        :param lowercase: If set, will lowercase all keys.
 
         :rtype: dict(str => list(int)), int
         :returns: The embeddings dict and the embedding dimension.
@@ -211,6 +227,8 @@ class Word2VecTransformer(TransformationABC):
         for line in input_handle:
             fields = line.strip().split()
             word = fields[0]
+            if lowercase:
+                word = word.lower()
             embedding = numpy.array(list(itertools.imap(float, fields[1:])))
             # itertools.imap is about 2x faster than list comprehension here
 
@@ -234,3 +252,15 @@ class Word2VecTransformer(TransformationABC):
 
         return e_dict, n_out
 
+
+    @staticmethod
+    def deUFALize(word):
+        """Removes lemmatization artifacts of Morphodita: numbers after
+        dash (and the dash).
+
+        :param word: The word to de-UFALize.
+
+        :return: The raw lemma.
+        """
+        output = deUFALize_regex.sub('', word)
+        return output

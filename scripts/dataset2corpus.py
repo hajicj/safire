@@ -408,8 +408,8 @@ def main(args):
         # HACK: logging word2vec OOV
         if args.word2vec:
             # Report out-of-vocabulary statistics
-            oov_report = word2vec.report_oov()
-            logging.info('OOV report:\n%s' % oov_report)
+            #oov_report = word2vec.report_oov()
+            #logging.info(u'OOV report:\n%s' % oov_report)
             word2vec.log_oov()
 
     # We are saving the VTextCorpus rather than the transformed corpus,
