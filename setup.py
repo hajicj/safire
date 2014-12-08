@@ -45,6 +45,7 @@ PACKAGE_DATA = { 'test' : walk_tail_dir('test/test-data') }
 SCRIPTS = ['scripts/annotation_stats.py',
            'scripts/dataset2corpus.py',
            'scripts/dataset_stats.py',
+           'scripts/clean.py',
            'scripts/evaluate.py',
            'scripts/filter_by_t2i.py',
            'scripts/generate_annotation_items.py',

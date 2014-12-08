@@ -3,12 +3,18 @@ This module contains classes that ...
 """
 import codecs
 import logging
+import itertools
 import numpy
+import sys
 import time
+
+from memory_profiler import profile
 
 import gensim
 from gensim.corpora import TextCorpus
 from gensim.interfaces import TransformationABC, TransformedCorpus
+
+from safire.utils import total_size
 
 __author__ = "Jan Hajic jr."
 
@@ -37,7 +43,8 @@ class Word2VecTransformer(TransformationABC):
     dictionary is supplied.
     """
 
-    def __init__(self, embeddings, id2word):
+    def __init__(self, embeddings, id2word, lowercase=False, dense=False,
+                 deUFALize=True):
         """Initializes the embeddings.
 
         :param embeddings: A filename or a handle to a word vector file that
@@ -53,13 +60,24 @@ class Word2VecTransformer(TransformationABC):
             corpus to be processable by the :meth:`utils.transcorp.id2word`
             method. All that is required is that it has a ``__getitem__``
             method.
+
+        :param lowercase: If this flag is set, will lowercase ``id2word``
+            values that are used as search keys for the embeddings. This is
+            basically a standardization step.
+
+        :param dense: If this flag is set, will output dense vectors
+            instead of gensim-style sparse vectors.
+
+        :param deUFALize: If this flag is set, will assume that
         """
         if isinstance(embeddings, str):
             with codecs.open(embeddings, 'r', 'utf-8') as embeddings_handle:
                 self.embeddings, self.n_out = self.parse_embeddings(
                     embeddings_handle)
-        else:
+        elif isinstance(embeddings, file):
             self.embeddings, self.n_out = self.parse_embeddings(embeddings)
+        else:
+            raise TypeError('Invalid embeddings type: %s' % type(embeddings))
 
         self.size = len(self.embeddings)
 
@@ -67,10 +85,19 @@ class Word2VecTransformer(TransformationABC):
             raise TypeError('Supplied id2word mapping does NOT implement'
                             ' a __getitem__ method (type: %s).' % type(id2word))
 
-        self.id2word = id2word  # TODO: add processing such as lowercasing
-        self._id2word_fn = self.id2word.__getitem__
+        self.id2word = id2word
 
-    def __getitem__(self, bow, dense=False):
+        self.lowercase = lowercase
+        self.dense = dense
+
+        self.oov = 0.0
+        self.total_processed = 0.0
+        self.oov_rate = 0.0
+        self.log_oov_at = 1000  # Each log_oov_at calls to getitem, the OOV
+                                # statistics are logged using logging.info()
+        self.oov_collector = set()
+
+    def __getitem__(self, bow):
         """Transforms a given item from a list of words to an embedding vector.
 
         The vector is obtained using a max operation on each dimension of the
@@ -82,9 +109,6 @@ class Word2VecTransformer(TransformationABC):
         :param bow: A sparse document vector (gensim-style) or a corpus. If
             a corpus is supplied, will return a :class:`TransformedCorpus`.
 
-        :param dense: If set, will return a dense embedding instead of
-            sparsifying it.
-
         :return: The document embedding or a transformed corpus that will
             output the document embeddings. Note that the returned vector
             is sparse, but can be set to dense using the ``dense`` parameter.
@@ -93,22 +117,33 @@ class Word2VecTransformer(TransformationABC):
         """
         iscorp, corp = gensim.utils.is_corpus(bow)
         if iscorp is True:
-            return self._apply(bow, dense=dense)
+            return self._apply(bow)
 
         embeddings = numpy.zeros((len(bow), self.n_out))
         for i, item in enumerate(bow):
             wid = item[0]
             word = self.id2word[wid]
+            if self.lowercase:
+                word = unicode(word).lower()
             try:
                 embedding = self.embeddings[word]
-                embeddings[i] = embedding
+                #logging.info('Embedding: %s with shape %s' % (
+                #    type(embedding), str(embedding.shape)))
+                embeddings[i, :] = embedding
             except KeyError:
-                pass
+                self.oov += 1.0
+                self.oov_collector.add((wid, word))
+
+        self.total_processed += len(bow)
+        self.oov_rate = self.oov / self.total_processed
+
+        if self.total_processed % self.log_oov_at == 0:
+            self.log_oov()
 
         # Combining the embeddings. (Could be a method.)
         maxout_embeddings = numpy.max(embeddings, axis=0)
 
-        if dense:
+        if self.dense:
             return maxout_embeddings
 
         sparse_embeddings = gensim.matutils.dense2vec(maxout_embeddings)
@@ -132,8 +167,28 @@ class Word2VecTransformer(TransformationABC):
         transformed_corpus = TransformedCorpus(self, corpus, chunksize)
         return transformed_corpus
 
+    def log_oov(self):
+        """Reports the OOV rate using the INFO logging level.
+        """
+        logging.info("Word2Vec OOV report: "
+                     "total %f, oov %f, rate %f, unique %f" % (
+            self.total_processed, self.oov, self.oov_rate,
+            len(self.oov_collector)))
+
+    def report_oov(self):
+        """Generates a report of queries that were in the id2word mapping but
+        without an embedding."""
+        oov_report = '\n'.join(["%d : %s" % (wid, word)
+                                for (wid, word) in self.oov_collector])
+        oov_report_header = '\nOOV report for word2vec'
+        return oov_report
+
+    def __len__(self):
+        """The length of the word2vec object is the vocabulary size."""
+        return len(self.id2word)
 
     @staticmethod
+    #@profile
     def parse_embeddings(input_handle):
         """Builds the embeddings data structure.
 
@@ -149,14 +204,15 @@ class Word2VecTransformer(TransformationABC):
         :returns: The embeddings dict and the embedding dimension.
         """
         header = next(input_handle)
-        dict_size, n_out = map(int, header.strip().split())
+        dict_size, n_out = itertools.imap(int, header.strip().split())
 
         e_dict = {}
         start_time = time.clock()
         for line in input_handle:
             fields = line.strip().split()
             word = fields[0]
-            embedding = fields[1:]
+            embedding = numpy.array(list(itertools.imap(float, fields[1:])))
+            # itertools.imap is about 2x faster than list comprehension here
 
             e_dict[word] = embedding
 

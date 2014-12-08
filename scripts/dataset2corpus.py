@@ -62,7 +62,8 @@ def build_argument_parser():
     parser.add_argument('-n', '--name', help='The dataset name passed to the'+
                         ' Loader. Has to correspond to the *.vtlist file name.')
 
-    parser.add_argument('-s', '--sentences', action='store_true', help='Consider ' +
+    parser.add_argument('-s', '--sentences', action='store_true',
+                        help='Consider' +
                          'each sentence of a vtext file as a separate ' +
                          'document (default behavior is document per file)')
     parser.add_argument('-i', '--input_label', action='store', default=None,
@@ -371,6 +372,7 @@ def main(args):
                                        w2v_dictionary)
         corpus_to_serialize = word2vec[corpus_to_serialize]
 
+
     logging.info('Serializing...')
     cnames = loader.layout.required_text_corpus_names(args.label)
 
@@ -402,6 +404,13 @@ def main(args):
         print profiler_results.getvalue()
     else:
         serializer.serialize(data_name, corpus_to_serialize)
+
+        # HACK: logging word2vec OOV
+        if args.word2vec:
+            # Report out-of-vocabulary statistics
+            oov_report = word2vec.report_oov()
+            logging.info('OOV report:\n%s' % oov_report)
+            word2vec.log_oov()
 
     # We are saving the VTextCorpus rather than the transformed corpus,
     # in order to be able to load it.

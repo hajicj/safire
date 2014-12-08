@@ -7,10 +7,20 @@ image from a set of samples or weights.
 """
 import cProfile
 import copy
+import logging
 import StringIO
 import pdb
 import pstats
 import random
+
+from sys import getsizeof, stderr
+from itertools import chain
+from collections import deque
+try:
+    from reprlib import repr
+except ImportError:
+    pass
+
 
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
@@ -26,6 +36,7 @@ import theano
 import theano.ifelse
 
 import math
+
 
 def check_kwargs(kwargs, names):
     """Checks that all \'names\' are in the \'dictionary\'.
@@ -232,6 +243,10 @@ def isqrt(n):
     return iroot, is_equal
 
 
+##############################################################################
+
+# Profiling
+
 def profile_run(function, *args, **kwargs):
     """Profile an arbitrary function. Returns the results as a StringIO stream
     object."""
@@ -243,10 +258,53 @@ def profile_run(function, *args, **kwargs):
     pr.disable()
     s = StringIO.StringIO()
     sortby = 'tottime'
-    ps = pstats.Stats(pr, stream = s).sort_stats(sortby)
+    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
     ps.print_stats(.33)
 
     return s, retval
+
+
+def total_size(o, handlers={}):
+    """Returns the approximate memory footprint an object and all of its
+    contents.
+
+    Automatically finds the contents of the following builtin containers and
+    their subclasses:  tuple, list, deque, dict, set and frozenset.
+    To search other containers, add handlers to iterate over their contents:
+
+        handlers = {SomeContainerClass: iter,
+                    OtherContainerClass: OtherContainerClass.get_elements}
+
+    """
+    dict_handler = lambda d: chain.from_iterable(d.items())
+    all_handlers = {tuple: iter,
+                    list: iter,
+                    deque: iter,
+                    dict: dict_handler,
+                    set: iter,
+                    frozenset: iter,
+                   }
+    all_handlers.update(handlers)  # user handlers take precedence
+    seen = set()                   # track which object id's have already
+                                   #  been seen
+    default_size = getsizeof(0)    # estimate sizeof object without __sizeof__
+
+    def sizeof(o):
+        if id(o) in seen:       # do not double count the same object
+            return 0
+        seen.add(id(o))
+        s = getsizeof(o, default_size)
+
+        #logging.debug('%s : %s : %s' % (s, type(o), repr(o)))
+
+        for typ, handler in all_handlers.items():
+            if isinstance(o, typ):
+                s += sum(map(sizeof, handler(o)))
+                break
+        return s
+
+    return sizeof(o)
+
 
 ##############################################################################
 

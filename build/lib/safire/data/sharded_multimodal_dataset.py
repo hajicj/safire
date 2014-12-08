@@ -85,7 +85,9 @@ class ShardedMultimodalDataset(MultimodalDataset):
         self.cache_size = 0
         self.cache_max_nbytes = 5000000000 # Maximum cache size - 5 * 10^9 B,
                                            # should be set better according to
-                                           # some sys.max_mem_param or whatever.
+                                           # some sys.max_mem_param or
+                                           # whatever.
+
 
 class UnsupervisedShardedCorpusDataset(UnsupervisedCorpusDataset):
     """A version of UnsupervisedCorpusDataset built around a ShardedDataset

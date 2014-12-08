@@ -63,6 +63,7 @@ safire/utils/matutils.py
 safire/utils/transcorp.py
 safire/utils/transformers.py
 scripts/annotation_stats.py
+scripts/clean.py
 scripts/dataset2corpus.py
 scripts/dataset_stats.py
 scripts/evaluate.py

@@ -14,6 +14,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
+
 class DataDirLayout(object):
     """A static class that holds constants that define the layout of a
     multimodal dataset root dir. (Layouts are used by Loaders to discover data
@@ -125,6 +126,7 @@ class DataDirLayout(object):
 
         self.img_dir = 'img'
         self.text_dir = 'text'
+
         self.corpus_dir = 'corpora'
         self.dataset_dir = 'datasets'
         self.model_dir = 'models'
