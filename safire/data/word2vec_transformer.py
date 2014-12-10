@@ -2,6 +2,7 @@
 This module contains classes that ...
 """
 import codecs
+import cPickle
 import logging
 import itertools
 import numpy
@@ -47,15 +48,14 @@ class Word2VecTransformer(TransformationABC):
     dictionary is supplied.
     """
 
-    def __init__(self, embeddings, id2word, lowercase=False, dense=False,
-                 deUFALize=True):
+    def __init__(self, embeddings, id2word, op='max', lowercase=False,
+                 dense=False,  deUFALize=True, from_pickle=False):
         """Initializes the embeddings.
 
         :param embeddings: A filename or a handle to a word vector file that
             contains the embeddings. The expected format is one word per line,
             separated by whitespace or tabspace, with the first item being
             the word itself and the other items are the embedding vector.
-
             Additionally, the first line of the file contains two fields:
             the size of the vocabulary and the dimension of the embedding.
 
@@ -65,6 +65,9 @@ class Word2VecTransformer(TransformationABC):
             method. All that is required is that it has a ``__getitem__``
             method.
 
+        :param op: The operation to apply when combining word vectors into
+            a document vector. Accepts ``max``, ``sum``, ``average``.
+
         :param lowercase: If this flag is set, will lowercase ``id2word``
             values that are used as search keys for the embeddings. This is
             basically a standardization step.
@@ -72,9 +75,20 @@ class Word2VecTransformer(TransformationABC):
         :param dense: If this flag is set, will output dense vectors
             instead of gensim-style sparse vectors.
 
+        :param from_pickle: If this flag is set, will consider the
+            ``embeddings`` parameter to point to a pickled embeddings dict
+            instead of a vectors file.
+
         :param deUFALize: If this flag is set, will assume that
         """
-        if isinstance(embeddings, str):
+        if from_pickle:
+            if not isinstance(embeddings, str):
+                raise TypeError('Embeddings requested from pickle, but not '
+                                'supplied as a string.')
+            with open(embeddings) as ehandle:
+                self.embeddings = cPickle.load(ehandle)
+                self.n_out = len(self.embeddings[self.embeddings.keys()[0]])
+        elif isinstance(embeddings, str):
             with codecs.open(embeddings, 'r', 'utf-8') as embeddings_handle:
                 self.embeddings, self.n_out = self.parse_embeddings(
                     embeddings_handle, lowercase=lowercase)
@@ -91,6 +105,7 @@ class Word2VecTransformer(TransformationABC):
                             ' a __getitem__ method (type: %s).' % type(id2word))
 
         self.id2word = id2word
+        self.op = op
 
         self.lowercase = lowercase
         self.dense = dense
@@ -99,10 +114,12 @@ class Word2VecTransformer(TransformationABC):
         self.oov = 0.0
         self.total_processed = 0.0
         self.oov_rate = 0.0
+
+        # DEACTIVATED
         self.log_oov_at = 1000  # Each log_oov_at calls to getitem, the OOV
                                 # statistics are logged using logging.info()
         self.oov_collector = set()
-        self.emptydocs = 0 # How many documents had no hit whatsoever
+        self.emptydocs = 0  # How many documents had no hit whatsoever
 
     def __getitem__(self, bow):
         """Transforms a given item from a list of words to an embedding vector.
@@ -127,8 +144,8 @@ class Word2VecTransformer(TransformationABC):
             return self._apply(bow)
 
         embeddings = numpy.zeros((len(bow), self.n_out))
+        has_hit = False
         for i, item in enumerate(bow):
-            has_hit = False
             wid = item[0]
             word = self.id2word[wid]
             if self.lowercase:
@@ -144,14 +161,14 @@ class Word2VecTransformer(TransformationABC):
             except KeyError:
                 self.oov += 1.0
                 self.oov_collector.add((wid, word))
-            if not has_hit:
-                self.emptydocs += 1
+        if not has_hit:
+            self.emptydocs += 1
 
         self.total_processed += len(bow)
         self.oov_rate = self.oov / self.total_processed
 
-        if self.total_processed % self.log_oov_at == 0:
-            self.log_oov()
+        #if self.total_processed % self.log_oov_at == 0:
+        #    self.log_oov()
 
         # Combining the embeddings. (Could be a method.)
         maxout_embeddings = numpy.max(embeddings, axis=0)
@@ -251,7 +268,6 @@ class Word2VecTransformer(TransformationABC):
                              ' doesn\'t match actual size (%i).' % len(e_dict))
 
         return e_dict, n_out
-
 
     @staticmethod
     def deUFALize(word):

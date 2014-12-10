@@ -3,6 +3,7 @@ import os
 
 ###############################################################################
 
+
 def walk_tail_dir(path):
     """Enumerate all files in the last directory of the path."""
 

@@ -107,6 +107,7 @@ class AlternatingGibbsHandle(ModelHandle):
     def __init__(self):
         pass
 
+
 class BackwardModelHandle(ModelHandle):
     """Performs a backward pass on the model, instead of forward.
     Requires a sampleable model.

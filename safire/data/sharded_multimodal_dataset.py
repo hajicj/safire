@@ -75,7 +75,6 @@ class ShardedMultimodalDataset(MultimodalDataset):
             else:
                 self.text2im_map[t] = [i]
 
-
         self.shared = shared
 
         self.cache = {} # Caches some requested batches. Assumes the dataset
@@ -99,7 +98,6 @@ class UnsupervisedShardedCorpusDataset(UnsupervisedCorpusDataset):
     # _build_batch
     # _load_dataset
     # get_sparse (will need to extra access the corpus/use full2sparse)
-
     def __init__(self, output_prefix, dim, test_p=0.1, devel_p=0.1,
                  serializer=MmCorpus, mm_corpus_filename=None, shardsize=4096,
                  overwrite=False):
@@ -130,7 +128,8 @@ class UnsupervisedShardedCorpusDataset(UnsupervisedCorpusDataset):
         self._test_doc_offset = self.n_docs - int(self.n_docs * self.test_p)
 
         self.devel_p = devel_p
-        self._devel_doc_offset = self._test_doc_offset - int(self.n_docs * self.devel_p)
+        self._devel_doc_offset = self._test_doc_offset - \
+                                 int(self.n_docs * self.devel_p)
 
         # None of the loading B.S. that was in UnsupervisedCorpusDataset.
 
@@ -155,6 +154,12 @@ class UnsupervisedShardedCorpusDataset(UnsupervisedCorpusDataset):
         return self.data
 
     def get_sparse(self, idx):
+        """Returns the sparse representation of a dataset row.
+
+        :param idx: The index of the returned item.
+
+        :return: The gensim-style sparse vector.
+        """
         if self.indexed_corpus is not None:
             return self.indexed_corpus[idx]
         else:

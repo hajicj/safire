@@ -271,13 +271,13 @@ def main(args):
         mm_full_filename = os.path.join(args.root, loader.layout.corpus_dir,
                                         mm_corpus_filename)
 
-        dataset = UnsupervisedShardedVTextCorpusDataset(output_prefix,
-                                            vt_corpus_filename=vt_full_filename,
-                                            mm_corpus_filename=mm_full_filename,
-                                            shardsize=args.shardsize,
-                                            overwrite=args.overwrite_shdat)
-        dataset.data.save() # Save the ShardedDataset, not the wrapper
-
+        dataset = UnsupervisedShardedVTextCorpusDataset(
+            output_prefix,
+            vt_corpus_filename=vt_full_filename,
+            mm_corpus_filename=mm_full_filename,
+            shardsize=args.shardsize,
+            overwrite=args.overwrite_shdat)
+        dataset.data.save()  # Save the ShardedDataset, not the wrapper
 
     if args.input_label is not None:
         logging.info('Loading corpus with label %s' % args.input_label)
@@ -408,8 +408,8 @@ def main(args):
         # HACK: logging word2vec OOV
         if args.word2vec:
             # Report out-of-vocabulary statistics
-            oov_report = word2vec.report_oov()
-            logging.info(u'OOV report:\n%s' % oov_report)
+            #oov_report = word2vec.report_oov()
+            #logging.info(u'OOV report:\n%s' % oov_report)
             word2vec.log_oov()
 
     # We are saving the VTextCorpus rather than the transformed corpus,

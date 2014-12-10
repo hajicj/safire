@@ -16,7 +16,8 @@ from safire.utils import transcorp
 
 class NormalizationTransform(gensim.interfaces.TransformationABC):
     """
-    Given a corpus, will simply normalize all BOW inputs to sum to 1.
+    Given a corpus, will simply normalize all BOW inputs to sum to
+    a normalization constant.
     """
     def __init__(self, C=1.0):
         """Sets the normalization constant."""
@@ -41,6 +42,7 @@ class NormalizationTransform(gensim.interfaces.TransformationABC):
         output = zip(keys, normalized_values)
 
         return output
+
 
 class CappedNormalizationTransform(NormalizationTransform):
     """Given a corpus, normalizes each item to a sum such that the largest
@@ -71,6 +73,7 @@ class CappedNormalizationTransform(NormalizationTransform):
         self.C = min_safe_constant
 
         logging.info('CappedNormalization: C = %.5f' % self.C)
+
 
 class UnitScalingTransform(gensim.interfaces.TransformationABC):
     """Scales the vector so that its maximum element is 1."""
@@ -173,9 +176,6 @@ class GeneralFunctionTransform(gensim.interfaces.TransformationABC):
         return [(i, oK * self._fn(K * x + C) + oC) for i, x in bow]
 
 
-
-
-
 class LeCunnVarianceScalingTransform(gensim.interfaces.TransformationABC):
     """Transforms features so that they all have the same "variance" defined
     by LeCunn, 1998: Efficient BackProp, 4.3, Eq. 13."""
@@ -211,7 +211,8 @@ class LeCunnVarianceScalingTransform(gensim.interfaces.TransformationABC):
                             * numpy.sqrt(self.target_cov)
 
         logging.info('Average covariance: %f' % self.target_cov)
-        logging.info('First few coefficients: %s' % ', '.join(map(str, self.coefficients[:10])))
+        logging.info('First few coefficients: %s' % ', '.join(
+            map(str, self.coefficients[:10])))
 
     def __getitem__(self, bow, chunksize=1000):
 

@@ -691,8 +691,7 @@ class RestrictedBoltzmannMachine(BaseUnsupervisedModel):
              definitely call  _cost_and_updates_computed()")
             
         return self._precomputed_training_updates
-    
-    
+
     def _get_pseudo_likelihood_cost(self, updates):
         """Stochastic approximation to the pseudo-likelihood
         

@@ -26,7 +26,7 @@ class ReplicatedSoftmax(RestrictedBoltzmannMachine):
                  persistent=None, CD_k=1, CD_use_mean=True,
                  sparsity_target=None, output_sparsity_target=None,
                  numpy_rng=numpy.random.RandomState(),
-                 L1_norm=0.0, L2_norm=0.0, bias_decay = 0.0,
+                 L1_norm=0.0, L2_norm=0.0, bias_decay=0.0,
                  entropy_loss=0.0, centering=False, prefer_extremes=False,
                  theano_rng=None):
         """ Initialize the parameters of the Replicated Softmax. This merely
@@ -122,15 +122,18 @@ class ReplicatedSoftmax(RestrictedBoltzmannMachine):
             uses the visible sample. If ``True``, uses the visible mean.
             Default is ``True``.
         """
-        super(ReplicatedSoftmax, self).__init__(inputs, n_in, n_out,
-                 TT.nnet.sigmoid,
-                 TT.nnet.softmax,
-                 W, b, b_hidden, b_visible,
-                 persistent, CD_k, CD_use_mean, sparsity_target,
-                 output_sparsity_target,
-                 numpy_rng, L1_norm, L2_norm, bias_decay,
-                 entropy_loss, centering, prefer_extremes,
-                 theano_rng)
+        super(ReplicatedSoftmax, self).__init__(
+            inputs,
+            n_in,
+            n_out,
+            TT.nnet.sigmoid,
+            TT.nnet.softmax,
+            W, b, b_hidden, b_visible,
+            persistent, CD_k, CD_use_mean, sparsity_target,
+            output_sparsity_target,
+            numpy_rng, L1_norm, L2_norm, bias_decay,
+            entropy_loss, centering, prefer_extremes,
+            theano_rng)
 
         print 'B: ', self.b_hidden.broadcastable
         self.b_hidden_broadcastable = TT.row('b_hidden_broadcastable',
@@ -154,7 +157,7 @@ class ReplicatedSoftmax(RestrictedBoltzmannMachine):
         :rtype: theano.tensor.var.TensorVariable
         :returns: The free energy of the model, given the visible activation.
             Computed as 
-            
+
             .. math::
                :label: free_energy
 
@@ -164,15 +167,13 @@ class ReplicatedSoftmax(RestrictedBoltzmannMachine):
 
         D = TT.sum(visible, axis=1)
         exponent_term = TT.dot(visible, self.W) + TT.outer(D, self.b_hidden)
-                        #TT.outer(D, self.b_hidden)
+                        # TT.outer(D, self.b_hidden)
                         # D is a coefficient, b_hidden should
 
         hidden_term = TT.sum(TT.log(1 + TT.exp(exponent_term)), axis=1)
 
-        # This is the other and more crucial difference between an RBM and a RSM:
-        # multiplying hidden bias by "document length".
-        
-
+        # This is the other and more crucial difference between an RBM and a
+        #  RSM: multiplying hidedn bias by "document length".
         b_visible_term = TT.dot(visible, self.b_visible)
 
         free_energy = - hidden_term - b_visible_term

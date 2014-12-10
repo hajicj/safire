@@ -37,9 +37,7 @@ from safire.learning.updaters import StandardSGDUpdater
 class BaseUnsupervisedModel(BaseModel):
 
     def __init__(self, inputs, n_in, n_out):
-        """ Initialize the parameters of the logistic regression
-
-        A Logistic Regression layer is the end layer in classificatio
+        """Initialize an unsupervised model with no parameters.
 
         :type inputs: theano.tensor.TensorType
         :param inputs: symbolic variable that descripbes the input
@@ -83,7 +81,6 @@ class BaseUnsupervisedModel(BaseModel):
         self.outputs = None # Models have to override outputs!
 
         self.params = []
-
 
     def error(self, X):
         """Returns the proportion of incorrectly classified instances.

@@ -123,16 +123,18 @@ def _build_argument_parser():
     # Sparsity parameters
     parser.add_argument('--sparsity', type=float, default=None,
                         help='Sparsity target for sparse denoising '
-                             'autoencoders and sparse RBMs.')
+                             'autoencoders and sparse RBMs. Operates on'
+                             'features.')
     parser.add_argument('--output_sparsity', type=float, default=None,
                         help='Sparsity target for sparse denoising '
-                             'autoencoders and sparse RBMs.')
+                             'autoencoders and sparse RBMs. Operates on'
+                             'data point representations.')
     parser.add_argument('--CD_k', type=int, default=1,
                         help='For RBMs: how many pre-training steps should be '
                              'taken.')
     parser.add_argument('--CD_use_sample', action='store_true',
-                        help='Use the sample as the negative gradient particle,'
-                             'not the mean.')
+                        help='Use the sample as the negative gradient'
+                             ' particle, not the mean.')
     parser.add_argument('--prefer_extremes', type=float,
                         help='Adds an extremes-preference cost: negative log'
                              'of 2 * distance from 0.5 (so that this cost is 0'
@@ -167,12 +169,13 @@ def _build_argument_parser():
                              'largest weight changes between iterations.')
     parser.add_argument('--save_every', type=int,
                         help='Saves the intermediate model every k-th epoch.')
-    parser.add_argument('--no_overwrite_intermediate_saves', action='store_true',
+    parser.add_argument('--no_overwrite_intermediate_saves',
+                        action='store_true',
                         help='If set and saving is set, will not overwrite '
                              'the intermediate saved models and retain all of '
                              'them, not just the last one.')
     parser.add_argument('--resume', action='store_true',
-                        help='Attempt to resume training.')
+                        help='Attempt to resume training. [BUGS]')
 
     parser.add_argument('--no_save', action='store_true',
                         help='If set, will not save anything.')
@@ -215,6 +218,7 @@ def _build_argument_parser():
     return parser
 
 ##############################################################################
+
 
 def main(args):
 
@@ -282,8 +286,6 @@ def main(args):
     model_handle = model_class.setup(dataset, n_out=args.n_out,
                                      **model_init_args)
 
-
-
     logging.info('Setting up learner...')
 
     lloader = LearnerLoader(args.root, args.name)
@@ -297,15 +299,16 @@ def main(args):
                          'start again. (Infix: %s)' % args.transformation_label)
 
     if not learner:
-        learner = BaseSGDLearner(n_epochs=args.n_epochs,
-                                 b_size=args.batch_size,
-                                 validation_frequency=args.validation_frequency,
-                                 track_weights=args.track_weights,
-                                 track_weights_change=args.track_weights_change,
-                                 plot_transformation=args.plot_transformation,
-                                 plot_weights=args.plot_weights,
-                                 plot_every=args.plot_every,
-                                 plot_on_init=args.plot_on_init)
+        learner = BaseSGDLearner(
+            n_epochs=args.n_epochs,
+            b_size=args.batch_size,
+            validation_frequency=args.validation_frequency,
+            track_weights=args.track_weights,
+            track_weights_change=args.track_weights_change,
+            plot_transformation=args.plot_transformation,
+            plot_weights=args.plot_weights,
+            plot_every=args.plot_every,
+            plot_on_init=args.plot_on_init)
 
     # Intermediate model saving during training
     if args.save_every:

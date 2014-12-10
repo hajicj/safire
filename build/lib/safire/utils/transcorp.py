@@ -35,7 +35,8 @@ def id2word(corpus, wid):
         logging.debug('Found corpus with dictionary, wid: %d' % wid)
         return unicode(corpus.dictionary[wid])
     else:
-        raise ValueError('Cannot backtrack through corpus type %s' % str(type(corpus)))
+        raise ValueError('Cannot backtrack through corpus type %s' % str(
+            type(corpus)))
 
 
 def get_id2word_obj(corpus):
