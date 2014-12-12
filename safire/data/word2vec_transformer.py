@@ -49,7 +49,7 @@ class Word2VecTransformer(TransformationABC):
     """
 
     def __init__(self, embeddings, id2word, op='max', lowercase=False,
-                 dense=False,  deUFALize=True, from_pickle=False):
+                 dense=False,  deUFALize=True, from_pickle=True):
         """Initializes the embeddings.
 
         :param embeddings: A filename or a handle to a word vector file that
@@ -85,7 +85,7 @@ class Word2VecTransformer(TransformationABC):
             if not isinstance(embeddings, str):
                 raise TypeError('Embeddings requested from pickle, but not '
                                 'supplied as a string.')
-            with open(embeddings) as ehandle:
+            with open(embeddings, 'rb') as ehandle:
                 self.embeddings = cPickle.load(ehandle)
                 self.n_out = len(self.embeddings[self.embeddings.keys()[0]])
         elif isinstance(embeddings, str):
@@ -143,11 +143,17 @@ class Word2VecTransformer(TransformationABC):
         if iscorp is True:
             return self._apply(bow)
 
+        if len(bow) == 0:
+            logging.debug('Running empty doc through Word2VecTransformer.')
+        else:
+            logging.debug('-- Word2VecTransformer doc length=%d --' % len(bow))
+
         embeddings = numpy.zeros((len(bow), self.n_out))
         has_hit = False
         for i, item in enumerate(bow):
             wid = item[0]
             word = self.id2word[wid]
+            #logging.debug('Word: %d --> %s' % (wid, word))
             if self.lowercase:
                 word = unicode(word).lower()
             if self.deUFALize:
@@ -158,9 +164,11 @@ class Word2VecTransformer(TransformationABC):
                 #    type(embedding), str(embedding.shape)))
                 embeddings[i, :] = embedding
                 has_hit = True
+                #logging.debug('...hit.')
             except KeyError:
                 self.oov += 1.0
                 self.oov_collector.add((wid, word))
+                #logging.debug('...no hit.')
         if not has_hit:
             self.emptydocs += 1
 
@@ -171,12 +179,15 @@ class Word2VecTransformer(TransformationABC):
         #    self.log_oov()
 
         # Combining the embeddings. (Could be a method.)
-        maxout_embeddings = numpy.max(embeddings, axis=0)
+        output_embeddings = self.combine_words(embeddings)
 
         if self.dense:
-            return maxout_embeddings
+            return output_embeddings
 
-        sparse_embeddings = gensim.matutils.dense2vec(maxout_embeddings)
+        sparse_embeddings = gensim.matutils.dense2vec(output_embeddings)
+
+        #logging.debug('Output doc: length %d' % len(sparse_embeddings))
+
         return sparse_embeddings
 
     def _apply(self, corpus, chunksize=None):
@@ -196,6 +207,22 @@ class Word2VecTransformer(TransformationABC):
 
         transformed_corpus = TransformedCorpus(self, corpus, chunksize)
         return transformed_corpus
+
+    def combine_words(self, embeddings):
+        """Computes a document representation from the word representations.
+
+        :type embeddings: numpy.array
+        :param embeddings: The embeddings matrix, one row per word.
+
+        :rtype: numpy.array
+        :return: The resulting vector.
+        """
+        if self.op == 'max':
+            return numpy.max(embeddings, axis=0)
+        elif self.op == 'sum':
+            return numpy.sum(embeddings, axis=0)
+        elif self.op == 'avg':
+            return numpy.average(embeddings, axis=0)
 
     def log_oov(self):
         """Reports the OOV rate using the INFO logging level.

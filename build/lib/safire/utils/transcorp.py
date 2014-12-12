@@ -142,3 +142,14 @@ class KeymapDict(object):
 
     def __getitem__(self, item):
         return self.dict[self.keymap[item]]
+
+
+def log_corpus_stack(corpus):
+    """Reports the types of corpora and transformations of a given
+    corpus stack."""
+    if isinstance(corpus, TransformedCorpus):
+        r = 'Type: %s with obj %s' % (type(corpus), type(corpus.obj))
+        return '\n'.join([r, log_corpus_stack(corpus.corpus)])
+    else:
+        r = 'Type: %s' % (type(corpus))
+        return '\n'.join([r, '=== STACK END ===\n'])

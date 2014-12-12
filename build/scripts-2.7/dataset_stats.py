@@ -113,11 +113,15 @@ class DatasetStats(object):
         :param sample_n: Instead of running through the whole corpus, only
             run through a sample of this many items.
         """
+        self.d_idxs = []
         if sample_n:
             self.d_idxs = sorted([ numpy.random.choice(range(len(dataset)),
-                                                            replace=False)
-                      for _ in xrange(sample_n) ])
+                                                       replace=False)
+                                   for _ in xrange(sample_n) ])
             logging.info('Completed sampling.')
+            logging.debug('Dataset samples:')
+            for idx in self.d_idxs[:10]:
+                logging.debug(dataset[idx])
         else:
             self.d_idxs = range(len(dataset))
 
@@ -370,14 +374,7 @@ class DatasetStats(object):
         pairwise_matrix = grid2sym_matrix(pairwise_grid)
         return pairwise_matrix
 
-
-
-
-
-
-
-##############################################################################
-
+###########################################################################
 
 
 def do_stats_init(args, dataset):
@@ -437,7 +434,8 @@ def main(args):
     logging.info('Sampling raw matrix...')
 
     n_raw_samples = min(len(dataset), 1000)
-    raw_matrix = numpy.array(stats.dataset[0:n_raw_samples])
+    raw_matrix = numpy.array([stats.dataset[idx]
+                              for idx in stats.d_idxs[:n_raw_samples]])
 
     if args.activation_histogram:
         logging.info('Computing histogram of activations...')
