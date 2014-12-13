@@ -2,8 +2,9 @@
 
 import theano
 
-import loader
-from .dataset import Dataset
+from safire.data.utils import as_shared
+from safire.datasets.dataset import Dataset
+
 
 class SupervisedDataset(Dataset):
     """Storage class for supervised datasets.
@@ -52,20 +53,19 @@ class SupervisedDataset(Dataset):
             self.train_X, self.train_y = data[0]
         else:
             assert len(data[0][0]) == len(data[0][1]), 'Dataset-train: unequal length of train features and response.'
-            self.train_X, self.train_y = loader.as_shared(data[0])
+            self.train_X, self.train_y = as_shared(data[0])
 
         if (isinstance(data[1][0], theano.tensor.sharedvar.TensorSharedVariable)):
             self.devel_X, self.devel_y = data[1]
         else:
             assert len(data[1][0]) == len(data[1][1]), 'Dataset-train: unequal length of train features and response.'
-            self.devel_X, self.devel_y = loader.as_shared(data[1])
+            self.devel_X, self.devel_y = as_shared(data[1])
 
         if (isinstance(data[2][0], theano.tensor.sharedvar.TensorSharedVariable)):
             self.test_X, self.test_y = data[2]
         else:
             assert len(data[2][0]) == len(data[2][1]), 'Dataset-train: unequal length of train features and response.'
-            self.test_X, self.test_y = loader.as_shared(data[2])
-
+            self.test_X, self.test_y = as_shared(data[2])
 
     def n_train_batches(self, batch_size):
         """Determines how many batches of given size the training data will be

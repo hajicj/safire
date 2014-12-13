@@ -9,17 +9,18 @@ import logging
 import os
 import random
 import time
-import gensim
 
+import gensim
 import numpy
 import theano
+
 #import matplotlib.pyplot as plt
 
 from safire.learning.interfaces.model_handle import BackwardModelHandle
 from safire.learning.models.base_model import BaseModel
 from safire.learning.models.base_supervised_model import BaseSupervisedModel
 from safire.learning.models.base_unsupervised_model import BaseUnsupervisedModel
-from safire.data.supervised_dataset import SupervisedDataset
+from safire.datasets.supervised_dataset import SupervisedDataset
 
 import safire.utils
 

@@ -3,10 +3,10 @@
 import os
 import gzip
 import cPickle
-import numpy as np
 
 from .loader import DataLoader
-from .supervised_dataset import SupervisedDataset
+from .safire.datasets.supervised_dataset import SupervisedDataset
+
 
 class MNIST(object):
     """A static class for keeping information about the MNIST dataset

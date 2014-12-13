@@ -272,13 +272,13 @@ class BaseUnsupervisedModel(BaseModel):
         # supervised_model_instance's inputs, so that the data runs
         # through the previous layers first and gets correctly transformed.
         batch_index = TT.lscalar('batch_index')
-        pretrain_model = theano.function(inputs = [supervised_model_instance.inputs],
-                                    outputs = bound_cost,
-                                    updates = updates,
-                                    allow_input_downcast=True)
+        pretrain_model = theano.function(inputs=[
+            supervised_model_instance.inputs],
+                                         outputs = bound_cost,
+                                         updates = updates,
+                                         allow_input_downcast=True)
 
         return PretrainingModelHandle(model, pretrain_model)
-
 
     @classmethod
     def setup(cls, data, model=None, batch_size=500, learning_rate=0.13,

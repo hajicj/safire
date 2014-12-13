@@ -8,17 +8,20 @@ on demand).
 import logging
 import os
 import cPickle
-import gensim
 import math
+import time
+
+import gensim
 from gensim.interfaces import TransformedCorpus
 import numpy
 import theano
-import time
+
 import safire.utils
+
 
 __author__ = 'Jan Hajic jr.'
 
-from safire.data.unsupervised_dataset import UnsupervisedDataset
+from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
 
 class ShardedDataset(UnsupervisedDataset):
@@ -379,18 +382,17 @@ class ShardedDataset(UnsupervisedDataset):
                 last_shard = self.shard_by_offset(stop) # This fails on one-past
                 # slice indexing; that's why there's a code branch here.
 
-
             self.load_shard(first_shard)
 
             # The easy case: both in one shard.
-            if (first_shard == last_shard):
+            if first_shard == last_shard:
                 return self.current_shard[start - self.current_offset:
                                           stop - self.current_offset]
 
             # The hard case: the slice is distributed across multiple shards
             # - initialize numpy.empty()
             s_result = numpy.empty((stop - start, self.dim),
-                                 dtype=self.current_shard.dtype)
+                                   dtype=self.current_shard.dtype)
 
             # - gradually build it up. We will be using three set of start:stop
             #   indexes:

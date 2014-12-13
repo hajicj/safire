@@ -3,13 +3,16 @@ This module contains utility functions for working with gensim TransformedCorpus
 stacks.
 """
 import logging
+
 from gensim.corpora import TextCorpus
 from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
+
 from safire.data import FrequencyBasedTransformer, VTextCorpus
-from safire.data.dataset import Dataset
+from safire.datasets.dataset import Dataset
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
+
 
 __author__ = "Jan Hajic jr."
 

@@ -8,17 +8,20 @@ on demand).
 import logging
 import os
 import cPickle
-import gensim
 import math
+import time
+
+import gensim
 from gensim.interfaces import TransformedCorpus
 import numpy
 import theano
-import time
+
 import safire.utils
+
 
 __author__ = 'Jan Hajic jr.'
 
-from safire.data.unsupervised_dataset import UnsupervisedDataset
+from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
 
 class ShardedDataset(UnsupervisedDataset):

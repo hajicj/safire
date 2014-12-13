@@ -1,29 +1,24 @@
 #!c:\users\lenovo\canopy\user\scripts\python.exe
 # -*- coding: utf-8 -*-
-import cProfile
 import os
-import pstats
-import sys
 import argparse
 import logging
-import StringIO
 import time
 
 from gensim import corpora
 from gensim.models import TfidfModel
 import numpy
+
 from safire.data.imagenetcorpus import ImagenetCorpus
-from safire.data.sharded_dataset import ShardedDataset
-from safire.data.sharded_multimodal_dataset import \
+from safire.datasets.sharded_dataset import ShardedDataset
+from safire.datasets.sharded_multimodal_dataset import \
     UnsupervisedShardedVTextCorpusDataset
 from safire.data.word2vec_transformer import Word2VecTransformer
-
 import safire.utils
-from safire.data.vtextcorpus import VTextCorpus
 from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.data.frequency_based_transform import FrequencyBasedTransformer
-from safire.utils.transcorp import bottom_corpus, get_id2word_obj, \
+from safire.utils.transcorp import get_id2word_obj, \
     log_corpus_stack
 from safire.utils.transformers import GlobalUnitScalingTransform, \
     LeCunnVarianceScalingTransform, GeneralFunctionTransform, \

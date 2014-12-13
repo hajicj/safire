@@ -3,15 +3,18 @@ Provides MultimodalDataset functionality with underlying ShardedDatasets for
 both text and images.
 """
 import logging
+
 import gensim
 from gensim.corpora import MmCorpus
 import numpy
 import theano
-from multimodal_dataset import MultimodalDataset
-import safire.utils
-from corpus_dataset import UnsupervisedCorpusDataset
+
+from safire.datasets.multimodal_dataset import MultimodalDataset
+from safire.datasets.corpus_dataset import UnsupervisedCorpusDataset
+from safire.datasets.sharded_dataset import ShardedDataset
 from safire.utils.transcorp import dimension
-from sharded_dataset import ShardedDataset
+import safire.utils
+
 
 __author__ = 'Jan Hajic jr.'
 

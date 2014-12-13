@@ -1,14 +1,16 @@
-
 import theano
 
-import loader
-from .dataset import Dataset
+from safire.data.utils import as_shared
+from safire.datasets.dataset import Dataset
+
 
 class UnsupervisedDataset(Dataset):
-    """Storage class for supervised datasets.
+    """Base class for unsupervised datasets.
 
     Expects the data to be split into a train/devel/test set, with
     a response vector for each of the datasets.
+
+    Do NOT instantiate this class; its ``__init__()`` is broken.
 
     Supports exporting batches.
     """
@@ -54,19 +56,20 @@ class UnsupervisedDataset(Dataset):
         if (isinstance(data[0], theano.tensor.sharedvar.TensorSharedVariable)):
             self.train_X =  data[0]
         else:
-            self.train_X = loader.as_shared(data[0])
+            self.train_X = as_shared(data[0])
 
         if (isinstance(data[1][0], theano.tensor.sharedvar.TensorSharedVariable)):
             self.devel_X = data[1]
         else:
-            self.devel_X = loader.as_shared(data[1])
+            self.devel_X = as_shared(data[1])
 
         if (isinstance(data[2][0], theano.tensor.sharedvar.TensorSharedVariable)):
             self.test_X = data[2]
         else:
-            self.test_X = loader.as_shared(data[2])
+            self.test_X = as_shared(data[2])
 
 # FIXME: Move n_[subset]_batches into Dataset superclass?
+
     def n_train_batches(self, batch_size):
         """Determines how many batches of given size the training data will be
         split into.
@@ -98,7 +101,6 @@ class UnsupervisedDataset(Dataset):
                   into for given batch_size.
         """
         return self.devel_X.get_value(borrow=True).shape[0] / batch_size
-
 
     def n_test_batches(self, batch_size):
         """Determines how many batches of given size the test data will
@@ -199,21 +201,21 @@ class UnsupervisedDataset(Dataset):
         lbound = b_index * b_size
         rbound = (b_index + 1) * b_size
 
-        if (subset == 'train'):
+        if subset == 'train':
             if (kind == 'X'):
                 return self.train_X[lbound:rbound]
             elif (kind == 'y'):
                 raise ValueError('Unsupervised dataset doesn\'t support batch kind \'y\'')
             else:
                 raise ValueError('Wrong batch kind specified: %s (use \'X\')' % kind )
-        elif (subset == 'devel'):
+        elif subset == 'devel':
             if (kind == 'X'):
                 return self.devel_X[lbound:rbound]
             elif (kind == 'y'):
                 raise ValueError('Unsupervised dataset doesn\'t support batch kind \'y\'')
             else:
                 raise ValueError('Wrong batch kind specified: %s (use \'X\')' % kind )
-        elif (subset == 'test'):
+        elif subset == 'test':
             if (kind == 'X'):
                 return self.test_X[lbound:rbound]
             elif (kind == 'y'):

@@ -1,23 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import logging
+import operator
+
 from gensim.corpora import MmCorpus
 import numpy
-import operator
-import os
-import sys
 import theano
 
-from gensim import matutils
+
 #from gensim.corpora.indexedcorpus import IndexedCorpus
 
-import utils as safutils
 #from .dataset import Dataset
-from .supervised_dataset import SupervisedDataset
+from safire.datasets.supervised_dataset import SupervisedDataset
 #from vtextcorpus import VTextCorpus
 #from .corpus_dataset import UnsupervisedCorpusDataset
-from .corpus_dataset import UnsupervisedVTextCorpusDataset
-from .corpus_dataset import UnsupervisedImagenetCorpusDataset
+from safire.datasets.corpus_dataset import UnsupervisedVTextCorpusDataset
+from safire.datasets.corpus_dataset import UnsupervisedImagenetCorpusDataset
 
 logger = logging.getLogger(__name__)
 
@@ -155,9 +153,9 @@ class MultimodalDataset(SupervisedDataset):
         self.dim_text = self.text.dim
 
         self.img = UnsupervisedImagenetCorpusDataset(img_mm_filename,
-                                                   img_ic_filename,
-                                                   dim_img, test_p, devel_p,
-                                                   serializer=img_serializer)
+                                                     img_ic_filename,
+                                                     dim_img, test_p, devel_p,
+                                                     serializer=img_serializer)
         self.dim_img = self.img.dim
 
         self.set_mode(mode)
