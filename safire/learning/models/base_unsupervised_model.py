@@ -350,7 +350,8 @@ class BaseUnsupervisedModel(BaseModel):
         """
         index = TT.lscalar() # index of minibatch
         X = TT.matrix('X')   # data as a matrix
-        X.tag.test_value = numpy.ones((10,data.n_in), dtype=theano.config.floatX)
+        X.tag.test_value = numpy.ones((10, data.n_in),
+                                      dtype=theano.config.floatX)
         # There is no response vector.
 
         # Check for kwargs ... obsolete?
@@ -368,7 +369,7 @@ class BaseUnsupervisedModel(BaseModel):
                 raise ValueError('Must supply n_out either from dataset or **model_init_kwargs.')
 
             # n_out is supplied in model_init_kwargs, either way.
-            model = cls(inputs=X, n_in = data.n_in,
+            model = cls(inputs=X, n_in=data.n_in,
                         **model_init_kwargs)
         else:
             # Sanity (dimensionality...) checks:

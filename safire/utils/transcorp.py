@@ -9,7 +9,7 @@ from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
 
 from safire.data import FrequencyBasedTransformer, VTextCorpus
-from safire.datasets.dataset import Dataset
+from safire.datasets.dataset import Dataset, DatasetTransformer
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
 
@@ -95,6 +95,7 @@ def dimension(corpus):
             return current_corpus.obj.n_out
         else:
             return dimension(current_corpus.corpus)
+
     else:
         raise ValueError('Cannot find output dimension of corpus %s' % str(corpus))
 
