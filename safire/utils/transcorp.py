@@ -9,9 +9,10 @@ from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
 
 from safire.data import FrequencyBasedTransformer, VTextCorpus
-from safire.datasets.dataset import Dataset, DatasetTransformer
+from safire.datasets.dataset import Dataset
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
+from safire.datasets.transformations import DatasetTransformer
 
 
 __author__ = "Jan Hajic jr."

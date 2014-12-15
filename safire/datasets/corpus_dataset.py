@@ -12,10 +12,10 @@ from gensim import matutils
 import time
 from safire.utils import profile_run
 
-from .supervised_dataset import SupervisedDataset
-from .unsupervised_dataset import UnsupervisedDataset
-from .vtextcorpus import VTextCorpus
-from .imagenetcorpus import ImagenetCorpus
+from safire.datasets.supervised_dataset import SupervisedDataset
+from safire.datasets.unsupervised_dataset import UnsupervisedDataset
+from safire.data.vtextcorpus import VTextCorpus
+from safire.data.imagenetcorpus import ImagenetCorpus
 
 logger = logging.getLogger(__name__)
 

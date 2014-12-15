@@ -4,8 +4,12 @@ This module contains classes that ...
 import cPickle
 import logging
 import numpy
+import os
 import theano
-from safire.datasets.dataset import DatasetTransformer
+import sys
+from safire.data.loaders import MultimodalShardedDatasetLoader
+from safire.data.word2vec_transformer import Word2VecTransformer
+from safire.datasets.transformations import DatasetTransformer
 
 __author__ = "Jan Hajic jr."
 
@@ -13,6 +17,8 @@ __author__ = "Jan Hajic jr."
 class Word2VecSamplingDatasetTransformer(DatasetTransformer):
     """A DatasetTransformer that samples a word from each document vector
     and returns its word2vec representation instead.
+
+    TODO: write doctests
     """
     def __init__(self, w2v_transformer, embeddings_matrix=None,
                  pickle_embeddings_matrix=None, n_samples=1):
@@ -89,6 +95,17 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
         The number of samples per row is determined by the ``n_samples``
         parameter.
 
+        >>> root = os.path.join(os.getenv('SAFRE_DATA'), 'mini-safire')
+        >>> label = ''
+        >>> loader = MultimodalShardedDatasetLoader(root, name)
+        >>> corpus = loader.load_text_corpus(label)
+        >>> id2word = get_id2word_obj(corpus)
+        >>> edict_path = '~/word2vec/ces_wiki.edict.pkl'
+        >>> w2v_transformer = Word2VecTransformer(edict_path, id2word)
+        >>> w2v = Word2VecSamplingDatasetTransformer(w2v_transformer)
+        >>> w2v = Word2VecSamplingDatasetTsransformer(w2v_transformer)
+        >>>
+
         :type batch: theano.tensor
         :param batch: A batch (theano tensor).
 
@@ -101,7 +118,6 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
         # Run through precompiled sampling function
         sample = self.sampling_fn(normalized_batch)
         return sample
-
 
     @staticmethod
     def w2v_transformer_to_embedding_matrix(w2v_transformer):

@@ -2,4 +2,3 @@
 
 from .vtextcorpus import VTextCorpus
 from .frequency_based_transform import FrequencyBasedTransformer
-from .multimodal_dataset import MultimodalDataset
