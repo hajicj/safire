@@ -153,7 +153,9 @@ class Word2VecTransformer(TransformationABC):
         for i, item in enumerate(bow):
             wid = item[0]
             word = self.id2word[wid]
-            #logging.debug('Word: %d --> %s' % (wid, word))
+
+            #print 'Word: %d --> %s' % (wid, word)
+
             if self.lowercase:
                 word = unicode(word).lower()
             if self.deUFALize:
@@ -164,11 +166,11 @@ class Word2VecTransformer(TransformationABC):
                 #    type(embedding), str(embedding.shape)))
                 embeddings[i, :] = embedding
                 has_hit = True
-                #logging.debug('...hit.')
+                #print '...hit.'
             except KeyError:
                 self.oov += 1.0
                 self.oov_collector.add((wid, word))
-                #logging.debug('...no hit.')
+                #print '...no hit.'
         if not has_hit:
             self.emptydocs += 1
 
@@ -179,7 +181,10 @@ class Word2VecTransformer(TransformationABC):
         #    self.log_oov()
 
         # Combining the embeddings. (Could be a method.)
+        #print 'Embeddings:', embeddings
         output_embeddings = self.combine_words(embeddings)
+
+        #print 'Output embeddings:', output_embeddings
 
         if self.dense:
             return output_embeddings

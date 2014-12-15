@@ -1,6 +1,8 @@
 import os
 import sys
 import unittest
+import logging
+import numpy
 
 import theano.tensor as TT
 
@@ -40,19 +42,37 @@ class TestWord2VecDatasetTransformer(unittest.TestCase):
         self.w2v_transformer = Word2VecTransformer(self.edict_pkl_file,
                                                    self.id2word)
 
+        self.w2v = Word2VecSamplingDatasetTransformer(self.w2v_transformer)
+        self.dataset = self.loader.load_text(self.infix)
+
     def test_get_batch_sample(self):
 
-        w2v = Word2VecSamplingDatasetTransformer(self.w2v_transformer)
-        dataset = self.loader.load_text(self.infix)
+        batch = self.dataset.train_X_batch(0, 5)
+        batch_sample = self.w2v.get_batch_sample(batch)
 
-        batch = dataset.train_X_batch(0, 2)
-        batch_sample = w2v.get_batch_sample(batch)
+        # Which words were sampled?
+        # for i, row in enumerate(batch_sample):
+        #     wid = numpy.argmax(row)
+        #     word = self.id2word[wid]
+        #     print 'Doc %d : chose word %d --> %s' % (i, wid, word)
 
-        self.assertEqual(TT.sum(batch_sample), batch.shape[0])
+        batch_sample_2 = self.w2v.get_batch_sample(batch)
+        # for i, row in enumerate(batch_sample_2):
+        #     wid = numpy.argmax(row)
+        #     word = self.id2word[wid]
+        #     print 'Doc %d : chose word %d --> %s' % (i, wid, word)
 
+        self.assertEqual(numpy.sum(batch_sample), batch.shape[0])
 
+    def test_getitem(self):
+
+        batch = self.dataset.train_X_batch(0, 2)
+        transformed_batch = self.w2v[batch]
+
+        self.assertEqual(transformed_batch.shape, (2, self.w2v.n_out))
 
 
 
 if __name__ == '__main__':
+
     unittest.main()

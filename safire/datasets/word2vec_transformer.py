@@ -41,6 +41,7 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
 
         :param n_samples: How many words should be drawn from each document.
         """
+        # Create embeddings matrix.
         self.embeddings_matrix = None
         self.n_out = None
         if embeddings_matrix:
@@ -56,17 +57,14 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
             with open(pickle_embeddings_matrix, 'wb') as phandle:
                 cPickle.dump(self.embeddings_matrix, phandle, protocol=-1)
 
-        self.n_out = len(self.embeddings[self.embeddings.keys()[0]])
-
-        # Build mapping matrix
-        self.embeddngs_matrix = self.build_mapping()
         self.n_samples = 1  # = n_samples  # Currently only supports 1 sample.
 
         # Pre-compile sampling function
-        rng = theano.tensor.shared_randomstreams.RandomStreams(60 * 256)
+        rng = theano.tensor.shared_randomstreams.RandomStreams(6)
         pvals = theano.tensor.matrix('pvals', dtype=theano.config.floatX)
         sample = rng.multinomial(pvals=pvals)
-        self.sampling_fn = theano.function([pvals], sample)
+        self.sampling_fn = theano.function([pvals], sample,
+                                           allow_input_downcast=True)
 
     def __getitem__(self, batch):
         """Transforms the given batch.
@@ -83,8 +81,10 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
         # Use embedding of given word as document vector.
         # - batch_projection is X * n_in,
         # - embeddings_matrix is n_in * n_out
-        embeddings = theano.tensor.dot(batch_projection,
-                                       self.embeddings_matrix)
+        #embeddings = theano.tensor.dot(batch_projection,
+        #                               self.embeddings_matrix)
+        embeddings = numpy.dot(batch_projection, self.embeddings_matrix)
+
         return embeddings
 
     def get_batch_sample(self, batch):
@@ -95,28 +95,17 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
         The number of samples per row is determined by the ``n_samples``
         parameter.
 
-        >>> root = os.path.join(os.getenv('SAFRE_DATA'), 'mini-safire')
-        >>> label = ''
-        >>> loader = MultimodalShardedDatasetLoader(root, name)
-        >>> corpus = loader.load_text_corpus(label)
-        >>> id2word = get_id2word_obj(corpus)
-        >>> edict_path = '~/word2vec/ces_wiki.edict.pkl'
-        >>> w2v_transformer = Word2VecTransformer(edict_path, id2word)
-        >>> w2v = Word2VecSamplingDatasetTransformer(w2v_transformer)
-        >>> w2v = Word2VecSamplingDatasetTsransformer(w2v_transformer)
-        >>>
-
         :type batch: theano.tensor
         :param batch: A batch (theano tensor).
 
         :return: The projection matrix, also as a theano variable.
         """
         # Normalize by row
-        row_sums = theano.tensor.sum(batch, axis=1)
-        normalized_batch = theano.tensor.true_div(batch, row_sums)
+        row_sums = numpy.sum(batch, axis=1)
+        normalized_batch = batch.T / row_sums
 
         # Run through precompiled sampling function
-        sample = self.sampling_fn(normalized_batch)
+        sample = self.sampling_fn(normalized_batch.T)
         return sample
 
     @staticmethod
@@ -152,8 +141,14 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
 
         id2word = w2v_transformer.id2word
 
+        was_dense = w2v_transformer.dense
+        w2v_transformer.dense = True
+
         for wid in xrange(len(id2word)):
-            embedding = w2v_transformer[(wid, 1)]
+            embedding = w2v_transformer[[(wid, 1)]]
+            #print embedding
             matrix[wid, :] = embedding
+
+        w2v_transformer.dense = was_dense
 
         return matrix

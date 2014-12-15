@@ -130,6 +130,8 @@ test/test-data/corpora/test-data.pf0.3.pff.tfidf.vt.vtcorp
 test/test-data/corpora/test-data.vt.mmcorp
 test/test-data/corpora/test-data.vt.mmcorp.index
 test/test-data/corpora/test-data.vt.vtcorp
+test/test-data/datasets/test-data.shdat
+test/test-data/datasets/test-data.shdat.0
 test/test-data/img/0000000323.jpg
 test/test-data/img/0000000326.jpg
 test/test-data/img/0000000714.jpg
