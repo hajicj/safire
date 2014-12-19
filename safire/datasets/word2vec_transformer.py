@@ -9,6 +9,7 @@ import theano
 import sys
 from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.word2vec_transformer import Word2VecTransformer
+from safire.datasets.dataset import Dataset
 from safire.datasets.transformations import DatasetTransformer
 
 __author__ = "Jan Hajic jr."
@@ -45,7 +46,8 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
         self.embeddings_matrix = None
         self.n_out = None
         if embeddings_matrix:
-            self.embeddings_matrix = cPickle.load(embeddings_matrix)
+            with open(embeddings_matrix, 'rb') as phandle:
+                self.embeddings_matrix = cPickle.load(phandle)
         else:
             self.embeddings_matrix = \
                 self.w2v_transformer_to_embedding_matrix(w2v_transformer)
@@ -67,13 +69,16 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
                                            allow_input_downcast=True)
 
     def __getitem__(self, batch):
-        """Transforms the given batch.
+        """Transforms the given batch. If a dataset is given, applies itself
+        on it.
 
         :param batch: A theano matrix. Expects ``self.n_in`` columns,
             any number of rows (corresponds to batch size during learning).
 
         :return: The transformed batch. Will have ``self.n_out`` columns.
         """
+        if isinstance(batch, Dataset):
+            return self._apply(dataset=batch)
 
         # Sample from each document (batch row) one word (column).
         batch_projection = self.get_batch_sample(batch)
