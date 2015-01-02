@@ -122,6 +122,11 @@ class FrequencyBasedTransformer(TransformationABC):
         if iscorp is True:
             return self._apply(bow)
 
+        if len(bow) == 0:
+            logging.debug('Running empty doc through FrequencyBasedTrans.')
+        else:
+            logging.debug('-- FrequencyBasedTrans. doc length=%d --' % len(bow))
+
         output = [ (self.orig2transformed[v[0]], v[1])
                    for v in bow if v[0] in self.allowed_features]
 

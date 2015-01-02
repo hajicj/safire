@@ -272,13 +272,13 @@ class BaseUnsupervisedModel(BaseModel):
         # supervised_model_instance's inputs, so that the data runs
         # through the previous layers first and gets correctly transformed.
         batch_index = TT.lscalar('batch_index')
-        pretrain_model = theano.function(inputs = [supervised_model_instance.inputs],
-                                    outputs = bound_cost,
-                                    updates = updates,
-                                    allow_input_downcast=True)
+        pretrain_model = theano.function(inputs=[
+            supervised_model_instance.inputs],
+                                         outputs = bound_cost,
+                                         updates = updates,
+                                         allow_input_downcast=True)
 
         return PretrainingModelHandle(model, pretrain_model)
-
 
     @classmethod
     def setup(cls, data, model=None, batch_size=500, learning_rate=0.13,
@@ -350,7 +350,8 @@ class BaseUnsupervisedModel(BaseModel):
         """
         index = TT.lscalar() # index of minibatch
         X = TT.matrix('X')   # data as a matrix
-        X.tag.test_value = numpy.ones((10,data.n_in), dtype=theano.config.floatX)
+        X.tag.test_value = numpy.ones((10, data.n_in),
+                                      dtype=theano.config.floatX)
         # There is no response vector.
 
         # Check for kwargs ... obsolete?
@@ -368,7 +369,7 @@ class BaseUnsupervisedModel(BaseModel):
                 raise ValueError('Must supply n_out either from dataset or **model_init_kwargs.')
 
             # n_out is supplied in model_init_kwargs, either way.
-            model = cls(inputs=X, n_in = data.n_in,
+            model = cls(inputs=X, n_in=data.n_in,
                         **model_init_kwargs)
         else:
             # Sanity (dimensionality...) checks:

@@ -6,16 +6,11 @@ import logging
 import os
 import unittest
 
-from gensim import similarities
 import numpy
-from safire.data.imagenetcorpus import ImagenetCorpus
-from safire.data.sharded_dataset import ShardedDataset
-from safire.data.vtextcorpus import VTextCorpus
+
+from safire.datasets.sharded_dataset import ShardedDataset
 from safire.data.loaders import MultimodalDatasetLoader, ShardedDatasetLoader
-from safire.learning.models.denoising_autoencoder import DenoisingAutoencoder
-from safire.learning.models.logistic_regression import LogisticRegression
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
-from safire.learning.interfaces.safire_transformer import SafireTransformer
 
 
 class TestShardedDataset(unittest.TestCase):

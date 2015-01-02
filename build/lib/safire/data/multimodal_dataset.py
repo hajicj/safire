@@ -219,7 +219,6 @@ class MultimodalDataset(SupervisedDataset):
                                            # should be set better according to
                                            # some sys.max_mem_param or whatever.
 
-
     def n_train_batches(self, batch_size):
         """Computes the number of training batches of the given batch size."""
         return int(numpy.floor(self._devel_doc_offset / batch_size))
@@ -294,8 +293,10 @@ class MultimodalDataset(SupervisedDataset):
             imnos = [ self.img.icorp.doc2id[iid] for iid in iids ]
         except KeyError:
             logging.debug('Missed key in textno2imno.')
-            logging.debug('Some available keys in t2i map:\n%s' % str(self.text2im_map.keys()[:10]))
-            logging.debug('Total available keys in t2i map: %d' % len(self.text2im_map))
+            logging.debug('Some available keys in t2i map:\n%s' % str(
+                self.text2im_map.keys()[:10]))
+            logging.debug('Total available keys in t2i map: %d' % len(
+                self.text2im_map))
             raise
 
         return imnos
@@ -305,13 +306,16 @@ class MultimodalDataset(SupervisedDataset):
         from the text corpus.
         """
         if self.cache_text and (lbound, batch_size) in self.cache:
-            logging.debug('Retrieving from text cache: (%d, %d)' % (lbound, batch_size))
+            logging.debug('Retrieving from text cache: (%d, %d)' % (
+                lbound,
+                batch_size))
             return self.cache[(lbound, batch_size)]
 
         result = numpy.empty((batch_size, self.text.dim), dtype=dtype)
 
-        logging.debug('Building text batch with lbound %i, size %i.' % (lbound,
-                                                                   batch_size))
+        logging.debug('Building text batch with lbound %i, size %i.' % (
+            lbound,
+            batch_size))
         
         for idx, docno in enumerate(xrange(lbound, lbound + batch_size)):
             text_doc, _ = self._text2im_list[docno]
@@ -323,7 +327,8 @@ class MultimodalDataset(SupervisedDataset):
 
         logging.debug('Built text batch: %s' % result)
 
-        if self.cache_text and not self.cache_full() and not (lbound, batch_size) in self.cache:
+        if self.cache_text and not self.cache_full() and \
+                not (lbound, batch_size) in self.cache:
             logging.debug('Adding to text cache: (%d, %d)' % (lbound, batch_size))
             self.cache_size += result.shape[0] * result.shape[1]
             self.cache[(lbound, batch_size)] = result
@@ -393,11 +398,11 @@ class MultimodalDataset(SupervisedDataset):
         img_batch = self._build_image_batch(lbound, batch_size, dtype)
 
         if text_first:
-            result[:,:text_batch.shape[1]] = text_batch
-            result[:,text_batch.shape[1]:] = img_batch
+            result[:, :text_batch.shape[1]] = text_batch
+            result[:, text_batch.shape[1]:] = img_batch
         else:
-            result[:,:img_batch.shape[1]] = img_batch
-            result[:,img_batch.shape[1]:] = text_batch
+            result[:, :img_batch.shape[1]] = img_batch
+            result[:, img_batch.shape[1]:] = text_batch
 
         # for idx, docno in enumerate(xrange(lbound, lbound + batch_size)):
         #     # Retrieve corresponding documents from the indexed corpus
@@ -608,10 +613,12 @@ class MultimodalDataset(SupervisedDataset):
         return sorted_text2im
 
     def cache_full(self):
-        if len(self.cache) > self.cache_max_nbytes:
+        """Checks whether the dataset cache is full."""
+        if (self.cache_size * 8) > self.cache_max_nbytes:
             return True
         else:
-            return False # Max cache size: self.cache_max_nbytes bytes
+            logging.debug('Dataset cache is full.')
+            return False  # Max cache size: self.cache_max_nbytes bytes
 
     def __len__(self):
         return len(self._text2im_list)

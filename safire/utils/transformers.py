@@ -11,7 +11,10 @@ import operator
 import gensim
 from gensim.interfaces import TransformedCorpus
 import numpy
+from safire.utils.transcorp import dimension
 from safire.utils import transcorp
+
+from sklearn.preprocessing import StandardScaler
 
 
 class NormalizationTransform(gensim.interfaces.TransformationABC):
@@ -75,7 +78,7 @@ class CappedNormalizationTransform(NormalizationTransform):
         logging.info('CappedNormalization: C = %.5f' % self.C)
 
 
-class UnitScalingTransform(gensim.interfaces.TransformationABC):
+class MaxUnitScalingTransform(gensim.interfaces.TransformationABC):
     """Scales the vector so that its maximum element is 1."""
     def __getitem__(self, bow):
         keys = list(itertools.imap(operator.itemgetter(0), bow))
@@ -169,6 +172,11 @@ class GeneralFunctionTransform(gensim.interfaces.TransformationABC):
         if is_corpus:
             return self._apply(bow, chunksize)
 
+        if len(bow) == 0:
+            logging.debug('Running empty doc through GeneralFunctionTransform.')
+        else:
+            logging.debug('-- GeneralFunctionTransform. doc length=%d --' % len(bow))
+
         oK = self.o_mul
         oC = self.o_add
         K = self.mul
@@ -224,3 +232,27 @@ class LeCunnVarianceScalingTransform(gensim.interfaces.TransformationABC):
         #if numpy.random.random() < 0.001:
         #    print 'UCov. Transformation:\n%s\n%s' % (bow[:10], out[:10])
         return out
+
+
+class StandardScalingTransformer(gensim.interfaces.TransformationABC):
+    """Scales data to zero mean and unit variance."""
+    def __init__(self, corpus, with_mean=True, with_variance=True,
+                 chunksize=1000):
+        """Initializes the transformer.
+
+        :type corpus: gensim.interfaces.CorpusABC
+        :param corpus: The corpus that should be scaled.
+
+        :param with_mean: If UNset, will NOT scale to zero mean. (By default:
+            do zero-mean scaling.)
+
+        :param with_variance: If UNset, will NOT scale to zero variance.
+            (By default: do variance scaling.)
+        """
+        self.with_mean = with_mean
+        self.with_variance = with_variance
+
+        self.sums = numpy.zeros(dimension(corpus))
+        self.means = numpy.zeros(dimension(corpus))
+        self.squared_sums = numpy.zeros(dimension(corpus))
+

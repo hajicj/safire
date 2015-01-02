@@ -9,14 +9,11 @@ Testing Loader classes:
 import logging
 import os
 import unittest
-from safire.data.corpus_dataset import UnsupervisedVTextCorpusDataset, \
-    UnsupervisedImagenetCorpusDataset
-from safire.data.imagenetcorpus import ImagenetCorpus
 
-from safire.data.loaders import MultimodalDatasetLoader, ModelLoader, \
-    MultimodalShardedDatasetLoader
-from safire.data.multimodal_dataset import MultimodalDataset
-from safire.data.sharded_multimodal_dataset import \
+from safire.data.imagenetcorpus import ImagenetCorpus
+from safire.data.loaders import MultimodalShardedDatasetLoader
+from safire.datasets.multimodal_dataset import MultimodalDataset
+from safire.datasets.sharded_multimodal_dataset import \
     UnsupervisedShardedVTextCorpusDataset, \
     UnsupervisedShardedImagenetCorpusDataset
 from safire.data.vtextcorpus import VTextCorpus

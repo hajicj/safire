@@ -3,10 +3,10 @@
 import os
 import gzip
 import cPickle
-import numpy as np
 
-from .loader import DataLoader
-from .supervised_dataset import SupervisedDataset
+from safire.data.utils import as_shared
+from safire.datasets.supervised_dataset import SupervisedDataset
+
 
 class MNIST(object):
     """A static class for keeping information about the MNIST dataset
@@ -42,8 +42,8 @@ class MNIST(object):
         with gzip.open(mnist_full_filename, 'rb') as mnist_file:
             train_set, devel_set, test_set = cPickle.load(mnist_file)
             return SupervisedDataset(
-                    (DataLoader.as_shared(train_set), 
-                    DataLoader.as_shared(devel_set), 
-                    DataLoader.as_shared(test_set)),
-                    n_in = 28*28,
-                    n_out = 10)
+                    (as_shared(train_set),
+                    as_shared(devel_set),
+                    as_shared(test_set)),
+                    n_in=28*28,
+                    n_out=10)

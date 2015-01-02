@@ -9,6 +9,7 @@ from gensim.interfaces import CorpusABC
 
 logger = logging.getLogger(__name__)
 
+
 class ImagenetCorpus(CorpusABC):
     """The ImgnetCorpus is capable of reading the results of running
     images through the ImageNet convolutional network, giving out 4096-dim
@@ -77,7 +78,6 @@ class ImagenetCorpus(CorpusABC):
 
         self.n_processed = 0
 
-
     def __iter__(self):
         """The function that defines a corpus.
 
@@ -89,6 +89,7 @@ class ImagenetCorpus(CorpusABC):
             yield matutils.full2sparse(image, self.eps)
 
     def reset(self):
+        """Sets corpus to "clean" state -- as if it was never iterated over."""
         logging.info('Resetting corpus as if it never iterated.')
         self.doc2id = {}
         self.id2doc = []

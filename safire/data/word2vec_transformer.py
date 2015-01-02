@@ -49,7 +49,7 @@ class Word2VecTransformer(TransformationABC):
     """
 
     def __init__(self, embeddings, id2word, op='max', lowercase=False,
-                 dense=False,  deUFALize=True, from_pickle=False):
+                 dense=False,  deUFALize=True, from_pickle=True):
         """Initializes the embeddings.
 
         :param embeddings: A filename or a handle to a word vector file that
@@ -85,7 +85,7 @@ class Word2VecTransformer(TransformationABC):
             if not isinstance(embeddings, str):
                 raise TypeError('Embeddings requested from pickle, but not '
                                 'supplied as a string.')
-            with open(embeddings) as ehandle:
+            with open(embeddings, 'rb') as ehandle:
                 self.embeddings = cPickle.load(ehandle)
                 self.n_out = len(self.embeddings[self.embeddings.keys()[0]])
         elif isinstance(embeddings, str):
@@ -95,6 +95,8 @@ class Word2VecTransformer(TransformationABC):
         elif isinstance(embeddings, file):
             self.embeddings, self.n_out = self.parse_embeddings(
                 embeddings, lowercase=lowercase)
+        elif isinstance(embeddings, dict):
+            self.embeddings = embeddings
         else:
             raise TypeError('Invalid embeddings type: %s' % type(embeddings))
 
@@ -114,6 +116,8 @@ class Word2VecTransformer(TransformationABC):
         self.oov = 0.0
         self.total_processed = 0.0
         self.oov_rate = 0.0
+
+        self.hit_ids = set() # A set of word IDs that have been actually used.
 
         # DEACTIVATED
         self.log_oov_at = 1000  # Each log_oov_at calls to getitem, the OOV
@@ -143,24 +147,28 @@ class Word2VecTransformer(TransformationABC):
         if iscorp is True:
             return self._apply(bow)
 
+        if len(bow) == 0:
+            logging.debug('Running empty doc through Word2VecTransformer.')
+        else:
+            logging.debug('-- Word2VecTransformer doc length=%d --' % len(bow))
+
         embeddings = numpy.zeros((len(bow), self.n_out))
         has_hit = False
         for i, item in enumerate(bow):
             wid = item[0]
-            word = self.id2word[wid]
-            if self.lowercase:
-                word = unicode(word).lower()
-            if self.deUFALize:
-                word = Word2VecTransformer.deUFALize(word)
+            word = self._id2word(wid)
             try:
                 embedding = self.embeddings[word]
                 #logging.info('Embedding: %s with shape %s' % (
                 #    type(embedding), str(embedding.shape)))
                 embeddings[i, :] = embedding
                 has_hit = True
+                self.hit_ids.add(wid)
+                #print '...hit.'
             except KeyError:
                 self.oov += 1.0
                 self.oov_collector.add((wid, word))
+                #print '...no hit.'
         if not has_hit:
             self.emptydocs += 1
 
@@ -171,12 +179,18 @@ class Word2VecTransformer(TransformationABC):
         #    self.log_oov()
 
         # Combining the embeddings. (Could be a method.)
-        maxout_embeddings = numpy.max(embeddings, axis=0)
+        #print 'Embeddings:', embeddings
+        output_embeddings = self.combine_words(embeddings)
+
+        #print 'Output embeddings:', output_embeddings
 
         if self.dense:
-            return maxout_embeddings
+            return output_embeddings
 
-        sparse_embeddings = gensim.matutils.dense2vec(maxout_embeddings)
+        sparse_embeddings = gensim.matutils.dense2vec(output_embeddings)
+
+        #logging.debug('Output doc: length %d' % len(sparse_embeddings))
+
         return sparse_embeddings
 
     def _apply(self, corpus, chunksize=None):
@@ -197,6 +211,33 @@ class Word2VecTransformer(TransformationABC):
         transformed_corpus = TransformedCorpus(self, corpus, chunksize)
         return transformed_corpus
 
+    def _id2word(self, wid):
+        """Converts the given word ID to a word, applying de-UFALization and
+        lowercasing according to how the transformer was initialized."""
+        word = self.id2word[wid]
+        if self.lowercase:
+            word = unicode(word).lower()
+        if self.deUFALize:
+            word = Word2VecTransformer.deUFALize(word)
+
+        return word
+
+    def combine_words(self, embeddings):
+        """Computes a document representation from the word representations.
+
+        :type embeddings: numpy.array
+        :param embeddings: The embeddings matrix, one row per word.
+
+        :rtype: numpy.array
+        :return: The resulting vector.
+        """
+        if self.op == 'max':
+            return numpy.max(embeddings, axis=0)
+        elif self.op == 'sum':
+            return numpy.sum(embeddings, axis=0)
+        elif self.op == 'avg':
+            return numpy.average(embeddings, axis=0)
+
     def log_oov(self):
         """Reports the OOV rate using the INFO logging level.
         """
@@ -213,6 +254,39 @@ class Word2VecTransformer(TransformationABC):
         oov_report_header = '\nOOV report for word2vec\n' \
                               '=======================\n'
         return oov_report_header + oov_report
+
+    def export_used(self):
+        """Creates a Word2Vec transformer object reduced to words that have
+        already been run through this instance of the transformer."""
+        # Filter id2word dict
+        id2word = { wid : self.id2word[wid] for wid in self.hit_ids }
+        # Filter embeddings dict
+        embeddings = { word : self.embeddings[word] for word in
+                       map(self._id2word, id2word.keys()) }
+        # create "spinoff" Word2VecTransformer
+        new_transformer = Word2VecTransformer(embeddings=embeddings,
+                                              id2word=id2word,
+                                              op=self.op,
+                                              lowercase=self.lowercase,
+                                              dense=self.dense,
+                                              deUFALize=self.deUFALize,
+                                              from_pickle=False)
+        return new_transformer
+
+    def reset(self):
+        """Resets itself to a "freshly initialized" state. Deletes all OOV
+        and other usage statistics."""
+        self.oov = 0.0
+        self.total_processed = 0.0
+        self.oov_rate = 0.0
+
+        self.hit_ids = set() # A set of word IDs that have been actually used.
+
+        # DEACTIVATED
+        self.log_oov_at = 1000  # Each log_oov_at calls to getitem, the OOV
+                                # statistics are logged using logging.info()
+        self.oov_collector = set()
+        self.emptydocs = 0  # How many documents had no hit whatsoever
 
     def __len__(self):
         """The length of the word2vec object is the vocabulary size."""

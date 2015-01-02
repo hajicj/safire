@@ -1,5 +1,6 @@
 """
 This module contains the base parameter space class.
+Marked for deprecation.
 """
 import argparse
 import collections

@@ -7,9 +7,9 @@ from gensim.corpora.mmcorpus import MmCorpus
 
 from .vtextcorpus import VTextCorpus
 from .imagenetcorpus import ImagenetCorpus
-from .multimodal_dataset import MultimodalDataset
-
+from .safire.datasets.multimodal_dataset import MultimodalDataset
 from .layouts import DataDirLayout
+
 
 logger = logging.getLogger(__name__)
 

@@ -27,26 +27,26 @@ datasets (see :class:`ShardedDataset`).
 import copy
 import logging
 import os
-import gensim
 
+import gensim
 from gensim.corpora.mmcorpus import MmCorpus
 from gensim.similarities import Similarity
-from safire.data.corpus_dataset import UnsupervisedVTextCorpusDataset, \
+
+from safire.datasets.corpus_dataset import UnsupervisedVTextCorpusDataset, \
     UnsupervisedImagenetCorpusDataset
-from safire.data.sharded_dataset import ShardedDataset
-from safire.data.sharded_multimodal_dataset import ShardedMultimodalDataset, \
+from safire.datasets.sharded_dataset import ShardedDataset
+from safire.datasets.sharded_multimodal_dataset import ShardedMultimodalDataset, \
     UnsupervisedShardedImagenetCorpusDataset, \
     UnsupervisedShardedVTextCorpusDataset
 from safire.learning.interfaces import ModelHandle
 from safire.learning.interfaces.safire_transformer import SafireTransformer
 from safire.learning.learners import BaseSGDLearner
 from safire.learning.models.base_model import BaseModel
-
-from .vtextcorpus import VTextCorpus
-from .imagenetcorpus import ImagenetCorpus
-from .multimodal_dataset import MultimodalDataset
-
+from safire.data.vtextcorpus import VTextCorpus
+from safire.data.imagenetcorpus import ImagenetCorpus
+from safire.datasets.multimodal_dataset import MultimodalDataset
 from .layouts import DataDirLayout
+
 
 logger = logging.getLogger(__name__)
 
