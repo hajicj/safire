@@ -42,9 +42,9 @@ from safire.learning.interfaces import ModelHandle
 from safire.learning.interfaces.safire_transformer import SafireTransformer
 from safire.learning.learners import BaseSGDLearner
 from safire.learning.models.base_model import BaseModel
-from .vtextcorpus import VTextCorpus
-from .imagenetcorpus import ImagenetCorpus
-from .safire.datasets.multimodal_dataset import MultimodalDataset
+from safire.data.vtextcorpus import VTextCorpus
+from safire.data.imagenetcorpus import ImagenetCorpus
+from safire.datasets.multimodal_dataset import MultimodalDataset
 from .layouts import DataDirLayout
 
 

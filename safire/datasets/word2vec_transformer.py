@@ -44,10 +44,12 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
         """
         # Create embeddings matrix.
         self.embeddings_matrix = None
+        self._embedding_matrix_file = None
         self.n_out = None
         if embeddings_matrix:
             with open(embeddings_matrix, 'rb') as phandle:
                 self.embeddings_matrix = cPickle.load(phandle)
+            self._embedding_matrix_file = os.path.abspath(embeddings_matrix)
         else:
             self.embeddings_matrix = \
                 self.w2v_transformer_to_embedding_matrix(w2v_transformer)
@@ -58,6 +60,7 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
         if pickle_embeddings_matrix:
             with open(pickle_embeddings_matrix, 'wb') as phandle:
                 cPickle.dump(self.embeddings_matrix, phandle, protocol=-1)
+            self._embedding_matrix_file = os.path.abspath(pickle_embeddings_matrix)
 
         self.n_samples = 1  # = n_samples  # Currently only supports 1 sample.
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import cPickle
 import os
 import argparse
 import logging
@@ -133,6 +134,7 @@ def build_argument_parser():
     parser.add_argument('--filter_capital', action='store_true',
                         help='If set, will filter out all words starting with '
                              'capital letters.')
+
     parser.add_argument('--word2vec', action='store',
                         help='If set, will apply word2vec embeddings from the'
                              'given file. (Path given relative to current'
@@ -142,12 +144,33 @@ def build_argument_parser():
                         help='The operation word2vec should do to combine word'
                              'embeddings into a document embedding. Supported:'
                              '\'max\', \'sum\' and \'avg\'.')
+    parser.add_argument('--word2vec_export', action='store',
+                        help='Saves the embeddings trimmed for the '
+                             'processed corpus. This will help speed up '
+                             'subsequent processing by only loading embeddings'
+                             'for the vocabulary present in the processed data.')
+    parser.add_argument('--word2vec_dataset', action='store',
+                        help='If set, will initialize the *dataset* to be '
+                             'a word2vec sampled dataset, sampling one word '
+                             'vector per item. This happens *after* data is'
+                             'serialized and works only when word2vec is NOT'
+                             'applied to the corpus - it applies a'
+                             'DatasetTransformer on the dataset before the'
+                             'dataset object is saved. [NOT IMPLEMENTED]')
 
     parser.add_argument('--no_shdat', action='store_true',
                         help='If set, will NOT automatically create the '
                              'sharded dataset with the given label.')
     parser.add_argument('--no_overwrite_shdat', action='store_true',
                         help='If set, will overwrite an existing dataset.')
+    parser.add_argument('--no_save_corpus', action='store_true',
+                        help='If set, will not save the corpus object. ONLY'
+                             'for very limited use cases -- normally, in order'
+                             'to proceed with training models, you *will* need'
+                             'this corpus. (I put this feature in to allow for'
+                             'filtering the word2vec embeddings by corpus '
+                             'without saving the processed corpora in the '
+                             'process.)')
 
     parser.add_argument('--serializer', action='store', help='Which '+
                         'gensim serializer to use: Mm, SvmLight, Blei, Low')
@@ -336,7 +359,7 @@ def main(args):
             transformer = FrequencyBasedTransformer(corpus_to_serialize,
                                                 args.top_k, args.discard_top)
 
-        corpus_to_serialize = transformer._apply(corpus_to_serialize)
+        corpus_to_serialize = transformer[corpus_to_serialize]
 
         # Cannot save the TransformedCorpus that comes out of TfidfModel
         # - transform original VTextCorpus instead.
@@ -381,7 +404,6 @@ def main(args):
                                        op=args.word2vec_op)
         corpus_to_serialize = word2vec[corpus_to_serialize]
 
-
     logging.info('Serializing...')
     cnames = loader.layout.required_text_corpus_names(args.label)
 
@@ -421,6 +443,12 @@ def main(args):
             #logging.info(u'OOV report:\n%s' % oov_report)
             word2vec.log_oov()
 
+        if args.word2vec_export:
+            word2vec_to_export = word2vec.export_used()
+            embeddings_dict = word2vec_to_export.embeddings
+            with open(args.word2vec_export, 'wb') as w2v_export_handle:
+                cPickle.dump(embeddings_dict, w2v_export_handle, protocol=-1)
+
     # We are saving the VTextCorpus rather than the transformed corpus,
     # in order to be able to load it.
 
@@ -428,7 +456,8 @@ def main(args):
         len(corpus_to_serialize),
         safire.utils.transcorp.dimension(corpus_to_serialize)))
 
-    corpus_to_serialize.save(obj_name)
+    if not args.no_save_corpus:
+        corpus_to_serialize.save(obj_name)
 
     if not args.no_shdat:
 

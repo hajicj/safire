@@ -359,7 +359,6 @@ def main(args):
 
         plt.savefig(args.plot_monitors)
 
-
     if not args.no_save_transformer:
 
         logging.info('Saving transformer with label %s' % args.transformation_label)

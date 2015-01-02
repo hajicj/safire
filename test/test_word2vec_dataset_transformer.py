@@ -38,11 +38,12 @@ class TestWord2VecDatasetTransformer(unittest.TestCase):
         else:
             homepath = os.getenv('HOME')
 
+        cls.w2v_data_root = cls.data_root
         cls.w2v_data_root = os.path.join(homepath, 'word2vec')
-        cls.edict_pkl_file = os.path.join(cls.w2v_data_root,
-                                          'ces_wiki.edict.pkl')
-        cls.e_matrix_file = os.path.join(cls.w2v_data_root,
-                                         'ces_wiki.emtr.pkl')
+        cls.edict_pkl_file = os.path.join(cls.data_root,
+                                          'test-data.edict.pkl')
+        cls.e_matrix_file = os.path.join(cls.data_root,
+                                         'test-data.emtr.pkl')
 
     def _setup_profileable(self):
         self.corpus = self.loader.load_text_corpus(self.infix)
