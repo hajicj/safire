@@ -70,7 +70,15 @@ class SafireTestCase(unittest.TestCase):
     def test_has_default_corpora(self):
         """Checks that the default corpora and datasets were created
         successfully."""
-        self.loader.load_text_corpus()
-        self.loader.load_image_corpus()
-        self.loader.load_text()
-        self.loader.load_img()
+        # None of these should raise an exception.
+        no_exceptions = False
+        try:
+            self.loader.load_text_corpus()
+            self.loader.load_image_corpus()
+            self.loader.load_text()
+            self.loader.load_img()
+            no_exceptions = True
+        except ValueError:
+            pass
+
+        self.assertTrue(no_exceptions)

@@ -50,6 +50,19 @@ from .layouts import DataDirLayout
 
 logger = logging.getLogger(__name__)
 
+default_label = None
+
+#: Default image corpus arguments. Works for the UFAL ImageNet vector inputs.
+default_icorp_args = {
+    'delimiter': ';',
+    'dim': 4096,
+    'label': default_label}
+# TODO: Move these defaults to somewhere more principled.
+
+#: Default text corpus arguments. They are already encoded within
+#  the VTextCorpus __init__() default values.
+default_vtcorp_args = {}
+
 
 class MultimodalDatasetLoader(object):
     """A class that works as an interface for loading a multimodal dataset
@@ -90,18 +103,6 @@ class MultimodalDatasetLoader(object):
     called separately for text and image data.
 
     """
-
-    #: Default image corpus arguments. Works for the UFAL ImageNet vector
-    #  inputs.
-    default_icorp_args = {
-        'delimiter': ';',
-        'dim': 4096,
-        'label': MultimodalShardedDatasetLoader.__default_infix()}
-    # TODO: Move these defaults to somewhere more principled.
-
-    #: Default text corpus arguments. They are already encoded within
-    #  the VTextCorpus __init__() default values.
-    default_vtcorp_args = {}
 
     def __init__(self, root, name, sentences=False, text_loader=VTextCorpus,
                  img_loader=ImagenetCorpus, text_serializer=MmCorpus,
@@ -281,7 +282,27 @@ class MultimodalDatasetLoader(object):
     def get_default_text_corpus(self):
         """Returns the default image corpus initialized to the loader's layout.
         """
-        return self.get_text_corpus(self.default_vtcorp_args)
+        return self.get_text_corpus(default_vtcorp_args)
+
+    def has_image_corpora(self, infix=None):
+        """Checks whether text corpora for loading the given multimodal dataset
+        have been generated and are in the right place.
+
+        Analogous methods for the text and image corpora separately are provided
+        as ``has_text_corpora()`` and ``has_img_corpora()``.
+        """
+        corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
+        files = os.listdir(corpus_dir)
+
+        for corpus in self.layout.required_img_corpus_names(infix):
+            if corpus not in files:
+                logger.info('Corpus %s not found in corpus directory %s.' % (
+                            corpus,
+                            corpus_dir))
+                logger.debug('   Available :\n%s' % '\t\t\n'.join(files))
+                return False
+
+        return True
 
     def get_image_corpus(self, image_corpus_args=None):
         """Returns the ImagenetCorpus object correctly initialized to the Loader's
@@ -320,7 +341,7 @@ class MultimodalDatasetLoader(object):
     def get_default_image_corpus(self):
         """Returns the default image corpus initialized to the loader's layout.
         """
-        return self.get_image_corpus(self.default_icorp_args)
+        return self.get_image_corpus(default_icorp_args)
 
     def build_image_corpora(self, img_corpus_args, serializer=None):
         """Creates all *image* corpora necessary for the creation of the
@@ -381,7 +402,7 @@ class MultimodalDatasetLoader(object):
     def build_default_image_corpora(self, serializer=None):
         """Builds (incl. serialization) the default image corpus initialized
         to the loader's layout. You still have to choose the serializer."""
-        self.build_image_corpora(self.default_icorp_args,
+        self.build_image_corpora(default_icorp_args,
                                  serializer=serializer)
 
     def build_text_corpora(self, vtext_corpus_args, serializer=None):
@@ -455,8 +476,8 @@ class MultimodalDatasetLoader(object):
     def build_default_text_corpora(self, serializer=None):
         """Builds (incl. serialization) the default image corpus initialized
         to the loader's layout. You still have to choose the serializer."""
-        self.build_text_corpora(self.default_vtcorp_args,
-                                 serializer=serializer)
+        self.build_text_corpora(default_vtcorp_args,
+                                serializer=serializer)
 
     def build_corpora(self, vtext_corpus_args={}, img_corpus_args={},
                       text_serializer=None, img_serializer=None):
