@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 ########################################################
 
+
 def _create_transformer(*args, **kwargs):
     """Wrapper for transformer creation, used for profiling."""
     transformer = FrequencyBasedTransformer(*args, **kwargs)
@@ -436,18 +437,18 @@ def main(args):
     else:
         serializer.serialize(data_name, corpus_to_serialize)
 
-        # HACK: logging word2vec OOV
-        if args.word2vec:
-            # Report out-of-vocabulary statistics
-            #oov_report = word2vec.report_oov()
-            #logging.info(u'OOV report:\n%s' % oov_report)
-            word2vec.log_oov()
+    # HACK: logging word2vec OOV
+    if args.word2vec:
+        # Report out-of-vocabulary statistics
+        #oov_report = word2vec.report_oov()
+        #logging.info(u'OOV report:\n%s' % oov_report)
+        word2vec.log_oov()
 
-        if args.word2vec_export:
-            word2vec_to_export = word2vec.export_used()
-            embeddings_dict = word2vec_to_export.embeddings
-            with open(args.word2vec_export, 'wb') as w2v_export_handle:
-                cPickle.dump(embeddings_dict, w2v_export_handle, protocol=-1)
+    if args.word2vec_export:
+        word2vec_to_export = word2vec.export_used()
+        embeddings_dict = word2vec_to_export.embeddings
+        with open(args.word2vec_export, 'wb') as w2v_export_handle:
+            cPickle.dump(embeddings_dict, w2v_export_handle, protocol=-1)
 
     # We are saving the VTextCorpus rather than the transformed corpus,
     # in order to be able to load it.
