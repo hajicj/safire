@@ -52,11 +52,11 @@ class SafireTestCase(unittest.TestCase):
         cls.loader.build_default_image_corpora(
             serializer=gensim.corpora.MmCorpus)
 
-        default_vtcorp = cls.loader.get_default_text_corpus()
+        default_vtcorp = cls.loader.load_text_corpus()
         cls.loader.build_text(default_vtcorp,
                               dataset_init_args={'overwrite': True})
 
-        default_icorp = cls.loader.get_default_image_corpus()
+        default_icorp = cls.loader.load_image_corpus()
         cls.loader.build_img(default_icorp,
                              dataset_init_args={'overwrite': True})
 

@@ -109,8 +109,8 @@ class ShardedDataset(UnsupervisedDataset):
         """Initializes the shards from the corpus."""
 
         if not gensim.utils.is_corpus(corpus):
-            raise ValueError('Cannot initialize shards withot a corpus to read'
-                             ' from! (Got: %s)' % str(corpus))
+            raise ValueError('Cannot initialize shards without a corpus to read'
+                             ' from! (Got corpus type: %s)' % type(corpus))
 
         proposed_dim = self._guess_n_features(corpus)
         if proposed_dim != self.dim:
@@ -137,8 +137,9 @@ class ShardedDataset(UnsupervisedDataset):
             current_offset = self.offsets[-1]
             current_shard = numpy.zeros((len(doc_chunk), self.dim),
                                         dtype=dtype)
+            logging.debug('Current chunk dimension: %d x %d' % (len(doc_chunk), self.dim))
 
-            for i,doc in enumerate(doc_chunk):
+            for i, doc in enumerate(doc_chunk):
                 doc = dict(doc)
                 current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
 
@@ -295,9 +296,8 @@ class ShardedDataset(UnsupervisedDataset):
             for old_shard_n, old_shard_name in enumerate(old_shard_names):
                 os.remove(old_shard_name)
         except Exception as e:
-            print 'Exception occurred during old shard no. %i removal: %s' % (
-                old_shard_n, str(e))
-            print 'Attempting to at least move new shards in.'
+            logging.error('Exception occurred during old shard no. %i removal: %s' % (
+                old_shard_n, str(e)) + ' Attempting to at least move new shards in.')
             # If something happens with cleaning up - try to at least get the
             # new guys in.
         finally:
@@ -330,14 +330,19 @@ class ShardedDataset(UnsupervisedDataset):
         """Attempts to guess number of features in corpus."""
         n_features = None
         if hasattr(corpus, 'dim'):
+            # print 'Guessing from \'dim\' attribute.'
             n_features = corpus.dim
         elif hasattr(corpus, 'dictionary'):
+            # print 'GUessing from dictionary.'
             n_features = len(corpus.dictionary)
         elif hasattr(corpus, 'n_out'):
+            # print 'Guessing from \'n_out\' attribute.'
             n_features = corpus.n_out
         elif hasattr(corpus, 'num_terms'):
+            # print 'Guessing from \'num_terms\' attribute.'
             n_features = corpus.num_terms
         elif isinstance(corpus, TransformedCorpus):
+            # print 'TransformedCorpus - guessing using transcorp.dimension()'
             return safire.utils.transcorp.dimension(corpus)
         else:
             raise ValueError('Couldn\'t find number of features, '

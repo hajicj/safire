@@ -456,22 +456,22 @@ class MultimodalDatasetLoader(object):
 
         corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
         # Text corpus building/serialization
-        with open(os.path.join(self.root, self.layout.vtlist)) as vtlist_handle:
+        vtlist_full_path = os.path.join(self.root, self.layout.vtlist)
 
-            text_corpus = VTextCorpus(vtlist_handle, **vtargs)
-            text_name_infix = self.generate_tcorp_name_infix(text_corpus)
+        text_corpus = VTextCorpus(vtlist_full_path, **vtargs)
+        text_name_infix = self.generate_tcorp_name_infix(text_corpus)
 
-            if self.has_text_corpora(text_name_infix):
-                logging.warn('Text corpora for given infix %s exist; overwriting.' % text_name_infix)
+        if self.has_text_corpora(text_name_infix):
+            logging.warn('Text corpora for given infix %s exist; overwriting.' % text_name_infix)
 
-            text_corpus_names = self.layout.required_text_corpus_names(text_name_infix)
-            text_data_name = text_corpus_names[0]
-            text_obj_name = text_corpus_names[2]
+        text_corpus_names = self.layout.required_text_corpus_names(text_name_infix)
+        text_data_name = text_corpus_names[0]
+        text_obj_name = text_corpus_names[2]
 
-            serializer.serialize(os.path.join(corpus_dir, text_data_name),
-                                           text_corpus)
+        serializer.serialize(os.path.join(corpus_dir, text_data_name),
+                             text_corpus)
 
-            text_corpus.save(os.path.join(corpus_dir, text_obj_name))
+        text_corpus.save(os.path.join(corpus_dir, text_obj_name))
 
     def build_default_text_corpora(self, serializer=None):
         """Builds (incl. serialization) the default image corpus initialized

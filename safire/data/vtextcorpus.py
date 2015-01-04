@@ -245,7 +245,7 @@ class VTextCorpus(TextCorpus):
             input_handle = open(self.input)
 
         for docno, doc in enumerate(input_handle):
-            #logger.debug('Processing doc no. %d: %s' % (docno, doc.strip()))
+            # logger.debug('Processing doc no. %d: %s' % (docno, doc.strip()))
 
             doc = doc.strip()
 
