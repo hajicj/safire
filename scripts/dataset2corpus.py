@@ -223,8 +223,8 @@ def main(args):
 
         if args.dataset_only:
             logging.info('Building dataset only (assumes icorp and mmcorp)...')
-            idata = loader.load_img(args.label, { 'overwrite' : True,
-                                                  'shardsize' : args.shardsize})
+            idata = loader.load_img(args.label, {'overwrite': True,
+                                                 'shardsize': args.shardsize})
             idata.data.save()
             return
 

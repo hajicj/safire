@@ -9,7 +9,7 @@ import unittest
 import numpy
 
 from safire.datasets.sharded_dataset import ShardedDataset
-from safire.data.loaders import MultimodalDatasetLoader, ShardedDatasetLoader
+from safire.data.loaders import MultimodalShardedDatasetLoader, ShardedDatasetLoader
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
 
 
@@ -20,8 +20,12 @@ class TestShardedDataset(unittest.TestCase):
         self.testdir = os.path.dirname(__file__)
         self.data_root = os.path.join(self.testdir, 'test-data')
 
-        self.loader = MultimodalDatasetLoader(self.data_root, 'test-data')
-        self.dloader = ShardedDatasetLoader(self.data_root, 'test-data')
+        print self.data_root
+
+        self.loader = MultimodalShardedDatasetLoader(self.data_root,
+                                                     'test-data')
+        self.dloader = ShardedDatasetLoader(self.data_root,
+                                            'test-data')
 
         self.learner = BaseSGDLearner(3, 2, validation_frequency=4)
 
@@ -84,6 +88,10 @@ class TestShardedDataset(unittest.TestCase):
 
         icorp = self.loader.load_image_corpus()
         output_prefix = self.dloader.output_prefix()
+
+        print icorp.input
+        print self.dloader.output_prefix()
+
         dataset = ShardedDataset(output_prefix, icorp, shardsize=2)
 
         self.assertEqual(10, dataset.n_shards)
