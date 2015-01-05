@@ -12,9 +12,9 @@ import unittest
 
 from safire.data.loaders import MultimodalDatasetLoader
 from safire.datasets.multimodal_dataset import MultimodalDataset
+from test import SafireTestCase
 
-
-class TestMultimodalDataset(unittest.TestCase):
+class TestMultimodalDataset(SafireTestCase):
 
     def setUp(self):
 
@@ -41,7 +41,6 @@ class TestMultimodalDataset(unittest.TestCase):
                                       for req_corp in required_corpora]
             self.temporary_files.extend([os.path.join(self.loader.root, corpus_file)
                                          for corpus_file in required_corpus_files])
-
 
     def tearDown(self):
 
@@ -80,7 +79,12 @@ class TestMultimodalDataset(unittest.TestCase):
         self.assertEqual((2, dim_img), img_batch.shape)
 
 
+##############################################################################
+
 if __name__ == '__main__':
-    logging.root.setLevel(logging.INFO)
-    logging.info('Running Loader tests...')
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestMultimodalDataset)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

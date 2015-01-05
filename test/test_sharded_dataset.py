@@ -11,16 +11,16 @@ import numpy
 from safire.datasets.sharded_dataset import ShardedDataset
 from safire.data.loaders import MultimodalShardedDatasetLoader, ShardedDatasetLoader
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
+from test import SafireTestCase
 
 
-class TestShardedDataset(unittest.TestCase):
+class TestShardedDataset(SafireTestCase):
+
+    @classmethod
+    def setUpClass(cls, clean_only=True):
+        super(TestShardedDataset, cls).setUpClass(clean_only=True)
 
     def setUp(self):
-
-        self.testdir = os.path.dirname(__file__)
-        self.data_root = os.path.join(self.testdir, 'test-data')
-
-        print self.data_root
 
         self.loader = MultimodalShardedDatasetLoader(self.data_root,
                                                      'test-data')
@@ -107,11 +107,12 @@ class TestShardedDataset(unittest.TestCase):
 
         #print dataset.n_shards
 
-
-
-
-
+##############################################################################
 
 if __name__ == '__main__':
-    logging.root.setLevel(logging.WARNING)
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestShardedDataset)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

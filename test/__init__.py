@@ -6,19 +6,12 @@ import logging
 import os
 import unittest
 import gensim
-from safire.data.imagenetcorpus import ImagenetCorpus
 
+# from safire.utils import profile_run
 from safire.data.loaders import MultimodalShardedDatasetLoader
-from scripts import clean
+from safire.data.layouts import clean_data_root
 
 ##############################################################################
-
-
-def clean_data_root(root, name='test-data'):
-    """Cleans the given root."""
-    parser = clean.build_argument_parser()
-    clean_args = parser.parse_args(['-r', root, '-n', name, '-f'])
-    clean.main(clean_args)
 
 
 class SafireTestCase(unittest.TestCase):
@@ -35,8 +28,15 @@ class SafireTestCase(unittest.TestCase):
     thing it does, the tearDownClass method should call it as the *last*
     thing it does.)
     """
+    #@profile
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls, clean_only=False):
+        """Sets up the default data root structure (clean root + default
+        corpora and datasets).
+
+        :param clean_only: If set, will not create default corpora/datasets.
+        :type clean_only: bool
+        """
 
         cls.testdir = os.path.dirname(__file__)
         cls.data_root = os.path.join(cls.testdir, 'test-data')
@@ -44,6 +44,9 @@ class SafireTestCase(unittest.TestCase):
         # Clean the test data - in case the previous TestCase was NOT
         # a SafireTestCase
         clean_data_root(cls.data_root)
+
+        if clean_only:
+            return
 
         # Re-generate the default corpora/datasets.
         cls.loader = MultimodalShardedDatasetLoader(cls.data_root,
@@ -82,3 +85,15 @@ class SafireTestCase(unittest.TestCase):
             pass
 
         self.assertTrue(no_exceptions)
+
+
+############################################################
+
+
+if __name__ == '__main__':
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(SafireTestCase)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

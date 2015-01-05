@@ -1,4 +1,4 @@
-#!c:\users\lenovo\canopy\user\scripts\python.exe
+#!/usr/bin/python
 """
 ``run.py`` is a script that runs a trained text-image system.
 

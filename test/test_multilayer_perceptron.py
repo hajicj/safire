@@ -3,19 +3,19 @@ import os
 from safire.data.loaders import MultimodalShardedDatasetLoader, ModelLoader
 from safire.learning.learners import BaseSGDLearner
 from safire.learning.models import MultilayerPerceptron
+from test import SafireTestCase
 
 __author__ = 'Jan Hajic jr.'
 
 import unittest
 
 
-class TestMultilayerPerceptron(unittest.TestCase):
+class TestMultilayerPerceptron(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
 
-        cls.testdir = os.path.dirname(__file__)
-        cls.data_root = os.path.join(cls.testdir, 'test-data')
+        super(TestMultilayerPerceptron, cls).setUpClass()
 
         cls.dloader = MultimodalShardedDatasetLoader(cls.data_root, 'test-data')
         cls.mloader = ModelLoader(cls.data_root, 'test-data')
@@ -37,6 +37,8 @@ class TestMultilayerPerceptron(unittest.TestCase):
 
         for f in cls.temp_files:
             os.remove(f)
+
+        super(TestMultilayerPerceptron, cls).tearDownClass()
 
     def setUp(self):
 
@@ -78,11 +80,13 @@ class TestMultilayerPerceptron(unittest.TestCase):
         #model_export = model._export_pickleable_object()
 
 
-
-
-
-
+##############################################################################
 
 if __name__ == '__main__':
-    logging.root.setLevel(logging.WARNING)
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestMultilayerPerceptron)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
+

@@ -4,19 +4,18 @@ from safire.data.loaders import MultimodalShardedDatasetLoader, \
     LearnerLoader, ModelLoader
 from safire.learning.learners import BaseSGDLearner
 from safire.learning.models import MultilayerPerceptron
+from test import SafireTestCase
 
 __author__ = 'Jan Hajic jr.'
 
 import unittest
 
 
-class TestBaseSGDLearner(unittest.TestCase):
+class TestBaseSGDLearner(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
-
-        cls.testdir = os.path.dirname(__file__)
-        cls.data_root = os.path.join(cls.testdir, 'test-data')
+        super(TestBaseSGDLearner, cls).setUpClass()
 
         cls.dloader = MultimodalShardedDatasetLoader(cls.data_root, 'test-data')
         cls.mloader = ModelLoader(cls.data_root, 'test-data')
@@ -38,6 +37,8 @@ class TestBaseSGDLearner(unittest.TestCase):
 
         for f in cls.temp_files:
             os.remove(f)
+
+        super(TestBaseSGDLearner, cls).tearDownClass()
 
     def setUp(self):
 
@@ -86,9 +87,13 @@ class TestBaseSGDLearner(unittest.TestCase):
         self.assertEqual(6, len(loaded_learner.intermediate_fnames))
 
 
-
-
+##############################################################################
 
 if __name__ == '__main__':
-    logging.root.setLevel(logging.INFO)
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestBaseSGDLearner)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
+

@@ -12,17 +12,14 @@ from safire.data.loaders import MultimodalDatasetLoader, ModelLoader
 from safire.learning.interfaces.model_handle import ModelHandle
 from safire.learning.models.denoising_autoencoder import DenoisingAutoencoder
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
+from test import SafireTestCase
 
-
-class TestModelLoader(unittest.TestCase):
+class TestModelLoader(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
+        super(TestModelLoader, cls).setUpClass()
 
-        cls.testdir = os.path.dirname(__file__)
-        cls.data_root = os.path.join(cls.testdir, 'test-data')
-
-        cls.loader = MultimodalDatasetLoader(cls.data_root, 'test-data')
         cls.mloader = ModelLoader(cls.data_root, 'test-data')
 
         dataset = cls.loader.load_text()
@@ -46,6 +43,8 @@ class TestModelLoader(unittest.TestCase):
         del cls.model_handle
         del cls.loader
         del cls.mloader
+
+        super(TestModelLoader, cls).tearDownClass()
 
     def test_save_load(self):
 
@@ -79,7 +78,12 @@ class TestModelLoader(unittest.TestCase):
 
         self.assertNotEqual(before_training, after_training)
 
+##############################################################################
 
 if __name__ == '__main__':
-    logging.root.setLevel(logging.WARNING)
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestModelLoader)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

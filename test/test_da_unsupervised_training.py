@@ -13,16 +13,14 @@ from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.learning.interfaces.model_handle import ModelHandle
 from safire.learning.models.denoising_autoencoder import DenoisingAutoencoder
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
+from test import SafireTestCase
 
 
-class TestUnsupervisedTraining(unittest.TestCase):
+class TestUnsupervisedTraining(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
-
-        cls.testdir = os.path.dirname(__file__)
-        cls.data_root = os.path.join(cls.testdir, 'test-data')
-        cls.loader = MultimodalShardedDatasetLoader(cls.data_root, 'test-data')
+        super(TestUnsupervisedTraining, cls).setUpClass()
 
         dataset = cls.loader.load_img()
 
@@ -40,6 +38,8 @@ class TestUnsupervisedTraining(unittest.TestCase):
         del cls.learner
         del cls.model_handle
         del cls.loader
+
+        super(TestUnsupervisedTraining, cls).tearDownClass()
 
     def test_training(self):
 
@@ -64,6 +64,12 @@ class TestUnsupervisedTraining(unittest.TestCase):
 
         print type(output)
 
+##############################################################################
+
 if __name__ == '__main__':
-    logging.root.setLevel(logging.INFO)
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestUnsupervisedTraining)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

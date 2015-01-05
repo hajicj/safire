@@ -16,14 +16,14 @@ from safire.data.loaders import MultimodalShardedDatasetLoader
 
 from safire.data.vtextcorpus import VTextCorpus
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
+from test import SafireTestCase
 
-class TestVTextCorpus(unittest.TestCase):
+class TestVTextCorpus(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
 
-        cls.testdir = os.path.dirname(__file__)
-        cls.data_root = os.path.join(cls.testdir, 'test-data')
+        super(TestVTextCorpus, cls).setUpClass(clean_only=True)
 
         cls.vtlist_file = os.path.join(cls.data_root, 'test-data.vtlist')
         with open(cls.vtlist_file) as vtlist_handle:
@@ -108,6 +108,7 @@ class TestVTextCorpus(unittest.TestCase):
 
         self.assertTrue(len(docs) == len(pdocs))
 
+    # What is this test???
     def test_tfidf(self):
 
         tfidf_corpus = VTextCorpus(self.vtlist_file,
@@ -160,6 +161,9 @@ class TestVTextCorpus(unittest.TestCase):
             self.assertTrue(True)
 
 if __name__ == '__main__':
-    logging.root.setLevel(logging.INFO)
-    logging.info('Running Loader tests...')
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestVTextCorpus)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

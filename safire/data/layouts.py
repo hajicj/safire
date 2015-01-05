@@ -11,6 +11,9 @@ expects.
 
 import logging
 import os
+import shutil
+import sys
+
 
 logger = logging.getLogger(__name__)
 
@@ -356,3 +359,87 @@ class DataDirLayout(object):
     def get_learner_file(self, infix):
         """Returns the path to index file with given infix from layout root."""
         return os.path.join(self.learner_dir, self.get_learner_name(infix))
+
+
+def clean_dir(path, force=False):
+    """Removes everything from the directory given by path."""
+    if not force:
+        print 'Are you sure you want to delete everything in %s? [y/n]' % path
+        confirmation = sys.stdin.readline().strip()
+        if confirmation not in ['y', 'Y', 'yes', 'Yes', 'YES']:
+            print 'Aborting...'
+            return
+        else:
+            print 'Proceeding...'
+
+    shutil.rmtree(path)
+    os.makedirs(path)
+
+
+def clean_data_root(root, force=True):
+    """Cleans the given data root - removes corpora, datasets, models, etc."""
+    layout = DataDirLayout(root)
+
+    corpus_dir = os.path.join(layout.name, layout.corpus_dir)
+    dataset_dir = os.path.join(layout.name, layout.dataset_dir)
+    model_dir = os.path.join(layout.name, layout.model_dir)
+    learner_dir = os.path.join(layout.name, layout.learner_dir)
+    index_dir = os.path.join(layout.name, layout.index_dir)
+    temp_dir = os.path.join(layout.name, layout.temp_dir)
+
+    clean_dir(corpus_dir, force=force)
+    clean_dir(dataset_dir, force=force)
+    clean_dir(model_dir, force=force)
+    clean_dir(learner_dir, force=force)
+    clean_dir(index_dir, force=force)
+    clean_dir(temp_dir, force=force)
+
+
+def init_data_root(path, overwrite=False):
+    """Initializes the given directory as a data root: creates all necessary
+    subdirectories.
+
+    If ``overwrite`` is set, will clean out all existing corpora/datasets/etc.
+    in the given directory if it already is a data root (or some partial
+    remainder - leftover ``corpora`` directory, etc.)."""
+    layout = DataDirLayout(path)
+
+    is_already_root = True
+
+    corpus_dir = os.path.join(layout.name, layout.corpus_dir)
+    if not os.path.exists(corpus_dir):
+        is_already_root = False
+        os.makedirs(corpus_dir)
+
+    dataset_dir = os.path.join(layout.name, layout.dataset_dir)
+    if not os.path.exists(dataset_dir):
+        is_already_root = False
+        os.makedirs(dataset_dir)
+
+    model_dir = os.path.join(layout.name, layout.model_dir)
+    if not os.path.exists(model_dir):
+        is_already_root = False
+        os.makedirs(model_dir)
+
+    learner_dir = os.path.join(layout.name, layout.learner_dir)
+    if not os.path.exists(learner_dir):
+        is_already_root = False
+        os.makedirs(learner_dir)
+
+    index_dir = os.path.join(layout.name, layout.index_dir)
+    if not os.path.exists(index_dir):
+        is_already_root = False
+        os.makedirs(index_dir)
+
+    temp_dir = os.path.join(layout.name, layout.temp_dir)
+    if not os.path.exists(temp_dir):
+        is_already_root = False
+        os.makedirs(temp_dir)
+
+    if is_already_root:
+        logging.warn('Directory already is a safire data root.')
+
+    if overwrite:
+        logging.warn('Overwriting to clean root...')
+        clean_data_root(path, force=True)
+
