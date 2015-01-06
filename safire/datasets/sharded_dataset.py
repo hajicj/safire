@@ -12,6 +12,7 @@ import math
 import time
 
 import gensim
+from gensim.corpora import IndexedCorpus
 from gensim.interfaces import TransformedCorpus
 import numpy
 import theano
@@ -24,7 +25,7 @@ __author__ = 'Jan Hajic jr.'
 from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
 
-class ShardedDataset(UnsupervisedDataset):
+class ShardedDataset(UnsupervisedDataset, IndexedCorpus):
     """
     A dataset that stores its data in separate files called
     "shards". This is a compromise between speed (keeping the whole dataset
@@ -55,7 +56,12 @@ class ShardedDataset(UnsupervisedDataset):
     the current shard, or opens a new one. The shard size is constant, except
     for the last shard.
 
-    TODO: Supports slice notation. [NOT IMPLEMENTED]
+    Gensim interface
+    ================
+
+    The ShardedDataset simultaneously implements a gensim-style corpus
+    interface: the :class:`IndexedCorpus` abstract base class for O(1)
+    random-access corpora. (It of course overrides everything
     """
     #@profile
     def __init__(self, output_prefix, corpus, dim=None, test_p=0.1, devel_p=0.1,
@@ -586,9 +592,11 @@ class ShardedDataset(UnsupervisedDataset):
             cPickle.dump(self, pickle_handle)
 
     @classmethod
-    def load(cls, output_prefix):
-        """Loads itself in clean state."""
-        with open(output_prefix, 'rb') as unpickle_handle:
+    def load(cls, fname, mmap=None):
+        """Loads itself in clean state. You can happily ignore the ``mmap``
+        parameter, as the saving mechanism for the dataset is different from
+        how gensim saves things in utils.SaveLoad."""
+        with open(fname, 'rb') as unpickle_handle:
             dataset = cPickle.load(unpickle_handle)
 
         return dataset
@@ -603,15 +611,24 @@ class ShardedDataset(UnsupervisedDataset):
         All this thing does is initialize a ShardedDataset from a corpus
         with the ``output_prefix`` argument set to the ``fname`` parameter
         of this method. The initialization of a ShardedDataset takes care of
-        serializing the data (in dense form) to shards."""
+        serializing the data (in dense form) to shards.
+
+        Ignore the parameters id2word, progress_cnt and metadata. They
+        currently do nothing and are here only to provide a compatible
+        method signature with superclass."""
         ShardedDataset(fname, corpus)
 
     @classmethod
     def serialize(serializer, fname, corpus, id2word=None,
-                  progress_cnt=None, metadata=False):
+                  index_fname=None, progress_cnt=None, labels=None,
+                  metadata=False):
         """Iterate through the document stream ``corpus``, saving the documents
         as a ShardedDataset to ``fname``.
 
-        Use this method instead of calling ``save_corpus`` directly."""
+        Use this method instead of calling ``save_corpus`` directly.
+
+        Ignore the parameters id2word, index_fname, progress_cnt, labels
+        and metadata. They currently do nothing and are here only to
+        provide a compatible method signature with superclass."""
         serializer.save_corpus(fname, corpus, id2word=id2word,
                                progress_cnt=progress_cnt, metadata=metadata)
