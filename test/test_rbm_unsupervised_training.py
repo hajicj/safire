@@ -13,7 +13,7 @@ from safire.learning.interfaces.model_handle import ModelHandle
 from safire.learning.models import RestrictedBoltzmannMachine
 from safire.learning.models.denoising_autoencoder import DenoisingAutoencoder
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
 
 
 class TestRBMUnsupervisedTraining(unittest.TestCase):

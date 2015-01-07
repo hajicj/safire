@@ -16,7 +16,7 @@ from gensim.interfaces import TransformedCorpus
 from safire.data.loaders import MultimodalDatasetLoader
 from safire.data.vtextcorpus import VTextCorpus
 from safire.data.frequency_based_transform import FrequencyBasedTransformer
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
 
 
 class TestFrequencyBasedTransform(SafireTestCase):

@@ -16,7 +16,8 @@ from safire.data.loaders import MultimodalShardedDatasetLoader
 
 from safire.data.vtextcorpus import VTextCorpus
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
+
 
 class TestVTextCorpus(SafireTestCase):
 

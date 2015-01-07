@@ -15,7 +15,7 @@ from safire.data import VTextCorpus, FrequencyBasedTransformer
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 import safire.utils
 from safire.utils.transcorp import bottom_corpus, run_transformations
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
 
 
 class TestUtils(SafireTestCase):

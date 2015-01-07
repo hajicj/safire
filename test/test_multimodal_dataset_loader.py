@@ -16,7 +16,7 @@ from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.loaders import MultimodalDatasetLoader
 from safire.datasets.multimodal_dataset import MultimodalDataset
 from safire.data.vtextcorpus import VTextCorpus
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
 
 
 class TestMultimodalDatasetLoader(SafireTestCase):

@@ -4,7 +4,7 @@ from safire.data.loaders import MultimodalShardedDatasetLoader, \
     LearnerLoader, ModelLoader
 from safire.learning.learners import BaseSGDLearner
 from safire.learning.models import MultilayerPerceptron
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
 
 __author__ = 'Jan Hajic jr.'
 

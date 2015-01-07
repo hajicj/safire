@@ -17,7 +17,7 @@ from safire.learning.models.logistic_regression import LogisticRegression
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
 from safire.learning.interfaces.safire_transformer import SafireTransformer
 from safire.utils.transcorp import bottom_corpus, reset_vtcorp_input
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
 
 
 class TestSafireTransformer(SafireTestCase):

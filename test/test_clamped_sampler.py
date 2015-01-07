@@ -6,7 +6,7 @@ from safire.learning.interfaces.clamped_sampler import MultimodalClampedSampler
 from safire.learning.learners import BaseSGDLearner
 from safire.learning.models import RestrictedBoltzmannMachine
 
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
 
 __author__ = 'Lenovo'
 

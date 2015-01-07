@@ -336,6 +336,7 @@ def abstanh(X):
 
 ##############################################################################
 
+
 def detect_nan(i, node, fn):
     """Debugging theano."""
     for output in fn.outputs:
@@ -447,6 +448,7 @@ def parse_csv_map(t2i_handle):
 ###############################################################################
 
 # Image drawing functions
+
 
 def compute_column_thumbnail_size(images, total_size, margin=10):
     """Computes the thumbnail size for images so that they all fit into the
@@ -593,7 +595,8 @@ def add_header_image(image, header_image, header_size=(300,200), margin=20):
 def heatmap_matrix(matrix, title='', with_average=False,
                    colormap='coolwarm', vmin=0.0, vmax=1.0,
                    **kwargs):
-    plt.figure(figsize=(matrix.shape[1]*0.002,matrix.shape[0]*0.02), dpi=160,
+    plt.figure(figsize=(matrix.shape[1]*0.002, matrix.shape[0]*0.02),
+               dpi=160,
                facecolor='white')
     if with_average:
         gs = gridspec.GridSpec(2,1,height_ratios=[1,2])
@@ -622,7 +625,7 @@ def heatmap_matrix(matrix, title='', with_average=False,
 
         #plt.xlim([0, matrix.shape[1]])
         plt.subplot(gs[1])
-
+C
     plt.xlim([0,matrix.shape[1]])
     plt.ylim([0,matrix.shape[0]])
     plt.pcolormesh(matrix, cmap=colormap, vmin=vmin, vmax=vmax, **kwargs)

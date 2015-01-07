@@ -17,7 +17,7 @@ from safire.datasets.sharded_multimodal_dataset import \
     UnsupervisedShardedVTextCorpusDataset, \
     UnsupervisedShardedImagenetCorpusDataset
 from safire.data.vtextcorpus import VTextCorpus
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
 
 
 class TestMultimodalShardedDatasetLoader(SafireTestCase):

@@ -25,7 +25,7 @@ __author__ = 'Jan Hajic jr.'
 from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
 
-class ShardedDataset(UnsupervisedDataset, IndexedCorpus):
+class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
     """
     A dataset that stores its data in separate files called
     "shards". This is a compromise between speed (keeping the whole dataset
@@ -426,7 +426,6 @@ class ShardedDataset(UnsupervisedDataset, IndexedCorpus):
             #    - into the current shard
             #    - into the result
 
-
             # Indexes into current result rows. These are always smaller than
             # the dataset indexes by ``start`` (as we move over the shards,
             # we're moving by the same number of rows through the result).
@@ -437,7 +436,8 @@ class ShardedDataset(UnsupervisedDataset, IndexedCorpus):
             #  - if in starting shard, these are from (start - current_offset)
             #    to self.shardsize
             #  - if in intermediate shard, these are from 0 to self.shardsize
-            #  - if in ending shard, thesea re from 0 to (stop - current_offset)
+            #  - if in ending shard, these are from 0
+            #    to (stop - current_offset)
             shard_start = start - self.current_offset
             shard_stop = self.offsets[self.current_shard_n + 1] - self.current_offset
 
@@ -469,7 +469,7 @@ class ShardedDataset(UnsupervisedDataset, IndexedCorpus):
             result = self.get_by_offset(offset)
             return result
 
-    # The obligatory Dataset mehtods.
+    # The obligatory Dataset methods.
     def n_train_batches(self, batch_size):
         """Determines how many batches of given size the training data will
         be split into.
@@ -577,6 +577,7 @@ class ShardedDataset(UnsupervisedDataset, IndexedCorpus):
 
         return result
 
+    # Overriding the IndexedCorpus and other corpus superclass methods
     def __iter__(self):
         """Yields items one by one from the dataset.
 
@@ -584,12 +585,27 @@ class ShardedDataset(UnsupervisedDataset, IndexedCorpus):
         for i in xrange(len(self)):
             yield self[i]
 
-    def save(self):
+    def save(self, *args, **kwargs):
         """Saves itself (the wrapper) in clean state (after calling reset())
-         to the output_prefix file."""
-        self.reset()
-        with open(self.output_prefix, 'wb') as pickle_handle:
-            cPickle.dump(self, pickle_handle)
+        to the output_prefix file. If you wish to save to a different file,
+        use the ``fname`` argument as the first positional arg."""
+        # Can we save to a different file than output_prefix? Well, why not?
+        if len(args) == 0:
+            args = tuple([self.output_prefix])
+
+        attrs_to_ignore = ['current_shard',
+                           'current_shard_n',
+                           'current_offset']
+        if 'ignore' not in kwargs:
+            kwargs['ignore'] = frozenset(attrs_to_ignore)
+        else:
+            kwargs['ignore'] = frozenset([v for v in kwargs['ignore']]
+                                         + attrs_to_ignore)
+        super(ShardedDataset, self).save(*args, **kwargs)
+        #
+        # self.reset()
+        # with open(self.output_prefix, 'wb') as pickle_handle:
+        #     cPickle.dump(self, pickle_handle)
 
     @classmethod
     def load(cls, fname, mmap=None):

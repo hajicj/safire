@@ -12,7 +12,7 @@ from safire.datasets.word2vec_transformer import \
 from safire.utils.transcorp import get_id2word_obj
 from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.word2vec_transformer import Word2VecTransformer
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
 
 __author__ = 'Jan Hajic jr.'
 

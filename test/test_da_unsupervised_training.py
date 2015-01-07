@@ -13,7 +13,7 @@ from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.learning.interfaces.model_handle import ModelHandle
 from safire.learning.models.denoising_autoencoder import DenoisingAutoencoder
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
 
 
 class TestUnsupervisedTraining(SafireTestCase):

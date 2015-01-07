@@ -11,7 +11,7 @@ import numpy
 from safire.datasets.sharded_dataset import ShardedDataset
 from safire.data.loaders import MultimodalShardedDatasetLoader, ShardedDatasetLoader
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
 
 
 class TestShardedDataset(SafireTestCase):

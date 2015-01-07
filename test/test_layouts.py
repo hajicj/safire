@@ -11,7 +11,8 @@ import os
 import unittest
 
 from safire.data.layouts import DataDirLayout
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
+
 
 class TestLayouts(SafireTestCase):
 

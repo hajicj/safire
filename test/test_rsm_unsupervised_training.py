@@ -14,7 +14,7 @@ from safire.learning.models import RestrictedBoltzmannMachine
 from safire.learning.models.denoising_autoencoder import DenoisingAutoencoder
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
 from safire.learning.models.replicated_softmax import ReplicatedSoftmax
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
 
 
 class TestRSMUnsupervisedTraining(SafireTestCase):

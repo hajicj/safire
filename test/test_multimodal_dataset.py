@@ -12,7 +12,8 @@ import unittest
 
 from safire.data.loaders import MultimodalDatasetLoader
 from safire.datasets.multimodal_dataset import MultimodalDataset
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
+
 
 class TestMultimodalDataset(SafireTestCase):
 

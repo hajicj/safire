@@ -5,7 +5,7 @@ from safire.data import VTextCorpus, FrequencyBasedTransformer
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.text_browser import TextBrowser
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
 
 __author__ = 'Lenovo'
 

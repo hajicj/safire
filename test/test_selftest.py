@@ -4,7 +4,7 @@ Testing the test procedure itself.
 
 import logging
 import unittest
-from test import SafireTestCase
+from safire_test_case import SafireTestCase
 
 
 class TestSelfTest(SafireTestCase):

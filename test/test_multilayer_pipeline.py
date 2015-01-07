@@ -11,7 +11,7 @@ from safire.learning.learners import BaseSGDLearner
 from safire.learning.models import RestrictedBoltzmannMachine, \
     DenoisingAutoencoder
 from safire.utils.transcorp import reset_vtcorp_input, dimension
-from test import SafireTestCase
+from test.safire_test_case import SafireTestCase
 
 __author__ = 'Lenovo'
 
