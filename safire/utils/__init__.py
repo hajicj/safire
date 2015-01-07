@@ -16,10 +16,11 @@ import random
 from sys import getsizeof, stderr
 from itertools import chain
 from collections import deque
-try:
-    from reprlib import repr
-except ImportError:
-    pass
+
+#try:
+#    from reprlib import repr
+#except ImportError:
+#    pass
 
 
 import matplotlib.gridspec as gridspec
@@ -394,6 +395,8 @@ def shuffle_together(*lists):
 
 
 def iter_sample_fast(iterable, samplesize):
+    """Got this off stackoverwflow."""
+    # I can't remember why it works.
     results = []
     iterator = iter(iterable)
     # Fill in the first samplesize elements:
@@ -412,7 +415,7 @@ def iter_sample_fast(iterable, samplesize):
 
 def uniform_steps(iterable, k):
     """Chooses K items from the iterable so that they are a constant step size
-    from each other. The last member is chosen"""
+    from each other."""
     stepsize = len(iterable) / k
     if stepsize == 0:
         raise ValueError('Too many steps, stepsize 0 (iterable length: %d, steps: %d' % (len(iterable), k))
@@ -447,6 +450,7 @@ def parse_csv_map(t2i_handle):
 ###############################################################################
 
 # Image drawing functions
+
 
 def compute_column_thumbnail_size(images, total_size, margin=10):
     """Computes the thumbnail size for images so that they all fit into the
@@ -593,10 +597,41 @@ def add_header_image(image, header_image, header_size=(300,200), margin=20):
 def heatmap_matrix(matrix, title='', with_average=False,
                    colormap='coolwarm', vmin=0.0, vmax=1.0,
                    **kwargs):
+    """Creates and shows a heatmap of the given matrix. Optionally, will also
+    plot column averages. Doesn't return anything; will show() the figure.
+
+    You can specify heatmap color, bounds and other arguments for
+    matplotlib.pyplot.colormesh.
+
+    :type matrix: numpy.ndarray
+    :param matrix: The data to plot.
+
+    :type title: str
+    :param title: The title of the plotted figure.
+
+    :type with_average: bool
+    :param with_average: If set, will plot column averages above the heatmap.
+
+    :type colormap: str
+    :param colormap: The colormap to use in colormesh. Passed directly to
+        colormesh, so you can use anything you find in the corresponding
+        matplotlib doucmentation.
+
+    :type vmin: float
+    :param vmin: The value in the ``matrix`` which should correspond to the
+        "minimum" color in the heatmap.
+
+    :type vmax: float
+    :param vmax: The value in the ``matrix`` which should correspond to the
+        "maximum" color in the heatmap.
+
+    :param kwargs: Other arguments to maptlotlib.pyplot.colormesh
+
+    """
     plt.figure(figsize=(matrix.shape[1]*0.002,matrix.shape[0]*0.02), dpi=160,
                facecolor='white')
     if with_average:
-        gs = gridspec.GridSpec(2,1,height_ratios=[1,2])
+        gs = gridspec.GridSpec(2, 1, height_ratios=[1,2])
         plt.subplot(gs[0])
         plt.title('Average activations')
 
@@ -605,7 +640,7 @@ def heatmap_matrix(matrix, title='', with_average=False,
 
         # Sliding window average
         avg_windowsize = 20
-        vscale=2.0
+        vscale = 2.0
         wavgs = [ sum(avgs[i:i+avg_windowsize])*vscale / float(avg_windowsize)
                  for i in xrange(matrix.shape[1] - avg_windowsize) ]
         wavgs.extend([avgs[-1] for _ in xrange(avg_windowsize)])
@@ -623,8 +658,8 @@ def heatmap_matrix(matrix, title='', with_average=False,
         #plt.xlim([0, matrix.shape[1]])
         plt.subplot(gs[1])
 
-    plt.xlim([0,matrix.shape[1]])
-    plt.ylim([0,matrix.shape[0]])
+    plt.xlim([0, matrix.shape[1]])
+    plt.ylim([0, matrix.shape[0]])
     plt.pcolormesh(matrix, cmap=colormap, vmin=vmin, vmax=vmax, **kwargs)
     if not with_average:
         plt.title(title)
