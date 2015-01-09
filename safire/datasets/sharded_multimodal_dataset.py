@@ -115,6 +115,9 @@ class UnsupervisedShardedCorpusDataset(UnsupervisedCorpusDataset):
         # from dataset items (and warn about it).
         if mm_corpus_filename is not None:
             self.indexed_corpus = serializer(mm_corpus_filename)
+        else:
+            logging.warn('No sparse corpus provided, will use full2sparse to'
+                         'convert to sparse representation on the fly if requested.')
 
         # Data are used for dense item retrieval.
         self.data = ShardedDataset(output_prefix, self.indexed_corpus, dim=dim,
@@ -123,7 +126,7 @@ class UnsupervisedShardedCorpusDataset(UnsupervisedCorpusDataset):
 
         self.dim = dim
         self.n_in = dim
-        self.n_out = None # Unsupervised...
+        self.n_out = None  # Unsupervised...
 
         self.n_docs = len(self.data)
 
@@ -166,8 +169,8 @@ class UnsupervisedShardedCorpusDataset(UnsupervisedCorpusDataset):
         if self.indexed_corpus is not None:
             return self.indexed_corpus[idx]
         else:
-            logging.warn('Retrieving sparse items without a corpus initialized'
-                         ' may be inefficient.')
+            logging.debug('Retrieving sparse items without a corpus initialized'
+                          ' may be inefficient.')
             return gensim.matutils.full2sparse(self.data[idx])
 
     def __getitem__(self, idx):
@@ -188,7 +191,8 @@ class UnsupervisedShardedVTextCorpusDataset(UnsupervisedShardedCorpusDataset):
                  mm_corpus_filename=None, shardsize=4096, overwrite=False):
 
         self.loaded_corpus = gensim.utils.SaveLoad.load(vt_corpus_filename)
-        logging.info('TextCorpusDataset loaded corpus %s' % str(self.loaded_corpus))
+        logging.info('TextCorpusDataset loaded corpus %s' % str(
+             self.loaded_corpus))
         self.vtcorp = safire.utils.transcorp.bottom_corpus(self.loaded_corpus)
         logging.info('TextCorpusDataset loaded vtcorp %s' % str(self.vtcorp))
 
@@ -196,9 +200,11 @@ class UnsupervisedShardedVTextCorpusDataset(UnsupervisedShardedCorpusDataset):
             dim = dimension(self.loaded_corpus)
             logging.debug('Setting text dataset dimension to %d' % dim)
 
-        super(UnsupervisedShardedVTextCorpusDataset, self).__init__(output_prefix,
-                dim, test_p, devel_p, serializer, mm_corpus_filename, shardsize,
-                overwrite)
+        super(UnsupervisedShardedVTextCorpusDataset, self).__init__(
+            output_prefix,
+            dim, test_p, devel_p,
+            serializer, mm_corpus_filename, shardsize,
+            overwrite)
 
 
 class UnsupervisedShardedImagenetCorpusDataset(UnsupervisedShardedCorpusDataset):

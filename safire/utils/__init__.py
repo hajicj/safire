@@ -337,6 +337,7 @@ def abstanh(X):
 
 ##############################################################################
 
+
 def detect_nan(i, node, fn):
     """Debugging theano."""
     for output in fn.outputs:
@@ -415,7 +416,7 @@ def iter_sample_fast(iterable, samplesize):
 
 def uniform_steps(iterable, k):
     """Chooses K items from the iterable so that they are a constant step size
-    from each other."""
+    from each other. The last member is chosen"""
     stepsize = len(iterable) / k
     if stepsize == 0:
         raise ValueError('Too many steps, stepsize 0 (iterable length: %d, steps: %d' % (len(iterable), k))
@@ -628,7 +629,8 @@ def heatmap_matrix(matrix, title='', with_average=False,
     :param kwargs: Other arguments to maptlotlib.pyplot.colormesh
 
     """
-    plt.figure(figsize=(matrix.shape[1]*0.002,matrix.shape[0]*0.02), dpi=160,
+    plt.figure(figsize=(matrix.shape[1]*0.002, matrix.shape[0]*0.02),
+               dpi=160,
                facecolor='white')
     if with_average:
         gs = gridspec.GridSpec(2, 1, height_ratios=[1,2])

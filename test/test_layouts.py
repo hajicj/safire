@@ -11,8 +11,10 @@ import os
 import unittest
 
 from safire.data.layouts import DataDirLayout
+from test.safire_test_case import SafireTestCase
 
-class TestLayouts(unittest.TestCase):
+
+class TestLayouts(SafireTestCase):
 
     def setUp(self):
 
@@ -57,9 +59,12 @@ class TestLayouts(unittest.TestCase):
         self.assertEqual(expected_reqnames, reqnames)
 
 
-
+##############################################################################
 
 if __name__ == '__main__':
-    logging.root.setLevel(logging.INFO)
-    logging.info('Running Loader tests...')
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestLayouts)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

@@ -17,7 +17,9 @@ def walk_tail_dir(path):
         if '.svn' in dirs:
             dirs.remove('.svn')
 
-        fnames.extend([ os.path.join(rootpath[from_idx:], f) for f in files if not f.startswith('.svn')])
+        fnames.extend(dirs)
+        fnames.extend([ os.path.join(rootpath[from_idx:], f)
+                        for f in files if not f.startswith('.svn')])
 
     return fnames
 

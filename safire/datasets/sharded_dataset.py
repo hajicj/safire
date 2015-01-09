@@ -12,6 +12,7 @@ import math
 import time
 
 import gensim
+from gensim.corpora import IndexedCorpus
 from gensim.interfaces import TransformedCorpus
 import numpy
 import theano
@@ -24,7 +25,7 @@ __author__ = 'Jan Hajic jr.'
 from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
 
-class ShardedDataset(UnsupervisedDataset):
+class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
     """
     A dataset that stores its data in separate files called
     "shards". This is a compromise between speed (keeping the whole dataset
@@ -44,7 +45,7 @@ class ShardedDataset(UnsupervisedDataset):
     >>> sdata = ShardedDataset(output_prefix, icorp)
 
     The ``output_prefix`` gives the path to the dataset file. The individual
-    shareds are saved as ``output_prefix.0``, ``output_prefix.1``, etc.
+    shards are saved as ``output_prefix.0``, ``output_prefix.1``, etc.
 
     On further initialization with the same ``output_prefix`` (more precisely:
     the output prefix leading to the same file), will load the already built
@@ -55,13 +56,28 @@ class ShardedDataset(UnsupervisedDataset):
     the current shard, or opens a new one. The shard size is constant, except
     for the last shard.
 
-    TODO: Supports slice notation. [NOT IMPLEMENTED]
+    Gensim interface
+    ================
+
+    The ShardedDataset simultaneously implements a gensim-style corpus
+    interface: the :class:`IndexedCorpus` abstract base class for O(1)
+    random-access corpora. (It of course overrides everything
     """
     #@profile
     def __init__(self, output_prefix, corpus, dim=None, test_p=0.1, devel_p=0.1,
                  shardsize=4096, overwrite=False):
         """Initializes the dataset. If ``output_prefix`` is not found,
-        builds the shards."""
+        builds the shards.
+
+        :type output_prefix: str
+        :param output_prefix: The absolute path to the file where the dataset
+            object should be saved. The individual shards will be saved as
+            ``output_prefix.0``, ``output_prefix.1``, etc.
+
+        :type corpus: gensim.interfaces.CorpusABC
+        :param corpus: The source corpus from which to build the dataset.
+
+        """
         self.output_prefix = output_prefix
         self.shardsize = shardsize
 
@@ -99,17 +115,19 @@ class ShardedDataset(UnsupervisedDataset):
         """Initializes the shards from the corpus."""
 
         if not gensim.utils.is_corpus(corpus):
-            raise ValueError('Cannot initialize shards withot a corpus to read'
-                             ' from! (Got: %s)' % str(corpus))
+            raise ValueError('Cannot initialize shards without a corpus to read'
+                             ' from! (Got corpus type: %s)' % type(corpus))
 
         proposed_dim = self._guess_n_features(corpus)
         if proposed_dim != self.dim:
             if self.dim is None:
-                logging.info('Deriving dataset dimension from corpus: %d' % proposed_dim)
+                logging.info('Deriving dataset dimension from corpus: '
+                             '%d' % proposed_dim)
             else:
                 logging.warn('Dataset dimension derived from input corpus diffe'
                              'rs from initialization argument, using corpus.'
-                             '(corpus %d, init arg %d)' % (proposed_dim, self.dim))
+                             '(corpus %d, init arg %d)' % (proposed_dim,
+                                                           self.dim))
 
         self.dim = proposed_dim
         self.offsets = [0]
@@ -125,8 +143,9 @@ class ShardedDataset(UnsupervisedDataset):
             current_offset = self.offsets[-1]
             current_shard = numpy.zeros((len(doc_chunk), self.dim),
                                         dtype=dtype)
+            logging.debug('Current chunk dimension: %d x %d' % (len(doc_chunk), self.dim))
 
-            for i,doc in enumerate(doc_chunk):
+            for i, doc in enumerate(doc_chunk):
                 doc = dict(doc)
                 current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
 
@@ -283,9 +302,8 @@ class ShardedDataset(UnsupervisedDataset):
             for old_shard_n, old_shard_name in enumerate(old_shard_names):
                 os.remove(old_shard_name)
         except Exception as e:
-            print 'Exception occurred during old shard no. %i removal: %s' % (
-                old_shard_n, str(e))
-            print 'Attempting to at least move new shards in.'
+            logging.error('Exception occurred during old shard no. %i removal: %s' % (
+                old_shard_n, str(e)) + ' Attempting to at least move new shards in.')
             # If something happens with cleaning up - try to at least get the
             # new guys in.
         finally:
@@ -318,17 +336,23 @@ class ShardedDataset(UnsupervisedDataset):
         """Attempts to guess number of features in corpus."""
         n_features = None
         if hasattr(corpus, 'dim'):
+            # print 'Guessing from \'dim\' attribute.'
             n_features = corpus.dim
         elif hasattr(corpus, 'dictionary'):
+            # print 'GUessing from dictionary.'
             n_features = len(corpus.dictionary)
         elif hasattr(corpus, 'n_out'):
+            # print 'Guessing from \'n_out\' attribute.'
             n_features = corpus.n_out
         elif hasattr(corpus, 'num_terms'):
+            # print 'Guessing from \'num_terms\' attribute.'
             n_features = corpus.num_terms
         elif isinstance(corpus, TransformedCorpus):
+            # print 'TransformedCorpus - guessing using transcorp.dimension()'
             return safire.utils.transcorp.dimension(corpus)
         else:
-            raise ValueError('Couldn\'t find number of features, refusing to guess.'
+            raise ValueError('Couldn\'t find number of features, '
+                             'refusing to guess.'
                              '(Type of corpus: %s' % type(corpus))
 
         if self.dim and n_features != self.dim:
@@ -372,7 +396,9 @@ class ShardedDataset(UnsupervisedDataset):
             start = offset.start
             stop = offset.stop
             if stop > self.n_docs:
-                raise IndexError('Requested slice offset %d out of range (%d docs)' % (stop, self.n_docs))
+                raise IndexError('Requested slice offset'
+                                 ' %d out of range (%d docs)' % (stop,
+                                                                 self.n_docs))
 
             # - get range of shards over which to iterate
             first_shard = self.shard_by_offset(start)
@@ -400,7 +426,6 @@ class ShardedDataset(UnsupervisedDataset):
             #    - into the current shard
             #    - into the result
 
-
             # Indexes into current result rows. These are always smaller than
             # the dataset indexes by ``start`` (as we move over the shards,
             # we're moving by the same number of rows through the result).
@@ -411,7 +436,8 @@ class ShardedDataset(UnsupervisedDataset):
             #  - if in starting shard, these are from (start - current_offset)
             #    to self.shardsize
             #  - if in intermediate shard, these are from 0 to self.shardsize
-            #  - if in ending shard, thesea re from 0 to (stop - current_offset)
+            #  - if in ending shard, these are from 0
+            #    to (stop - current_offset)
             shard_start = start - self.current_offset
             shard_stop = self.offsets[self.current_shard_n + 1] - self.current_offset
 
@@ -443,7 +469,7 @@ class ShardedDataset(UnsupervisedDataset):
             result = self.get_by_offset(offset)
             return result
 
-    # The obligatory Dataset mehtods.
+    # The obligatory Dataset methods.
     def n_train_batches(self, batch_size):
         """Determines how many batches of given size the training data will
         be split into.
@@ -508,31 +534,37 @@ class ShardedDataset(UnsupervisedDataset):
         if subset == 'train':
             if kind == 'X':
                 if lbound + b_size > self._devel_doc_offset:
-                    raise ValueError('Too high batch index and/or batch size (%d, %d); training dataset has only %d documents.' % (b_index, b_size, self._devel_doc_offset))
+                    raise ValueError('Too high batch index and/or batch size'
+                                     ' (%d, %d); training dataset has only %d documents.' % (b_index, b_size, self._devel_doc_offset))
                 batch = self._build_batch(lbound, b_size, dtype)
                 return batch
             else:
-                raise ValueError('Wrong batch kind specified: %s (unsupervised datasets only support \'X\')' % kind)
+                raise ValueError('Wrong batch kind specified:'
+                                 ' %s (unsupervised datasets only support \'X\')' % kind)
 
         elif subset == 'devel':
             if kind == 'X':
                 lbound += self._devel_doc_offset
                 if lbound + b_size > self._test_doc_offset:
-                    raise ValueError('Too high batch index and/or batch size (%d, %d); devel dataset has only %d documents.' % (b_index, b_size, self._test_doc_offset - self._devel_doc_offset))
+                    raise ValueError('Too high batch index and/or batch size'
+                                     ' (%d, %d); devel dataset has only %d documents.' % (b_index, b_size, self._test_doc_offset - self._devel_doc_offset))
                 batch = self._build_batch(lbound, b_size, dtype)
                 return batch
             else:
-                raise ValueError('Wrong batch kind specified: %s (unsupervised datasets only support \'X\')' % kind)
+                raise ValueError('Wrong batch kind specified: '
+                                 '%s (unsupervised datasets only support \'X\')' % kind)
 
         elif subset == 'test':
             if kind == 'X':
                 lbound += self._test_doc_offset
                 if lbound > len(self):
-                    raise ValueError('Too high batch index and/or batch size (%d, %d); testing dataset has only %d documents.' % (b_index, b_size, len(self) - self._test_doc_offset))
+                    raise ValueError('Too high batch index and/or batch size'
+                                     ' (%d, %d); testing dataset has only %d documents.' % (b_index, b_size, len(self) - self._test_doc_offset))
                 batch = self._build_batch(lbound, b_size, dtype)
                 return batch
             else:
-                raise ValueError('Wrong batch kind specified: %s (unsupervised datasets only support \'X\')' % kind)
+                raise ValueError('Wrong batch kind specified: %s (unsupervised'
+                                 ' datasets only support \'X\')' % kind)
 
         else:
             raise ValueError('Wrong batch subset specified: %s (datasets only supports \'train\', \'devel\', \'test\').' % subset)
@@ -545,18 +577,74 @@ class ShardedDataset(UnsupervisedDataset):
 
         return result
 
-    def save(self):
-        """Saves itself in clean state (after calling reset()) to the
-        output_prefix file."""
-        self.reset()
-        with open(self.output_prefix, 'wb') as pickle_handle:
-            cPickle.dump(self, pickle_handle)
+    # Overriding the IndexedCorpus and other corpus superclass methods
+    def __iter__(self):
+        """Yields items one by one from the dataset.
+
+        This method imitates gensim corpus interface."""
+        for i in xrange(len(self)):
+            yield self[i]
+
+    def save(self, *args, **kwargs):
+        """Saves itself (the wrapper) in clean state (after calling reset())
+        to the output_prefix file. If you wish to save to a different file,
+        use the ``fname`` argument as the first positional arg."""
+        # Can we save to a different file than output_prefix? Well, why not?
+        if len(args) == 0:
+            args = tuple([self.output_prefix])
+
+        attrs_to_ignore = ['current_shard',
+                           'current_shard_n',
+                           'current_offset']
+        if 'ignore' not in kwargs:
+            kwargs['ignore'] = frozenset(attrs_to_ignore)
+        else:
+            kwargs['ignore'] = frozenset([v for v in kwargs['ignore']]
+                                         + attrs_to_ignore)
+        super(ShardedDataset, self).save(*args, **kwargs)
+        #
+        # self.reset()
+        # with open(self.output_prefix, 'wb') as pickle_handle:
+        #     cPickle.dump(self, pickle_handle)
 
     @classmethod
-    def load(cls, output_prefix):
-
-        with open(output_prefix, 'rb') as unpickle_handle:
+    def load(cls, fname, mmap=None):
+        """Loads itself in clean state. You can happily ignore the ``mmap``
+        parameter, as the saving mechanism for the dataset is different from
+        how gensim saves things in utils.SaveLoad."""
+        with open(fname, 'rb') as unpickle_handle:
             dataset = cPickle.load(unpickle_handle)
 
         return dataset
 
+    @staticmethod
+    def save_corpus(fname, corpus, id2word=None, progress_cnt=1000,
+                    metadata=False):
+        """Implements a serialization interface a la gensim for the
+        ShardedDataset. Do not call directly; use the ``serialize`` method
+        instead.
+
+        All this thing does is initialize a ShardedDataset from a corpus
+        with the ``output_prefix`` argument set to the ``fname`` parameter
+        of this method. The initialization of a ShardedDataset takes care of
+        serializing the data (in dense form) to shards.
+
+        Ignore the parameters id2word, progress_cnt and metadata. They
+        currently do nothing and are here only to provide a compatible
+        method signature with superclass."""
+        ShardedDataset(fname, corpus)
+
+    @classmethod
+    def serialize(serializer, fname, corpus, id2word=None,
+                  index_fname=None, progress_cnt=None, labels=None,
+                  metadata=False):
+        """Iterate through the document stream ``corpus``, saving the documents
+        as a ShardedDataset to ``fname``.
+
+        Use this method instead of calling ``save_corpus`` directly.
+
+        Ignore the parameters id2word, index_fname, progress_cnt, labels
+        and metadata. They currently do nothing and are here only to
+        provide a compatible method signature with superclass."""
+        serializer.save_corpus(fname, corpus, id2word=id2word,
+                               progress_cnt=progress_cnt, metadata=metadata)

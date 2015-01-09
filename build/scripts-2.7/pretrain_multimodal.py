@@ -1,4 +1,4 @@
-#!c:\users\lenovo\canopy\user\scripts\python.exe
+#!/usr/bin/python
 """
 Trains an unsupervised layer on text data.
 
@@ -36,7 +36,7 @@ def _build_argument_parser():
     parser.add_argument('-n', '--name', help='The dataset name passed to the' +
                         ' Loader. Has to correspond to the *.vtlist file name.')
     parser.add_argument('-t', '--text_label', help='The text corpus label from'
-                                                  'which to load data.')
+                                                   'which to load data.')
     parser.add_argument('-i', '--img_label', help='The image corpus label from'
                                                   'which to load data.')
 
@@ -104,7 +104,6 @@ def _build_argument_parser():
                         help='Turn on a brutal amount of debugging from inside'
                              ' the compiled theano functions.')
 
-
     return parser
 
 
@@ -149,7 +148,6 @@ def main(args):
                                     profile_training=args.profile_training)
 
     transformation_label = args.text_label + '-' + args.img_label + '-' + args.joint_label
-
 
     logging.info('Creating transformed corpus with label %s' % transformation_label)
     vtcorp = dloader.load_text_corpus(args.text_label)
