@@ -26,8 +26,11 @@ from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
 
 class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
-    """
-    A dataset that stores its data in separate files called
+    """This class is designed for situations where you need to train a model
+    on dense data, with a large number of iterations (when you need sequential
+    and fast access to your data).
+
+    The dataset stores its data in separate files called
     "shards". This is a compromise between speed (keeping the whole dataset
     in memory) and memory footprint (keeping the data on disk and reading from
     it on demand). All saving/loading is done using the cPickle mechanism.
@@ -36,7 +39,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
 
       The dataset is **read-only**, there is - as opposed to gensim's Similarity
       class, which works similarly - no way of adding documents to the dataset
-      for now.
+      (for now).
 
     On initialization, will read from a corpus and build the dataset. This only
     needs to be done once (and it may take quite a long time):
@@ -49,15 +52,15 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
 
     On further initialization with the same ``output_prefix`` (more precisely:
     the output prefix leading to the same file), will load the already built
-    dataset unless the ``override`` option is given.
+    dataset unless the ``overwrite`` option is given.
 
     Internally, to retrieve data, the dataset keeps track of which shard is
-    currently open and on a __getitem__ request, either returns an item from
+    currently open and on a ``__getitem__`` request, either returns an item from
     the current shard, or opens a new one. The shard size is constant, except
     for the last shard.
 
     Gensim interface
-    ================
+    ----------------
 
     The ShardedDataset simultaneously implements a gensim-style corpus
     interface: the :class:`IndexedCorpus` abstract base class for O(1)
@@ -65,7 +68,8 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
     """
     #@profile
     def __init__(self, output_prefix, corpus, dim=None, test_p=0.1, devel_p=0.1,
-                 shardsize=4096, overwrite=False):
+                 shardsize=4096, overwrite=False, sparse_serialization=False,
+                 sparse_retrieval=False, gensim=False):
         """Initializes the dataset. If ``output_prefix`` is not found,
         builds the shards.
 
@@ -77,6 +81,60 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         :type corpus: gensim.interfaces.CorpusABC
         :param corpus: The source corpus from which to build the dataset.
 
+        :type dim: int
+        :param dim: Specify beforehand what the dimension of a dataset item
+            should be. This is useful when initializing from a corpus that
+            doesn't advertise its dimension, or when it does and you want to
+            check that the corpus matches the expected dimension.
+
+        :type test_p: float
+        :param test_p: The proportion of the dataset which should be used for
+            testing.
+
+        :type devel_p: float
+        :param devel_p: The proportion of the dataset which should be used as
+            heldout (development) data for validation.
+
+        :type shardsize: int
+        :param shardsize: How many data points should be in one shard. More
+            data per shard means less shard reloading but higher memory usage
+            and vice versa.
+
+        :type overwrite: bool
+        :param overwrite: If set, will build dataset from given corpus even
+            if ``output_prefix`` already exists.
+
+        :type sparse_serialization: bool
+        :param sparse_serialization: If set, will save the data in a sparse
+            form (as csr matrices). This is to speed up retrieval when you
+            know you will be using sparse matrices.
+
+            This property **should not change** during the lifetime of the
+            dataset. (If you find out you need to change from a sparse to
+            a dense representation, the best practice is to create another
+            ShardedDataset object.)
+
+            [NOT IMPLEMENTED]
+
+        :type sparse_retrieval: bool
+        :param sparse_retrieval: If set, will retrieve data as sparse vectors
+            (numpy csr matrices). If unset, will return ndarrays.
+
+            Note that retrieval speed for this option depends on how the dataset
+            was serialized. If ``sparse_serialization`` was set, then setting
+            ``sparse_retrieval`` will be faster. However, if the two settings
+            do not correspond, the conversion on the fly will slow the dataset
+            down.
+
+            [NOT IMPLEMENTED]
+
+        :type gensim: bool
+        :param gensim: If set, will additionally convert the output to gensim
+            sparse vectors (list of tuples (id, value)) to make it behave like
+            any other gensim corpus. This **will** slow the dataset down.
+
+            [NOT IMPLEMENTED]
+
         """
         self.output_prefix = output_prefix
         self.shardsize = shardsize
@@ -86,17 +144,24 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         self.offsets = []
         self.n_shards = 0
 
-        self.dim = dim # This number may change during initialization/loading.
+        self.dim = dim  # This number may change during initialization/loading.
 
-        self.current_shard = None # Current shard (numpy ndarray)
-        self.current_shard_n = None
-        self.current_offset = None
+        # Sparse vs. dense serialization and retrieval.
+        self.sparse_serialization = sparse_serialization
+        self.sparse_retrieval = sparse_retrieval
+        self.gensim = gensim
+
+        # The "state" of the dataset.
+        self.current_shard = None    # The current shard itself (numpy ndarray)
+        self.current_shard_n = None  # Current shard is the current_shard_n-th
+        self.current_offset = None   # The index into the dataset which
+                                     # corresponds to index 0 of current shard
 
         logging.info('Initializing shard dataset with prefix %s' % output_prefix)
         if (not os.path.isfile(output_prefix)) or overwrite:
             logging.info('Building from corpus...')
             self.init_shards(output_prefix, corpus, shardsize)
-            self.save() # Save automatically, to facillitate re-loading
+            self.save()  # Save automatically, to facillitate re-loading
         else:
             logging.info('Cloning existing...')
             self.init_by_clone()

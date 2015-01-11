@@ -11,14 +11,14 @@ import numpy
 from safire.datasets.sharded_dataset import ShardedDataset
 from safire.data.loaders import MultimodalShardedDatasetLoader, ShardedDatasetLoader
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
-from test.safire_test_case import SafireTestCase
+from safire_test_case import SafireTestCase
 
 
 class TestShardedDataset(SafireTestCase):
 
     @classmethod
-    def setUpClass(cls, clean_only=True):
-        super(TestShardedDataset, cls).setUpClass(clean_only=True)
+    def setUpClass(cls):
+        super(TestShardedDataset, cls).setUpClass(no_datasets=True)
 
     def setUp(self):
 

@@ -1740,7 +1740,6 @@ class MultimodalShardedDatasetLoader(MultimodalDatasetLoader):
                              'at %s with infix %s' % (os.path.join(self.root,
                              self.layout.corpus_dir), text_infix))
 
-
         corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
 
         text_corpora_fnames = self.layout.required_text_corpus_names(text_infix)
