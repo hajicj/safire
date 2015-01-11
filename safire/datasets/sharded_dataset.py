@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 Implements a dataset class that stores its data in separate files called
 "shards". This is a compromise between speed (keeping the whole dataset
@@ -9,20 +8,19 @@ import logging
 import os
 import cPickle
 import math
+import numpy
+import scipy.sparse as sparse
+import theano
 import time
 
 import gensim
 from gensim.corpora import IndexedCorpus
 from gensim.interfaces import TransformedCorpus
-import numpy
-import theano
 
 import safire.utils
-
+from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
 __author__ = 'Jan Hajic jr.'
-
-from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
 
 class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
@@ -168,6 +166,8 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
 
         # Both methods of initialization initialize self.dim
         self.n_in = self.dim
+        self.n_out = self.dim
+
         self.test_p = test_p
         self._test_doc_offset = self.n_docs - int(self.n_docs * self.test_p)
 
@@ -215,6 +215,9 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
                 current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
 
             # Handles the updating as well.
+            if self.sparse_serialization:
+                current_shard = sparse.csr_matrix(current_shard)
+
             self.save_shard(current_shard)
 
         end_time = time.clock()
@@ -238,7 +241,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
                              'dimension, using loaded dim. '
                              '(loaded %d, init %d)' % (temp.dim, self.dim))
 
-        self.dim = temp.dim # To be consistent with the loaded data!
+        self.dim = temp.dim  # To be consistent with the loaded data!
 
     def save_shard(self, shard, n=None, filename=None):
         """Pickles the given shard. If n is not given, will consider the shard
@@ -257,8 +260,8 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
             cPickle.dump(shard, pickle_handle, protocol=-1)
 
         if new_shard:
-            self.offsets.append(self.offsets[-1] + len(shard))
-            self.n_docs += len(shard)
+            self.offsets.append(self.offsets[-1] + shard.shape[0])
+            self.n_docs += shard.shape[0]
             self.n_shards += 1
 
     def load_shard(self, n):
@@ -290,7 +293,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         is greater than the number of available documents, raises a
         ValueError."""
         if offset >= self.n_docs:
-            raise ValueError('Too high offset specified (%i), available docs: %i' % (offset, self.n_docs))
+            raise ValueError('Too high offset specified (%d), available docs: %d' % (offset, self.n_docs))
         if offset < 0:
             raise ValueError('Negative offset currently not supported.')
 
@@ -452,9 +455,25 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
     #@profile
     def __getitem__(self, offset):
         """Retrieves the given row of the dataset.
+
         Slice notation support added, list support for ints added."""
         if isinstance(offset, list):
-            l_result = [self.get_by_offset(i) for i in offset]
+
+            # Handle all serialization & retrieval options.
+            if self.sparse_serialization:
+                l_result = sparse.vstack([self.get_by_offset(i)
+                                          for i in offset])
+                if self.gensim:
+                    l_result = self.__getitem_sparse2gensim(l_result)
+                elif not self.sparse_retrieval:
+                    l_result = numpy.array(l_result.todense())
+            else:
+                l_result = numpy.array([self.get_by_offset(i) for i in offset])
+                if self.gensim:
+                    l_result = self.__getitem_dense2gensim(l_result)
+                elif self.sparse_retrieval:
+                    l_result = sparse.csr_matrix(l_result)
+
             return l_result
 
         elif isinstance(offset, slice):
@@ -477,13 +496,20 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
 
             # The easy case: both in one shard.
             if first_shard == last_shard:
-                return self.current_shard[start - self.current_offset:
-                                          stop - self.current_offset]
+                s_result = self.current_shard[start - self.current_offset:
+                                            stop - self.current_offset]
+                # Handle different sparsity settings:
+                s_result = self.__getitem_format(s_result)
+
+                return s_result
 
             # The hard case: the slice is distributed across multiple shards
-            # - initialize numpy.empty()
-            s_result = numpy.empty((stop - start, self.dim),
+            # - initialize numpy.zeros()
+            s_result = numpy.zeros((stop - start, self.dim),
                                    dtype=self.current_shard.dtype)
+            if self.sparse_serialization:
+                s_result = sparse.csr_matrix((0, self.dim),
+                                             dtype=self.current_shard.dtype)
 
             # - gradually build it up. We will be using three set of start:stop
             #   indexes:
@@ -506,7 +532,10 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
             shard_start = start - self.current_offset
             shard_stop = self.offsets[self.current_shard_n + 1] - self.current_offset
 
-            s_result[result_start:result_stop] = self.current_shard[shard_start:shard_stop]
+            #s_result[result_start:result_stop] = self.current_shard[
+            #                                         shard_start:shard_stop]
+            s_result = self.__add_to_slice(s_result, result_start, result_stop,
+                                           shard_start, shard_stop)
 
             # First and last get special treatment, these are in between
             for shard_n in xrange(first_shard+1, last_shard):
@@ -517,7 +546,9 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
                 shard_start = 0
                 shard_stop = self.shardsize
 
-                s_result[result_start:result_stop] = self.current_shard[shard_start:shard_stop]
+                s_result = self.__add_to_slice(s_result, result_start,
+                                               result_stop, shard_start,
+                                               shard_stop)
 
             # Last shard
             self.load_shard(last_shard)
@@ -526,13 +557,98 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
             shard_start = 0
             shard_stop = stop - self.current_offset
 
-            s_result[result_start:result_stop] = self.current_shard[shard_start:shard_stop]
+            s_result = self.__add_to_slice(s_result, result_start, result_stop,
+                                           shard_start, shard_stop)
+
+            s_result = self.__getitem_format(s_result)
 
             return s_result
 
         else:
-            result = self.get_by_offset(offset)
-            return result
+            s_result = self.get_by_offset(offset)
+            s_result = self.__getitem_format(s_result)
+
+            return s_result
+
+    def __add_to_slice(self, s_result, result_start, result_stop, start, stop):
+        """Adds the rows of the current shard from ``start`` to ``stop``
+        into rows ``result_start`` to ``result_stop`` of ``s_result``.
+
+        Operation is based on the self.sparse_serialize setting. If the shard
+        contents are dense, then s_result is assumed to be an ndarray that
+        already supports row indices ``result_start:result_stop``. If the shard
+        contents are sparse, assumes that s_result has ``result_start`` rows
+        and we should add them up to ``result_stop``.
+
+        Returns the resulting s_result.
+        """
+        if (result_stop - result_start) != (stop - start):
+            raise ValueError('Result start/stop range different than stop/start'
+                             'range (%d - %d vs. %d - %d)' % (result_start,
+                                                              result_stop,
+                                                              start, stop))
+
+        # Dense data: just copy using numpy's slice notation
+        if not self.sparse_serialization:
+            try:
+                s_result[result_start:result_stop] = self.current_shard[start:stop]
+            except ValueError:
+                cpdata = self.current_shard[start:stop]
+                print 'Copied data: type %s, shape %s' % (type(cpdata),
+                                                          str(cpdata.shape))
+                print 'S_result: type %s, shape %s' % (type(s_result),
+                                                       str(s_result.shape))
+                print 'Rstart-Rstop: %d:%d -- start:stop: %d:%d' % (result_start,
+                                                                    result_stop,
+                                                                    start, stop)
+                raise
+            return s_result
+
+        # A bit more difficult, we're using a different structure to build the
+        # result.
+        else:
+            if s_result.shape != (result_start, self.dim):
+                raise ValueError('Assuption about sparse s_result shape '
+                                 'invalid: %d expected rows, %d real rows.' % (
+                    result_start, s_result.shape[0]))
+
+            tmp_matrix = self.current_shard[start:stop]
+            s_result = sparse.vstack([s_result, tmp_matrix])
+            return s_result
+
+    def __getitem_format(self, s_result):
+        if self.sparse_serialization:
+            if self.gensim:
+                s_result = self.__getitem_sparse2gensim(s_result)
+            elif not self.sparse_retrieval:
+                s_result = numpy.array(s_result.todense())
+        else:
+            if self.gensim:
+                s_result = self.__getitem_dense2gensim(s_result)
+            elif self.sparse_retrieval:
+                s_result = sparse.csr_matrix(s_result)
+        return s_result
+
+    def __getitem_sparse2gensim(self, result):
+        """Change given sparse result matrix to gensim sparse vectors.
+
+        Uses the insides of the sparse matrix to make this fast.
+        """
+        output = [[] for _ in xrange(result.shape[0])]
+        for row_idx in xrange(result.shape[0]):
+            indices = result.indices[result.indptr[row_idx]:result.indptr[row_idx+1]]
+            g_row = [(col_idx, result[row_idx, col_idx]) for col_idx in indices]
+            output[row_idx] = g_row
+        return output
+
+    def __getitem_dense2gensim(self, result):
+        """Change given dense result matrix to gensim sparse vectors."""
+        if len(result.shape) == 1:
+            output = gensim.matutils.full2sparse(result)
+        else:
+            output = [gensim.matutils.full2sparse(result[i])
+                      for i in xrange(result.shape[0])]
+        return output
 
     # The obligatory Dataset methods.
     def n_train_batches(self, batch_size):
