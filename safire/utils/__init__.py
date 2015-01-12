@@ -12,6 +12,7 @@ import StringIO
 import pdb
 import pstats
 import random
+import time
 
 from sys import getsizeof, stderr
 from itertools import chain
@@ -263,6 +264,19 @@ def profile_run(function, *args, **kwargs):
     ps.print_stats(.33)
 
     return s, retval
+
+
+# Let's try writing a decorator!
+def benchmark(fn):
+    """Simple timing decorator. Prints to stdout."""
+    def _benchmark(*args, **kwargs):
+        start = time.clock()
+        retval = fn(*args, **kwargs)
+        end = time.clock()
+        total = end - start
+        print 'Benchmark | {0} : {1}'.format(fn.__name__, total)
+        return retval
+    return _benchmark
 
 
 def total_size(o, handlers={}):

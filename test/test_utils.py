@@ -15,6 +15,8 @@ from safire.data import VTextCorpus, FrequencyBasedTransformer
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 import safire.utils
 from safire.utils.transcorp import bottom_corpus, run_transformations
+from safire.utils import benchmark
+
 from test.safire_test_case import SafireTestCase
 
 
@@ -121,6 +123,20 @@ class TestUtils(SafireTestCase):
         self.assertAlmostEqual(1.0, math.sqrt(sum([f**2 for _, f in normalized_output])),
                                delta=0.0001)
 
+    def test_benchmark(self):
+
+        @benchmark
+        def simple_function(a, b):
+            result = []
+            for i in xrange(a**b):
+                result.append([unicode(b) for _ in xrange(b**a)])
+            return result
+
+        a = 3
+        b = 8
+        retval = simple_function(a, b)
+        self.assertEqual(len(retval), a**b)
+        self.assertEqual(len(retval[0]), b**a)
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()

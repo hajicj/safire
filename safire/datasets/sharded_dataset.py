@@ -64,6 +64,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
     interface: the :class:`IndexedCorpus` abstract base class for O(1)
     random-access corpora. (It of course overrides everything
     """
+
     #@profile
     def __init__(self, output_prefix, corpus, dim=None, test_p=0.1, devel_p=0.1,
                  shardsize=4096, overwrite=False, sparse_serialization=False,
@@ -145,6 +146,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         self.dim = dim  # This number may change during initialization/loading.
 
         # Sparse vs. dense serialization and retrieval.
+        self._pickle_protocol = -1
         self.sparse_serialization = sparse_serialization
         self.sparse_retrieval = sparse_retrieval
         self.gensim = gensim
@@ -257,7 +259,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         if not filename:
             filename = self._shard_name(n)
         with open(filename, 'wb') as pickle_handle:
-            cPickle.dump(shard, pickle_handle, protocol=-1)
+            cPickle.dump(shard, pickle_handle, protocol=self._pickle_protocol)
 
         if new_shard:
             self.offsets.append(self.offsets[-1] + shard.shape[0])
@@ -419,10 +421,15 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
             # print 'TransformedCorpus - guessing using transcorp.dimension()'
             return safire.utils.transcorp.dimension(corpus)
         else:
-            raise ValueError('Couldn\'t find number of features, '
-                             'refusing to guess.'
-                             '(Type of corpus: %s' % type(corpus))
-
+            if not self.dim:
+                print self.dim
+                raise ValueError('Couldn\'t find number of features, '
+                                 'refusing to guess.'
+                                 '(Type of corpus: %s' % type(corpus))
+            else:
+                logging.warn('Couldn\'t find number of features, trusting '
+                             'supplied dimension ({0})'.format(self.dim))
+                n_features = self.dim
         if self.dim and n_features != self.dim:
             logging.warn('Discovered inconsistent dataset dim (%i) and feature count from corpus (%i). Coercing to corpus dim.' % (self.dim, n_features))
             #n_features = self.dim
@@ -800,7 +807,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
 
     @staticmethod
     def save_corpus(fname, corpus, id2word=None, progress_cnt=1000,
-                    metadata=False):
+                    metadata=False, **kwargs):
         """Implements a serialization interface a la gensim for the
         ShardedDataset. Do not call directly; use the ``serialize`` method
         instead.
@@ -810,22 +817,30 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         of this method. The initialization of a ShardedDataset takes care of
         serializing the data (in dense form) to shards.
 
+        Note that you might need some ShardedDataset init parameters, most
+        likely the dimension (``dim``). Again, pass these as ``kwargs`` to the
+        ``serialize`` method.
+
         Ignore the parameters id2word, progress_cnt and metadata. They
         currently do nothing and are here only to provide a compatible
         method signature with superclass."""
-        ShardedDataset(fname, corpus)
+        ShardedDataset(fname, corpus, **kwargs)
 
     @classmethod
     def serialize(serializer, fname, corpus, id2word=None,
                   index_fname=None, progress_cnt=None, labels=None,
-                  metadata=False):
+                  metadata=False, **kwargs):
         """Iterate through the document stream ``corpus``, saving the documents
         as a ShardedDataset to ``fname``.
 
         Use this method instead of calling ``save_corpus`` directly.
+        You may need to supply some kwargs that are used upon dataset creation
+        (namely: ``dim``, unless the dataset can infer the dimension from the
+        given corpus).
 
         Ignore the parameters id2word, index_fname, progress_cnt, labels
         and metadata. They currently do nothing and are here only to
         provide a compatible method signature with superclass."""
         serializer.save_corpus(fname, corpus, id2word=id2word,
-                               progress_cnt=progress_cnt, metadata=metadata)
+                               progress_cnt=progress_cnt, metadata=metadata,
+                               **kwargs)
