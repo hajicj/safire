@@ -45,7 +45,7 @@ import os
 import time
 import unittest
 from gensim.corpora import MmCorpus
-from numpy.random import uniform, poisson
+from numpy.random import uniform, poisson, randint
 import shutil
 from safire.datasets.sharded_dataset import ShardedDataset
 
@@ -69,7 +69,7 @@ tasks = {
 n_items = 10000
 
 #: What the mock data dimension should be
-dim = 1000
+dim = 10000
 
 ###############################################################################
 
@@ -110,17 +110,29 @@ def serialize_sharded_dataset(fname, data, **kwargs):
     """Serialization benchmark - ShardedDataset"""
     ShardedDataset.serialize(fname, data, **kwargs)
 
+
 @benchmark
 def iter_inorder(corpus):
-    """In-order iteration by individual item - MmCorpus"""
+    """In-order iteration by individual item."""
     i = 1
     for doc in corpus:
         i += len(doc)
 
 
+def iter_random(corpus, n_accesses=1000):
+    indices = [randint(0, n_accesses-1) for _ in xrange(n_accesses)]
+    _iter_random(corpus, indices)
 
 
-
+@benchmark
+def _iter_random(corpus, indices):
+    """Random access by individual item."""
+    ctr = 1
+    for i, idx in enumerate(indices):
+        doc = corpus[idx]
+        if i % 500 == 0:
+            logging.info('Retrieved doc no. {0}:\n{1}'.format(i, doc))
+        ctr += len(doc)
 
 ###############################################################################
 
@@ -141,14 +153,43 @@ def main(args):
         n_items, dim))
     data = mock_data(dim=args.dim, n_items=args.n_items)
 
-    logging.info('Serialization:')
-    logging.info('     shdat...')
+    print '\nSerialization:'
+    print '--------------\n'
+    print '      shdat...'
     shdat_fname = os.path.join(temp_dir, 'shdat-bench')
-    serialize_sharded_dataset(shdat_fname, data, dim=dim)
+    serialize_sharded_dataset(shdat_fname, data, dim=args.dim,
+                              shardsize=args.shardsize)
 
-    logging.info('     mmcorpus...')
+    print '      mmcorpus...'
     mmcorpus_fname = os.path.join(temp_dir, 'mmcorpus-bench')
     serialize_mmcorpus(mmcorpus_fname, data)
+
+    print '\nIn-order retrieval:'
+    print '-------------------\n'
+    shdat = ShardedDataset.load(shdat_fname)
+    print '      shdat-dense2gensim...'
+    shdat.gensim = True
+    iter_inorder(shdat)
+    del shdat
+
+    mmcorpus = MmCorpus(mmcorpus_fname)
+    print '      mmcorpus...'
+    iter_inorder(mmcorpus)
+    del mmcorpus
+
+    print '\nRandom-access iteration:'
+    print '------------------------\n'
+    indices = [randint(0, args.n_items-1) for _ in xrange(args.n_items)]
+    shdat = ShardedDataset.load(shdat_fname)
+    print '      shdat-dense2gensim...'
+    shdat.gensim = True
+    _iter_random(shdat, indices)
+    del shdat
+
+    mmcorpus = MmCorpus(mmcorpus_fname)
+    print '      mmcorpus...'
+    _iter_random(mmcorpus, indices)
+    del mmcorpus
 
     logging.info('Removing temp dir {0}'.format(temp_dir))
     shutil.rmtree(temp_dir)
@@ -178,6 +219,10 @@ def build_argument_parser():
         parser.add_argument('--%s' % task,
                             action='store_true',
                             help='Run the %s task.' % task['name'])
+
+    # Options for ShardedDataset initialization
+    parser.add_argument('--shardsize', action='store', default=4096, type=int,
+                        help='ShardedDataset corpus shard size.')
 
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Turn on INFO logging messages.')
