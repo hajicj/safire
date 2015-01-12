@@ -18,12 +18,11 @@ from gensim.corpora import IndexedCorpus
 from gensim.interfaces import TransformedCorpus
 
 import safire.utils
-from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
 __author__ = 'Jan Hajic jr.'
 
 
-class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
+class ShardedCorpus(IndexedCorpus):
     """This class is designed for situations where you need to train a model
     on dense data, with a large number of iterations (when you need sequential
     and fast access to your data). It should be faster than gensim's other
@@ -67,7 +66,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
     """
 
     #@profile
-    def __init__(self, output_prefix, corpus, dim=None, test_p=0.1, devel_p=0.1,
+    def __init__(self, output_prefix, corpus, dim=None,
                  shardsize=4096, overwrite=False, sparse_serialization=False,
                  sparse_retrieval=False, gensim=False):
         """Initializes the dataset. If ``output_prefix`` is not found,
@@ -114,8 +113,6 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
             a dense representation, the best practice is to create another
             ShardedDataset object.)
 
-            [NOT IMPLEMENTED]
-
         :type sparse_retrieval: bool
         :param sparse_retrieval: If set, will retrieve data as sparse vectors
             (numpy csr matrices). If unset, will return ndarrays.
@@ -126,14 +123,10 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
             do not correspond, the conversion on the fly will slow the dataset
             down.
 
-            [NOT IMPLEMENTED]
-
         :type gensim: bool
         :param gensim: If set, will additionally convert the output to gensim
             sparse vectors (list of tuples (id, value)) to make it behave like
             any other gensim corpus. This **will** slow the dataset down.
-
-            [NOT IMPLEMENTED]
 
         """
         self.output_prefix = output_prefix
@@ -158,7 +151,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         self.current_offset = None   # The index into the dataset which
                                      # corresponds to index 0 of current shard
 
-        logging.info('Initializing shard dataset with prefix %s' % output_prefix)
+        logging.info('Initializing sharded corpus with prefix %s' % output_prefix)
         if (not os.path.isfile(output_prefix)) or overwrite:
             logging.info('Building from corpus...')
             self.init_shards(output_prefix, corpus, shardsize)
@@ -170,13 +163,6 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         # Both methods of initialization initialize self.dim
         self.n_in = self.dim
         self.n_out = self.dim
-
-        self.test_p = test_p
-        self._test_doc_offset = self.n_docs - int(self.n_docs * self.test_p)
-
-        self.devel_p = devel_p
-        self._devel_doc_offset = self._test_doc_offset \
-                                 - int(self.n_docs * self.devel_p)
 
     def init_shards(self, output_prefix, corpus, shardsize=4096,
                     dtype=theano.config.floatX):
@@ -658,114 +644,6 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
                       for i in xrange(result.shape[0])]
         return output
 
-    # The obligatory Dataset methods.
-    def n_train_batches(self, batch_size):
-        """Determines how many batches of given size the training data will
-        be split into.
-
-        :type batch_size: int
-        :param batch_size: The intended size of one batch of the data.
-
-        :returns: The number of batches the training data will be split into
-            for the given ``batch_size``.
-        """
-        return self._devel_doc_offset / batch_size
-
-    def n_devel_batches(self, batch_size):
-        """Determines how many batches of given size the training data will
-        be split into.
-
-        :type batch_size: int
-        :param batch_size: The intended size of one batch of the data.
-
-        :returns: The number of batches the training data will be split into
-            for the given ``batch_size``.
-        """
-        return (self._test_doc_offset - self._devel_doc_offset) / batch_size
-
-    def n_test_batches(self, batch_size):
-        """Determines how many batches of given size the training data will
-        be split into.
-
-        :type batch_size: int
-        :param batch_size: The intended size of one batch of the data.
-
-        :returns: The number of batches the training data will be split into
-            for the given ``batch_size``.
-        """
-        return (len(self) - self._test_doc_offset) / batch_size
-
-    def _get_batch(self, subset, kind, b_index, b_size,
-                   dtype=theano.config.floatX):
-        """Retrieves a segment of the data, specified by the arguments.
-
-        :type subset: str
-        :param subset: One of ``'train'``, ``'devel'`` or ``'test'``.
-            Specifies which subset of the dataset should be used.
-
-        :type kind: str
-        :param kind: One of ``'X'`` or ``'y'``. Specifies whether we want
-            the inputs or the response.
-
-        :type b_index: int
-        :param b_index: The order of the batch in the dataset (0 for first,
-            1 for second, etc.)
-
-        :type b_size: int
-        :param b_size: Size of one batch.
-
-        :raises: ValueError
-
-        """
-
-        lbound = b_index * b_size
-
-        if subset == 'train':
-            if kind == 'X':
-                if lbound + b_size > self._devel_doc_offset:
-                    raise ValueError('Too high batch index and/or batch size'
-                                     ' (%d, %d); training dataset has only %d documents.' % (b_index, b_size, self._devel_doc_offset))
-                batch = self._build_batch(lbound, b_size, dtype)
-                return batch
-            else:
-                raise ValueError('Wrong batch kind specified:'
-                                 ' %s (unsupervised datasets only support \'X\')' % kind)
-
-        elif subset == 'devel':
-            if kind == 'X':
-                lbound += self._devel_doc_offset
-                if lbound + b_size > self._test_doc_offset:
-                    raise ValueError('Too high batch index and/or batch size'
-                                     ' (%d, %d); devel dataset has only %d documents.' % (b_index, b_size, self._test_doc_offset - self._devel_doc_offset))
-                batch = self._build_batch(lbound, b_size, dtype)
-                return batch
-            else:
-                raise ValueError('Wrong batch kind specified: '
-                                 '%s (unsupervised datasets only support \'X\')' % kind)
-
-        elif subset == 'test':
-            if kind == 'X':
-                lbound += self._test_doc_offset
-                if lbound > len(self):
-                    raise ValueError('Too high batch index and/or batch size'
-                                     ' (%d, %d); testing dataset has only %d documents.' % (b_index, b_size, len(self) - self._test_doc_offset))
-                batch = self._build_batch(lbound, b_size, dtype)
-                return batch
-            else:
-                raise ValueError('Wrong batch kind specified: %s (unsupervised'
-                                 ' datasets only support \'X\')' % kind)
-
-        else:
-            raise ValueError('Wrong batch subset specified: %s (datasets only supports \'train\', \'devel\', \'test\').' % subset)
-
-    def _build_batch(self, lbound, batch_size, dtype=theano.config.floatX):
-        """Given the first index of a batch and batch size, builds the batch
-        from the corpus.
-        """
-        result = self[lbound:lbound+batch_size]
-
-        return result
-
     # Overriding the IndexedCorpus and other corpus superclass methods
     def __iter__(self):
         """Yields items one by one from the dataset.
@@ -790,7 +668,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         else:
             kwargs['ignore'] = frozenset([v for v in kwargs['ignore']]
                                          + attrs_to_ignore)
-        super(ShardedDataset, self).save(*args, **kwargs)
+        super(ShardedCorpus, self).save(*args, **kwargs)
         #
         # self.reset()
         # with open(self.output_prefix, 'wb') as pickle_handle:
@@ -801,7 +679,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         """Loads itself in clean state. You can happily ignore the ``mmap``
         parameter, as the saving mechanism for the dataset is different from
         how gensim saves things in utils.SaveLoad."""
-        return super(ShardedDataset, cls).load(fname, mmap)
+        return super(ShardedCorpus, cls).load(fname, mmap)
 
     @staticmethod
     def save_corpus(fname, corpus, id2word=None, progress_cnt=1000,

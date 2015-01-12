@@ -9,6 +9,7 @@ from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
 
 from safire.data import FrequencyBasedTransformer, VTextCorpus
+from safire.data.sharded_corpus import ShardedCorpus
 from safire.datasets.dataset import Dataset
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
@@ -79,6 +80,8 @@ def dimension(corpus):
     if isinstance(current_corpus, TextCorpus):
         return len(current_corpus.dictionary)
     if isinstance(current_corpus, ImagenetCorpus):
+        return current_corpus.dim
+    if isinstance(current_corpus, ShardedCorpus):
         return current_corpus.dim
 
     # This is the "magic". There's no unified mechanism for providing output
