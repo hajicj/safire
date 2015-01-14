@@ -700,7 +700,7 @@ class ShardedCorpus(IndexedCorpus):
         Ignore the parameters id2word, progress_cnt and metadata. They
         currently do nothing and are here only to provide a compatible
         method signature with superclass."""
-        ShardedDataset(fname, corpus, **kwargs)
+        ShardedCorpus(fname, corpus, **kwargs)
 
     @classmethod
     def serialize(serializer, fname, corpus, id2word=None,
