@@ -11,7 +11,7 @@ from scipy import sparse
 
 from gensim.utils import is_corpus
 
-from safire.datasets.sharded_dataset import ShardedCorpus
+from safire.datasets.sharded_dataset import ShardedDataset
 from safire.data.loaders import MultimodalShardedDatasetLoader, ShardedDatasetLoader
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
 from safire_test_case import SafireTestCase
@@ -42,7 +42,7 @@ class TestShardedDataset(SafireTestCase):
 
         icorp = self.loader.load_image_corpus()
         output_prefix = self.dloader.output_prefix()
-        dataset = ShardedCorpus(output_prefix, icorp, shardsize=2)
+        dataset = ShardedDataset(output_prefix, icorp, shardsize=2)
 
         # Test that the shards were actually created
         self.assertTrue(os.path.isfile(output_prefix + '.1'))
@@ -51,13 +51,13 @@ class TestShardedDataset(SafireTestCase):
 
         icorp = self.loader.load_image_corpus()
         output_prefix = self.dloader.output_prefix()
-        dataset = ShardedCorpus(output_prefix, icorp, shardsize=2)
+        dataset = ShardedDataset(output_prefix, icorp, shardsize=2)
 
         # Test that the shards were actually created
         self.assertTrue(os.path.isfile(output_prefix + '.1'))
 
         dataset.save()
-        loaded_dataset = ShardedCorpus.load(output_prefix)
+        loaded_dataset = ShardedDataset.load(output_prefix)
 
         self.assertEqual(loaded_dataset.dim, dataset.dim)
         self.assertEqual(loaded_dataset.n_shards, dataset.n_shards)
@@ -66,7 +66,7 @@ class TestShardedDataset(SafireTestCase):
 
         icorp = self.loader.load_image_corpus()
         output_prefix = self.dloader.output_prefix()
-        dataset = ShardedCorpus(output_prefix, icorp, shardsize=2)
+        dataset = ShardedDataset(output_prefix, icorp, shardsize=2)
 
         item = dataset[3]
 
@@ -89,7 +89,7 @@ class TestShardedDataset(SafireTestCase):
         output_prefix = self.dloader.output_prefix()
         no_exception = True
         try:
-            dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
+            dataset = ShardedDataset(output_prefix, icorp, shardsize=2,
                                      sparse_serialization=True)
         except Exception:
             no_exception = False
@@ -100,7 +100,7 @@ class TestShardedDataset(SafireTestCase):
 
         icorp = self.loader.load_image_corpus()
         output_prefix = self.dloader.output_prefix()
-        dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
+        dataset = ShardedDataset(output_prefix, icorp, shardsize=2,
                                  sparse_serialization=False,
                                  sparse_retrieval=False)
 
@@ -122,7 +122,7 @@ class TestShardedDataset(SafireTestCase):
 
         icorp = self.loader.load_image_corpus()
         output_prefix = self.dloader.output_prefix()
-        dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
+        dataset = ShardedDataset(output_prefix, icorp, shardsize=2,
                                  sparse_serialization=False,
                                  sparse_retrieval=True)
 
@@ -144,12 +144,12 @@ class TestShardedDataset(SafireTestCase):
 
         icorp = self.loader.load_image_corpus()
         sp_output_prefix = self.dloader.output_prefix(sparse_serialization=True)
-        dataset = ShardedCorpus(sp_output_prefix, icorp, shardsize=2,
+        dataset = ShardedDataset(sp_output_prefix, icorp, shardsize=2,
                                  sparse_serialization=True,
                                  sparse_retrieval=True)
 
         output_prefix = self.dloader.output_prefix()
-        dense_dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
+        dense_dataset = ShardedDataset(output_prefix, icorp, shardsize=2,
                                        sparse_serialization=False,
                                        sparse_retrieval=True)
 
@@ -177,12 +177,12 @@ class TestShardedDataset(SafireTestCase):
 
         icorp = self.loader.load_image_corpus()
         sp_output_prefix = self.dloader.output_prefix(sparse_serialization=True)
-        dataset = ShardedCorpus(sp_output_prefix, icorp, shardsize=2,
+        dataset = ShardedDataset(sp_output_prefix, icorp, shardsize=2,
                                  sparse_serialization=True,
                                  sparse_retrieval=False)
 
         output_prefix = self.dloader.output_prefix()
-        dense_dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
+        dense_dataset = ShardedDataset(output_prefix, icorp, shardsize=2,
                                        sparse_serialization=False,
                                        sparse_retrieval=False)
 
@@ -207,7 +207,7 @@ class TestShardedDataset(SafireTestCase):
 
         icorp = self.loader.load_image_corpus()
         output_prefix = self.dloader.output_prefix()
-        dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
+        dataset = ShardedDataset(output_prefix, icorp, shardsize=2,
                                  sparse_serialization=False,
                                  gensim=True)
 
@@ -253,7 +253,7 @@ class TestShardedDataset(SafireTestCase):
         #print icorp.input
         #print self.dloader.output_prefix()
 
-        dataset = ShardedCorpus(output_prefix, icorp, shardsize=2)
+        dataset = ShardedDataset(output_prefix, icorp, shardsize=2)
 
         self.assertEqual(10, dataset.n_shards)
 
