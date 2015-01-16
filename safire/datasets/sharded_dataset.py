@@ -801,7 +801,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         """Loads itself in clean state. You can happily ignore the ``mmap``
         parameter, as the saving mechanism for the dataset is different from
         how gensim saves things in utils.SaveLoad."""
-        return super(ShardedCorpus, cls).load(fname, mmap)
+        return super(ShardedDataset, cls).load(fname, mmap)
 
     @staticmethod
     def save_corpus(fname, corpus, id2word=None, progress_cnt=1000,
