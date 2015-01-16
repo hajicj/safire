@@ -790,7 +790,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         else:
             kwargs['ignore'] = frozenset([v for v in kwargs['ignore']]
                                          + attrs_to_ignore)
-        super(ShardedCorpus, self).save(*args, **kwargs)
+        super(ShardedDataset, self).save(*args, **kwargs)
         #
         # self.reset()
         # with open(self.output_prefix, 'wb') as pickle_handle:
