@@ -14,17 +14,14 @@ from safire.learning.models import RestrictedBoltzmannMachine
 from safire.learning.models.denoising_autoencoder import DenoisingAutoencoder
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
 from safire.learning.models.replicated_softmax import ReplicatedSoftmax
+from test.safire_test_case import SafireTestCase
 
 
-class TestUnsupervisedTraining(unittest.TestCase):
+class TestRSMUnsupervisedTraining(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
-
-        cls.testdir = os.path.dirname(__file__)
-        cls.data_root = os.path.join(cls.testdir, 'test-data')
-
-        cls.loader = MultimodalDatasetLoader(cls.data_root, 'test-data')
+        super(TestRSMUnsupervisedTraining, cls).setUpClass()
 
         dataset = cls.loader.load_text()
 
@@ -41,8 +38,9 @@ class TestUnsupervisedTraining(unittest.TestCase):
         del cls.model_handle
         del cls.loader
 
-    def test_training(self):
+        super(TestRSMUnsupervisedTraining, cls).tearDownClass()
 
+    def test_training(self):
 
         self.assertIsInstance(self.model_handle, ModelHandle)
         self.assertTrue(hasattr(self.model_handle, 'train'))
@@ -63,6 +61,12 @@ class TestUnsupervisedTraining(unittest.TestCase):
 
         print type(output)
 
+##############################################################################
+
 if __name__ == '__main__':
-    logging.root.setLevel(logging.WARNING)
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestRSMUnsupervisedTraining)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

@@ -1,28 +1,29 @@
 """
-Testing the test procedure itself.
+Testing the utility functions.
 """
 import gzip
 
 import logging
+import math
 import os
 import unittest
+
 import gensim
 from gensim.models import TfidfModel
-import operator
-import math
+
 from safire.data import VTextCorpus, FrequencyBasedTransformer
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 import safire.utils
 from safire.utils.transcorp import bottom_corpus, run_transformations
+from test.safire_test_case import SafireTestCase
 
 
-class TestUtils(unittest.TestCase):
+class TestUtils(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
 
-        cls.testdir = os.path.dirname(__file__)
-        cls.data_root = os.path.join(cls.testdir, 'test-data')
+        super(TestUtils, cls).setUpClass()
 
         cls.vtlist_file = os.path.join(cls.data_root, 'test-data.vtlist')
         cls.vtlist = [ os.path.join(cls.data_root, l.strip())
@@ -30,19 +31,18 @@ class TestUtils(unittest.TestCase):
 
         cls.token_filter = PositionalTagTokenFilter(['N', 'A', 'V'], 0)
 
-
     def test_uniform_steps(self):
 
-        iterable = [1,2,3,4,5,6,7,8,9,10]
+        iterable = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
         stepped = safire.utils.uniform_steps(iterable, 4)
-        self.assertEqual([10,8,6,4], stepped)
+        self.assertEqual([10, 8, 6, 4], stepped)
 
         stepped = safire.utils.uniform_steps(iterable, 10)
-        self.assertEqual([10,9,8,7,6,5,4,3,2,1], stepped)
+        self.assertEqual([10, 9, 8, 7, 6, 5, 4, 3, 2, 1], stepped)
 
         stepped = safire.utils.uniform_steps(iterable, 6)
-        self.assertEqual([10,9,8,7,6,5], stepped)
+        self.assertEqual([10, 9, 8, 7, 6, 5], stepped)
 
     def test_id2word(self):
 
@@ -95,7 +95,6 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(vtcorp, bottom_corpus(tfidf_freq_vtcorp))
         self.assertEqual(vtcorp, bottom_corpus(freq_vtcorp))
 
-
     def test_run_transformations(self):
         vtcorp = VTextCorpus(self.vtlist_file, input_root=self.data_root,
                              token_filter=self.token_filter,
@@ -108,9 +107,9 @@ class TestUtils(unittest.TestCase):
         with gzip.open(self.vtlist[0]) as vt_handle:
 
             output = run_transformations(vt_handle,
-                                                      vtcorp,
-                                                      freq_transform,
-                                                      tfidf_freq)
+                                         vtcorp,
+                                         freq_transform,
+                                         tfidf_freq)
         print output
         normalized_output = gensim.matutils.unitvec(output)
 
@@ -124,5 +123,9 @@ class TestUtils(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    logging.root.setLevel(logging.WARNING)
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestUtils)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

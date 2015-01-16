@@ -5,28 +5,11 @@ state: no corpora, no models, no learners, no indexes.
 """
 import argparse
 import logging
-import os
-import shutil
-import sys
 
-from safire.data.layouts import DataDirLayout
+from safire.data.layouts import clean_data_root
+
 
 __author__ = 'Jan Hajic jr.'
-
-
-def clean_dir(path, force=False):
-    """Removes everything from the directory given by path."""
-    if not force:
-        print 'Are you sure you want to delete everything in %s? [y/n]' % path
-        confirmation = sys.stdin.readline().strip()
-        if confirmation not in ['y', 'Y', 'yes', 'Yes', 'YES']:
-            print 'Aborting...'
-            return
-        else:
-            print 'Proceeding...'
-
-    shutil.rmtree(path)
-    os.makedirs(path)
 
 ########################################################################
 
@@ -34,21 +17,7 @@ def clean_dir(path, force=False):
 def main(args):
     logging.info('Executing clean.py...')
 
-    layout = DataDirLayout(args.root)
-
-    corpus_dir = os.path.join(layout.name, layout.corpus_dir)
-    dataset_dir = os.path.join(layout.name, layout.dataset_dir)
-    model_dir = os.path.join(layout.name, layout.model_dir)
-    learner_dir = os.path.join(layout.name, layout.learner_dir)
-    index_dir = os.path.join(layout.name, layout.index_dir)
-    temp_dir = os.path.join(layout.name, layout.temp_dir)
-
-    clean_dir(corpus_dir, force=args.force)
-    clean_dir(dataset_dir, force=args.force)
-    clean_dir(model_dir, force=args.force)
-    clean_dir(learner_dir, force=args.force)
-    clean_dir(index_dir, force=args.force)
-    clean_dir(temp_dir, force=args.force)
+    clean_data_root(args.root)
 
     logging.info('Exiting clean.py.')
 

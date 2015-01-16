@@ -9,19 +9,23 @@ import unittest
 import numpy
 
 from safire.datasets.sharded_dataset import ShardedDataset
-from safire.data.loaders import MultimodalDatasetLoader, ShardedDatasetLoader
+from safire.data.loaders import MultimodalShardedDatasetLoader, ShardedDatasetLoader
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
+from test.safire_test_case import SafireTestCase
 
 
-class TestShardedDataset(unittest.TestCase):
+class TestShardedDataset(SafireTestCase):
+
+    @classmethod
+    def setUpClass(cls, clean_only=True):
+        super(TestShardedDataset, cls).setUpClass(clean_only=True)
 
     def setUp(self):
 
-        self.testdir = os.path.dirname(__file__)
-        self.data_root = os.path.join(self.testdir, 'test-data')
-
-        self.loader = MultimodalDatasetLoader(self.data_root, 'test-data')
-        self.dloader = ShardedDatasetLoader(self.data_root, 'test-data')
+        self.loader = MultimodalShardedDatasetLoader(self.data_root,
+                                                     'test-data')
+        self.dloader = ShardedDatasetLoader(self.data_root,
+                                            'test-data')
 
         self.learner = BaseSGDLearner(3, 2, validation_frequency=4)
 
@@ -84,6 +88,10 @@ class TestShardedDataset(unittest.TestCase):
 
         icorp = self.loader.load_image_corpus()
         output_prefix = self.dloader.output_prefix()
+
+        print icorp.input
+        print self.dloader.output_prefix()
+
         dataset = ShardedDataset(output_prefix, icorp, shardsize=2)
 
         self.assertEqual(10, dataset.n_shards)
@@ -99,11 +107,12 @@ class TestShardedDataset(unittest.TestCase):
 
         #print dataset.n_shards
 
-
-
-
-
+##############################################################################
 
 if __name__ == '__main__':
-    logging.root.setLevel(logging.WARNING)
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestShardedDataset)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

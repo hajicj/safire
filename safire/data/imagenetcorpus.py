@@ -62,6 +62,7 @@ class ImagenetCorpus(CorpusABC):
         self.__do_cleanup = False
 
         self.input = input
+
         self.delimiter = delimiter
         self.dim = dim
         self.eps = eps

@@ -12,6 +12,7 @@ from safire.datasets.word2vec_transformer import \
 from safire.utils.transcorp import get_id2word_obj
 from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.word2vec_transformer import Word2VecTransformer
+from test.safire_test_case import SafireTestCase
 
 __author__ = 'Jan Hajic jr.'
 
@@ -22,15 +23,12 @@ def _init_word2vec_dtransformer(*args, **kwargs):
     return Word2VecSamplingDatasetTransformer(*args, **kwargs)
 
 
-class TestWord2VecDatasetTransformer(unittest.TestCase):
+class TestWord2VecDatasetTransformer(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
+        super(TestWord2VecDatasetTransformer, cls).setUpClass()
 
-        cls.testdir = os.path.dirname(__file__)
-        cls.data_root = os.path.join(cls.testdir, 'test-data')
-
-        cls.loader = MultimodalShardedDatasetLoader(cls.data_root, 'test-data')
         cls.infix = ''
 
         if not os.getenv('HOME'):
@@ -110,8 +108,12 @@ class TestWord2VecDatasetTransformer(unittest.TestCase):
 
         self.assertEqual(transformed_batch.shape, (batch_size, self.w2v.n_out))
 
-
+###############################################################################
 
 if __name__ == '__main__':
-
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestWord2VecDatasetTransformer)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
