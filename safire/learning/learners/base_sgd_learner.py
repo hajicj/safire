@@ -211,8 +211,9 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
             else:
                 resume_successful = True
                 # TODO: There should be a sanity check here!
-                # Also, the loading could possibly use TIDs - which would require,
+                # Also, the loading could use TIDs - which would require,
                 # however, a ModelLoader.
+                # XXX: WTF are TIDs?
                 model_handle.model_instance = resuming_instance
 
         try:
