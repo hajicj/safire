@@ -12,10 +12,10 @@ class DatasetABC(object):
     sparse, nump vs. gensim...). Use a DataFormatter for that.
 
     >>> corpus = [[(1, 22.3), (3, 1.8), (4, 0.97)], [(2, 0.5) (3, 11.6)]]
-    >>> dataset = Dataset(data=corpus, dim=4)
-    >>> dataset.train(0, 1)
+    >>> dataset = DatasetABC(data=corpus, dim=4)
+    >>> dataset.train_X_batch(0, 1)
     [[(1, 22.3), (3, 1.8), (4, 0.97)]]
-    >>> dataset.train(0, 2)
+    >>> dataset.train_X_batch(0, 2)
     [[(1, 22.3), (3, 1.8), (4, 0.97)], [(2, 0.5) (3, 11.6)]]
 
     Note that the dataset always returns **batches**: even if your batch size
@@ -69,6 +69,7 @@ class DatasetABC(object):
     What next:
     ^^^^^^^^^^
 
+    0. Write a basic wrapper that implements the old Dataset functionality.
     1. Get a basic pipeline to work: only create a simple dataset that can feed
        batches for an unsupervised model.
     2. Decide on support for supervised datasets. May coincide heavily with
@@ -112,12 +113,3 @@ class Dataset(object):
     def _get_batch(self, subset, kind, b_index, b_size):
         raise NotImplementedError
 
-
-class CompositeDataset(Dataset):
-    """Derived class for multiple datasets. On each batch request, returns
-    recursively a tuple of batches, one from each dataset it contains.
-    If its components are also composite, returns a tuple of tuples, etc.
-    (The structure of the data space is determined by the composition structure
-    of the data, in math-speak.)
-    """
-    pass

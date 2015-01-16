@@ -43,7 +43,7 @@ class ShardedCorpus(IndexedCorpus):
     needs to be done once (and it may take quite a long time):
 
     >>> icorp = data_loader.load_image_corpus()
-    >>> sdata = ShardedDataset(output_prefix, icorp)
+    >>> sdata = ShardedCorpus(output_prefix, icorp)
 
     The ``output_prefix`` gives the path to the dataset file. The individual
     shards are saved as ``output_prefix.0``, ``output_prefix.1``, etc.

@@ -790,7 +790,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         else:
             kwargs['ignore'] = frozenset([v for v in kwargs['ignore']]
                                          + attrs_to_ignore)
-        super(ShardedDataset, self).save(*args, **kwargs)
+        super(ShardedCorpus, self).save(*args, **kwargs)
         #
         # self.reset()
         # with open(self.output_prefix, 'wb') as pickle_handle:
@@ -801,7 +801,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         """Loads itself in clean state. You can happily ignore the ``mmap``
         parameter, as the saving mechanism for the dataset is different from
         how gensim saves things in utils.SaveLoad."""
-        return super(ShardedDataset, cls).load(fname, mmap)
+        return super(ShardedCorpus, cls).load(fname, mmap)
 
     @staticmethod
     def save_corpus(fname, corpus, id2word=None, progress_cnt=1000,
@@ -822,7 +822,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         Ignore the parameters id2word, progress_cnt and metadata. They
         currently do nothing and are here only to provide a compatible
         method signature with superclass."""
-        ShardedDataset(fname, corpus, **kwargs)
+        ShardedCorpus(fname, corpus, **kwargs)
 
     @classmethod
     def serialize(serializer, fname, corpus, id2word=None,

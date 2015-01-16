@@ -11,17 +11,17 @@ from scipy import sparse
 
 from gensim.utils import is_corpus
 
-from safire.datasets.sharded_dataset import ShardedCorpus
+from safire.data.sharded_corpus import ShardedCorpus
 from safire.data.loaders import MultimodalShardedDatasetLoader, ShardedDatasetLoader
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
 from safire_test_case import SafireTestCase
 
 
-class TestShardedDataset(SafireTestCase):
+class TestShardedCorpus(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
-        super(TestShardedDataset, cls).setUpClass(no_datasets=True)
+        super(TestShardedCorpus, cls).setUpClass(no_datasets=True)
 
     def setUp(self):
 
@@ -273,7 +273,9 @@ class TestShardedDataset(SafireTestCase):
 if __name__ == '__main__':
     suite = unittest.TestSuite()
     loader = unittest.TestLoader()
-    tests = loader.loadTestsFromTestCase(TestShardedDataset)
+    tests = loader.loadTestsFromTestCase(TestShardedCorpus)
     suite.addTest(tests)
     runner = unittest.TextTestRunner()
     runner.run(suite)
+
+    from numpy.distutils.__config__ import openblas_info

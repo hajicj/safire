@@ -47,7 +47,7 @@ import unittest
 from gensim.corpora import MmCorpus
 from numpy.random import uniform, poisson, randint
 import shutil
-from safire.datasets.sharded_dataset import ShardedDataset
+from safire.data.sharded_corpus import ShardedCorpus
 
 from safire.utils import benchmark
 
@@ -108,7 +108,7 @@ def serialize_mmcorpus(fname, data, **kwargs):
 @benchmark
 def serialize_sharded_dataset(fname, data, **kwargs):
     """Serialization benchmark - ShardedDataset"""
-    ShardedDataset.serialize(fname, data, **kwargs)
+    ShardedCorpus.serialize(fname, data, **kwargs)
 
 
 @benchmark
@@ -166,7 +166,7 @@ def main(args):
 
     print '\nIn-order retrieval:'
     print '-------------------\n'
-    shdat = ShardedDataset.load(shdat_fname)
+    shdat = ShardedCorpus.load(shdat_fname)
     print '      shdat-dense2gensim...'
     shdat.gensim = True
     iter_inorder(shdat)
@@ -180,7 +180,7 @@ def main(args):
     print '\nRandom-access iteration:'
     print '------------------------\n'
     indices = [randint(0, args.n_items-1) for _ in xrange(args.n_items)]
-    shdat = ShardedDataset.load(shdat_fname)
+    shdat = ShardedCorpus.load(shdat_fname)
     print '      shdat-dense2gensim...'
     shdat.gensim = True
     _iter_random(shdat, indices)
@@ -220,9 +220,9 @@ def build_argument_parser():
                             action='store_true',
                             help='Run the %s task.' % task['name'])
 
-    # Options for ShardedDataset initialization
+    # Options for ShardedCorpus initialization
     parser.add_argument('--shardsize', action='store', default=4096, type=int,
-                        help='ShardedDataset corpus shard size.')
+                        help='ShardedCorpus shard size.')
 
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Turn on INFO logging messages.')

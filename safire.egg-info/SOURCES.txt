@@ -16,6 +16,7 @@ safire/data/imagenetcorpus.py
 safire/data/layouts.py
 safire/data/loaders.py
 safire/data/parameter_space.py
+safire/data/sharded_corpus.py
 safire/data/text_browser.py
 safire/data/utils.py
 safire/data/vtextcorpus.py
@@ -101,6 +102,7 @@ test/test_rbm_unsupervised_training.py
 test/test_rsm_unsupervised_training.py
 test/test_safire_transformer.py
 test/test_selftest.py
+test/test_sharded_corpus.py
 test/test_sharded_dataset.py
 test/test_text_browser.py
 test/test_utils.py
