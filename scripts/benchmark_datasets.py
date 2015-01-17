@@ -42,14 +42,14 @@ Compared implementations
 import argparse
 import logging
 import os
-import time
-import unittest
-from gensim.corpora import MmCorpus
-from numpy.random import uniform, poisson, randint
+from numpy.random import randint
 import shutil
-from safire.data.sharded_corpus import ShardedCorpus
 
-from safire.utils import benchmark
+from gensim.corpora import MmCorpus
+
+from safire.data.sharded_corpus import ShardedCorpus
+from safire.utils import benchmark, mock_data
+
 
 __author__ = 'Jan Hajic jr.'
 
@@ -70,29 +70,6 @@ n_items = 10000
 
 #: What the mock data dimension should be
 dim = 10000
-
-###############################################################################
-
-# Setting up the show
-
-
-def mock_data_row(dim=1000, prob_nnz=0.5, lam=1.0):
-    """Creates a random gensim sparse vector. Each coordinate is nonzero with
-    probability ``prob_nnz``, each non-zero coordinate value is drawn from
-    a Poisson distribution with parameter lambda equal to ``lam``."""
-    nnz = uniform(size=(dim,))
-    data = [(i, poisson(lam=lam)) for i in xrange(dim) if nnz[i] < prob_nnz]
-    return data
-
-
-@benchmark
-def mock_data(n_items=1000, dim=1000, prob_nnz=0.5, lam=1.0):
-    """Creates a mock gensim-style corpus (a list of lists of tuples (int,
-    float) to use as a mock corpus.
-    """
-    data = [mock_data_row(dim=dim, prob_nnz=prob_nnz, lam=lam)
-            for _ in xrange(n_items)]
-    return data
 
 ###############################################################################
 

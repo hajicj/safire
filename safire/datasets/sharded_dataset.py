@@ -29,6 +29,12 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
     and fast access to your data). It should be faster than gensim's other
     IndexedCorpus implementations; check the ``benchmark_datasets.py`` script.
 
+    .. warning:
+
+      This class is superseded by ShardedCorpus and an upcoming ShardedDataset
+      class that split the data retention functionality and batch-retrieval
+      interface into two.
+
     The dataset stores its data in separate files called
     "shards". This is a compromise between speed (keeping the whole dataset
     in memory) and memory footprint (keeping the data on disk and reading from
@@ -67,8 +73,10 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
     """
 
     #@profile
-    def __init__(self, output_prefix, corpus, dim=None, test_p=0.1, devel_p=0.1,
-                 shardsize=4096, overwrite=False, sparse_serialization=False,
+    def __init__(self, output_prefix, corpus, dim=None,
+                 test_p=0.1, devel_p=0.1,
+                 shardsize=4096, overwrite=False,
+                 sparse_serialization=False,
                  sparse_retrieval=False, gensim=False):
         """Initializes the dataset. If ``output_prefix`` is not found,
         builds the shards.

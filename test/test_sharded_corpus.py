@@ -250,9 +250,6 @@ class TestShardedCorpus(SafireTestCase):
         icorp = self.loader.load_image_corpus()
         output_prefix = self.dloader.output_prefix()
 
-        #print icorp.input
-        #print self.dloader.output_prefix()
-
         dataset = ShardedCorpus(output_prefix, icorp, shardsize=2)
 
         self.assertEqual(10, dataset.n_shards)
@@ -277,5 +274,3 @@ if __name__ == '__main__':
     suite.addTest(tests)
     runner = unittest.TextTestRunner()
     runner.run(suite)
-
-    from numpy.distutils.__config__ import openblas_info
