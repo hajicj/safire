@@ -22,7 +22,7 @@ from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
 __author__ = 'Jan Hajic jr.'
 
-#: TO BE DEPRECATED
+#: DEPRECATED!!!
 class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
     """This class is designed for situations where you need to train a model
     on dense data, with a large number of iterations (when you need sequential
@@ -73,7 +73,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
     """
 
     #@profile
-    def __init__(self, corpus, dim=None,
+    def __init__(self, output_prefix, corpus, dim=None,
                  test_p=0.1, devel_p=0.1,
                  shardsize=4096, overwrite=False,
                  sparse_serialization=False,

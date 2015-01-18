@@ -1,7 +1,8 @@
 """Base class for safire datasets."""
+import logging
 import gensim
 import theano
-import safire
+import safire.utils.transcorp
 
 
 class DatasetABC(gensim.utils.SaveLoad):
@@ -11,8 +12,11 @@ class DatasetABC(gensim.utils.SaveLoad):
     * batch retrieval
     * may advertise the space in which the data lives
 
+    Retrieval through ``__getitem__`` calls is still possible.
+
     The dataset does *not* define the format of the retrieved data (dense vs.
-    sparse, nump vs. gensim...). Use a DataFormatter for that.
+    sparse, numpy vs. gensim...). Use a DataFormatter for that. [NOT
+    IMPLEMENTED]
 
     >>> corpus = [[(1, 22.3), (3, 1.8), (4, 0.97)], [(2, 0.5) (3, 11.6)]]
     >>> dataset = DatasetABC(data=corpus, dim=4)
@@ -85,7 +89,9 @@ class DatasetABC(gensim.utils.SaveLoad):
     that supports slicing operation on ``__getitem__`` call and can return its
     ``__len__`` that gets passed as the ``data`` parameter to the constructor.
 
-    Datasets are stateless. There should be no need for persistence.
+    Datasets are containers: they are fully specified at initialization
+    and afterwards are only accessed.
+
     Train/dev/test split is handled at the dataset level.
     """
     pass
@@ -117,11 +123,13 @@ class Dataset(DatasetABC):
         try:
             x = data[0:1]
         except TypeError:
-            raise TypeError('Dataset initialized with non-sliceable type'
-                            ' ({0})'.format(type(data)))
+            #raise TypeError('Dataset initialized with non-sliceable type'
+            #                ' ({0})'.format(type(data)))
+            logging.warn('Dataset initialized with non-sliceable type'
+                         ' ({0})'.format(type(data)))
 
         if not dim:
-            dim = safire.utils.transcorp.dimension(data)
+            dim = self.derive_dimension(data)
 
         self.data = data
 
@@ -305,3 +313,73 @@ class Dataset(DatasetABC):
 
     def __len__(self):
         return len(self.data)
+
+    def derive_dimension(self, data):
+        """Derives the dimension (space) of the data. This method is
+        called during initialization and should be overridden by
+        SimpleDataset and CompositeDataset to enforce constraints on
+        data structure."""
+        logging.warn('Calling Dataset.__derive_dimension()')
+        return safire.utils.transcorp.dimension(data)
+
+
+class SimpleDataset(Dataset):
+    """This is essentially a renaming of the Dataset class. Indicates
+    a Simple/Composite split architecture. Most datasets will be Composite.
+
+    TODO: Refactor Dataset direct __getitem__ behavior into SimpleDataset.
+    """
+    pass
+
+
+class CompositeDataset(Dataset):
+    """Allows using a dictionary of Datasets instead of single data. The keys
+    of the data dictionary can be used to look up specific subsets of the
+    CompositeDataset, for instance a split between ``train``, ``dev`` and
+    ``test`` data.
+
+    >>> data1 = Dataset([[1], [2], [3]], dim=1)
+    >>> data2 = Dataset([[-1], [-2], [-3]], dim=1)
+    >>> composite = CompositeDataset({'data1': data1, 'data2': data2})
+    >>> composite.data1[2]
+    [3]
+    >>> composite.data2[1:3]
+    [[-2], [-3]]
+    >>> composite[1:3]
+    {'data1': [[2], [3]], 'data2': [[-2], [-3]]}
+
+    The dimension of the corpus is derived automatically:
+
+    >>> composite.dim
+    {'data1': 1, 'data2': 1}
+
+    You can also recursively combine composite (or simple) datasets:
+
+    >>> composite2 = ({'1data': data1, '2data': data2})
+    >>> recursive = CompositeDataset({'cdata1': composite, 'cdata2': data2})
+    >>> recursive[1:2]
+    {'cdata2': [[-2]], 'cdata1': {'data1': [[2]], 'data2': [[-2]]}}
+    >>> recursive.cdata1[1:3]
+    {'data1': [[2], [3]], 'data2': [[-2], [-3]]}
+    >>> recursive.dim
+    {'cdata2': 1, 'cdata1': {'data1': 1, 'data2': 1}}
+
+    Internals
+    ---------
+
+    The mechanism that allows selecting from batches like this is implemented
+    by overriding the ``__getattr__`` and ``__getitem__`` methods. Attribute
+    lookup is directed to the ``data`` dictionary for the ``recursive.cdata1``
+    syntax. ``__getitem__`` simply calls recursively travels the ``data``
+    tree.
+    """
+    def __getattr__(self, item):
+        return self.data[item]
+
+    def __getitem__(self, item):
+        return {name: self.__getattr__(name)[item]
+                for name in sorted(self.data)}
+
+    def derive_dimension(self, data):
+        logging.warn('Calling CompositeDataset.__derive_dimension')
+        return {name: data[name].dim for name in sorted(data.keys())}
