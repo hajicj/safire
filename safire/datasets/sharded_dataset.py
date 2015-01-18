@@ -22,7 +22,7 @@ from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
 __author__ = 'Jan Hajic jr.'
 
-
+#: TO BE DEPRECATED
 class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
     """This class is designed for situations where you need to train a model
     on dense data, with a large number of iterations (when you need sequential
@@ -73,7 +73,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
     """
 
     #@profile
-    def __init__(self, output_prefix, corpus, dim=None,
+    def __init__(self, corpus, dim=None,
                  test_p=0.1, devel_p=0.1,
                  shardsize=4096, overwrite=False,
                  sparse_serialization=False,
@@ -103,77 +103,14 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         :param devel_p: The proportion of the dataset which should be used as
             heldout (development) data for validation.
 
-        :type shardsize: int
-        :param shardsize: How many data points should be in one shard. More
-            data per shard means less shard reloading but higher memory usage
-            and vice versa.
-
-        :type overwrite: bool
-        :param overwrite: If set, will build dataset from given corpus even
-            if ``output_prefix`` already exists.
-
-        :type sparse_serialization: bool
-        :param sparse_serialization: If set, will save the data in a sparse
-            form (as csr matrices). This is to speed up retrieval when you
-            know you will be using sparse matrices.
-
-            This property **should not change** during the lifetime of the
-            dataset. (If you find out you need to change from a sparse to
-            a dense representation, the best practice is to create another
-            ShardedDataset object.)
-
-            [NOT IMPLEMENTED]
-
-        :type sparse_retrieval: bool
-        :param sparse_retrieval: If set, will retrieve data as sparse vectors
-            (numpy csr matrices). If unset, will return ndarrays.
-
-            Note that retrieval speed for this option depends on how the dataset
-            was serialized. If ``sparse_serialization`` was set, then setting
-            ``sparse_retrieval`` will be faster. However, if the two settings
-            do not correspond, the conversion on the fly will slow the dataset
-            down.
-
-            [NOT IMPLEMENTED]
-
-        :type gensim: bool
-        :param gensim: If set, will additionally convert the output to gensim
-            sparse vectors (list of tuples (id, value)) to make it behave like
-            any other gensim corpus. This **will** slow the dataset down.
-
-            [NOT IMPLEMENTED]
 
         """
-        self.output_prefix = output_prefix
-        self.shardsize = shardsize
-
         self.n_docs = 0
 
         self.offsets = []
         self.n_shards = 0
 
         self.dim = dim  # This number may change during initialization/loading.
-
-        # Sparse vs. dense serialization and retrieval.
-        self._pickle_protocol = -1
-        self.sparse_serialization = sparse_serialization
-        self.sparse_retrieval = sparse_retrieval
-        self.gensim = gensim
-
-        # The "state" of the dataset.
-        self.current_shard = None    # The current shard itself (numpy ndarray)
-        self.current_shard_n = None  # Current shard is the current_shard_n-th
-        self.current_offset = None   # The index into the dataset which
-                                     # corresponds to index 0 of current shard
-
-        logging.info('Initializing shard dataset with prefix %s' % output_prefix)
-        if (not os.path.isfile(output_prefix)) or overwrite:
-            logging.info('Building from corpus...')
-            self.init_shards(output_prefix, corpus, shardsize)
-            self.save()  # Save automatically, to facillitate re-loading
-        else:
-            logging.info('Cloning existing...')
-            self.init_by_clone()
 
         # Both methods of initialization initialize self.dim
         self.n_in = self.dim

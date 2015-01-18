@@ -53,6 +53,7 @@ class SafireTestCase(unittest.TestCase):
         cls.loader.build_default_image_corpora(
             serializer=gensim.corpora.MmCorpus)
 
+        cls._no_datasets = no_datasets
         if not no_datasets:
             default_vtcorp = cls.loader.load_text_corpus()
             cls.loader.build_text(default_vtcorp,
@@ -61,6 +62,7 @@ class SafireTestCase(unittest.TestCase):
             default_icorp = cls.loader.load_image_corpus()
             cls.loader.build_img(default_icorp,
                                  dataset_init_args={'overwrite': True})
+
 
     @classmethod
     def tearDownClass(cls):
@@ -77,8 +79,9 @@ class SafireTestCase(unittest.TestCase):
         try:
             self.loader.load_text_corpus()
             self.loader.load_image_corpus()
-            self.loader.load_text()
-            self.loader.load_img()
+            if not self._no_datasets:
+                self.loader.load_text()
+                self.loader.load_img()
             no_exceptions = True
         except ValueError:
             pass

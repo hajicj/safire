@@ -8,6 +8,7 @@ image from a set of samples or weights.
 import cProfile
 import copy
 import logging
+import math
 import StringIO
 import pdb
 import pstats
@@ -18,11 +19,7 @@ from sys import getsizeof, stderr
 from itertools import chain
 from collections import deque
 
-#try:
-#    from reprlib import repr
-#except ImportError:
-#    pass
-
+from gensim.matutils import full2sparse
 
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
@@ -37,8 +34,6 @@ import numpy
 import numpy.random
 import theano
 import theano.ifelse
-
-import math
 
 
 def check_kwargs(kwargs, names):
@@ -746,7 +741,8 @@ def mock_data_row(dim=1000, prob_nnz=0.5, lam=1.0):
     probability ``prob_nnz``, each non-zero coordinate value is drawn from
     a Poisson distribution with parameter lambda equal to ``lam``."""
     nnz = numpy.random.uniform(size=(dim,))
-    data = [(i, numpy.random.poisson(lam=lam)) for i in xrange(dim) if nnz[i] < prob_nnz]
+    data = [(i, float(numpy.random.poisson(lam=lam) + 1.0))
+            for i in xrange(dim) if nnz[i] < prob_nnz]
     return data
 
 
@@ -757,3 +753,9 @@ def mock_data(n_items=1000, dim=1000, prob_nnz=0.5, lam=1.0):
     data = [mock_data_row(dim=dim, prob_nnz=prob_nnz, lam=lam)
             for _ in xrange(n_items)]
     return data
+
+
+# Conversions: ndarray2gensim, gensim2ndarray
+def ndarray2gensim(array):
+    """Convert a numpy ndarray into a gensim-style list of list of tuples."""
+    return [full2sparse(row) for row in array]

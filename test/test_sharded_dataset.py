@@ -11,16 +11,16 @@ from scipy import sparse
 
 from gensim.utils import is_corpus
 from safire.data.sharded_corpus import ShardedCorpus
-from safire.datasets.sharded_dataset import ShardedDataset
+from safire.datasets.dataset import Dataset
 
 from safire.data.loaders import MultimodalShardedDatasetLoader, ShardedDatasetLoader
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
-from safire.utils import mock_data
+from safire.utils import mock_data, ndarray2gensim
 from safire_test_case import SafireTestCase
 
 
 # This class should test stuff like train_X_batch, etc.
-class TestShardedDataset(SafireTestCase):
+class TestDataset(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -32,7 +32,7 @@ class TestShardedDataset(SafireTestCase):
         cls.devel_p = 0.1
         cls.test_p = 0.1
 
-        super(TestShardedDataset, cls).setUpClass(no_datasets=True)
+        super(TestDataset, cls).setUpClass(no_datasets=True)
 
         # Files will get removed through SafireTestCase.tearDownClass()
         cls.shcorp_name = os.path.join(cls.data_root, 'corpora', 'tshcorp')
@@ -45,19 +45,24 @@ class TestShardedDataset(SafireTestCase):
         # Can do this without Loaders, as we are
         # using "live" mock data that was later serialized.
         self.corpus = ShardedCorpus.load(self.shcorp_name)
-        self.dataset = ShardedDataset(corpus=self.corpus,
-                                      devel_p=self.devel_p,
-                                      test_p=self.test_p)
+        # Note the difference in initialization of new ShardedDataset:
+        # no ``output_prefix`` argument, only a corpus.
+        self.dataset = Dataset(data=self.corpus,
+                               devel_p=self.devel_p,
+                               test_p=self.test_p)
 
-    # def test_init(self):
-    # No need to test initialization, as setUp would fail right away.
+    def test_init(self):
+        # Tests various behavior of initialization: stuff that should raise
+        # exceptions, for instance a non-sliceable ``corpus`` object
+        # or an object that doesn't declare its dimensionality.
+        self.assertRaises(TypeError, Dataset, ((x, x * 0.2) for x in xrange(10)))
 
     def test_saveload(self):
         self.dataset.save(fname=self.shdat_name)
-        loaded_dataset = ShardedDataset.load(self.shdat_name)
+        loaded_dataset = Dataset.load(self.shdat_name)
 
-        self.assertEqual(self.dataset.train_X_batch(0, 100),
-                         loaded_dataset.train_X_batch(0, 100))
+        self.assertEqual(self.dataset.train_X_batch(0, 100).all(),
+                         loaded_dataset.train_X_batch(0, 100).all())
 
     def test_n_train_batches(self):
         self.assertEqual(self.dataset.n_train_batches(100), 8)
@@ -76,10 +81,12 @@ class TestShardedDataset(SafireTestCase):
         self.assertEqual(self.dataset.n_test_batches(99), 1)
 
     def test_train_X_batch(self):
-        pass
+        batch = self.dataset.train_X_batch(0, 100)
+        self.assertEqual(ndarray2gensim(batch), self.data[:100])
 
     def test_getitem(self):
-        pass
+        batch = self.dataset[100:200]
+        self.assertEqual(ndarray2gensim(batch), self.data[100:200])
 
 
 ##############################################################################

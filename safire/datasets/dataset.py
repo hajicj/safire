@@ -1,7 +1,10 @@
 """Base class for safire datasets."""
+import gensim
+import theano
+import safire
 
 
-class DatasetABC(object):
+class DatasetABC(gensim.utils.SaveLoad):
     """Base class for datasets. A dataset is a wrapper around something
     that supports slice retrieval and adds the following functionality:
 
@@ -85,31 +88,220 @@ class DatasetABC(object):
     Datasets are stateless. There should be no need for persistence.
     Train/dev/test split is handled at the dataset level.
     """
+    pass
 
 
-class Dataset(object):
-    """This is the old Dataset."""
-    def __init__(self, data, n_in):
-        """Constructs a Dataset from the given data.
+class Dataset(DatasetABC):
+    """This is the old Dataset, reworked into a wrapper for an IndexedCorpus
+    (like, for instance, the ShardedCorpus)."""
+    def __init__(self, data, dim=None, test_p=None, devel_p=None):
+        """Constructs a Dataset wrapper for the given data.
+
+        The default train-dev-test split is by proportion of data.
+        Subclasses may override it.
         
-        :type data: tuple
-        :param data: A triplet of data items. No other expectations
-                     than a length of 3 are enforced.
-                     
-        :type n_in: int
-        :param n_in: Dimension of input space (think number of input neurons).
+        :type data: gensim.corpora.IndexedCorpus
+        :param data: An indexed corpus, or anything that supports
+            slice retrieval.
+
+        :type dim: int
+        :param dim: Dimension of input space (think number of input
+                     neurons).
+
+        :param test_p: Proportion of data to be used as test. Will be taken
+            from the end of the dataset.
+
+        :param devel_p: Proportion of data to be used as development set.
+            Will be taken from before the test set.
+        """
+        try:
+            x = data[0:1]
+        except TypeError:
+            raise TypeError('Dataset initialized with non-sliceable type'
+                            ' ({0})'.format(type(data)))
+
+        if not dim:
+            dim = safire.utils.transcorp.dimension(data)
+
+        self.data = data
+
+        self.dim = dim
+        self.n_in = dim # Input row dimension/shape
+        self.n_out = dim # Input row dimension/shape
+
+        self.test_p = 0.0
+        if test_p:
+            self.test_p = test_p
+        self._test_doc_offset = len(self) - int(len(self) * self.test_p)
+
+        self.devel_p = 0.0
+        if devel_p:
+            self.devel_p = devel_p
+        self._devel_doc_offset = self._test_doc_offset \
+                                 - int(len(self) * self.devel_p)
+
+    def n_train_batches(self, batch_size):
+        """Determines how many batches of given size the training data will
+        be split into.
+
+        :type batch_size: int
+        :param batch_size: The intended size of one batch of the data.
+
+        :returns: The number of batches the training data will be split into
+            for the given ``batch_size``.
+        """
+        return self._devel_doc_offset / batch_size
+
+    def n_devel_batches(self, batch_size):
+        """Determines how many batches of given size the training data will
+        be split into.
+
+        :type batch_size: int
+        :param batch_size: The intended size of one batch of the data.
+
+        :returns: The number of batches the training data will be split into
+            for the given ``batch_size``.
+        """
+        return (self._test_doc_offset - self._devel_doc_offset) / batch_size
+
+    def n_test_batches(self, batch_size):
+        """Determines how many batches of given size the training data will
+        be split into.
+
+        :type batch_size: int
+        :param batch_size: The intended size of one batch of the data.
+
+        :returns: The number of batches the training data will be split into
+            for the given ``batch_size``.
+        """
+        return (len(self) - self._test_doc_offset) / batch_size
+
+    def train_X_batch(self, b_index, b_size):
+        """Slices a batch of ``train_X`` for given batch index and batch size.
+
+        :type b_index: int
+        :param b_index: The order of the batch in the dataset (0 for first,
+                        1 for second, etc.)
+
+        :type b_size: int
+        :param b_size: The size of one batch.
+
+        :returns: A slice of the shared variable ``train_X`` starting at
+                  ``b_index * b_size`` and ending at ``(b_index + 1) *
+                  b_size``.
+
+        :raises: ValueError
+        """
+        return self._get_batch('train', 'X', b_index, b_size)
+
+    def devel_X_batch(self, b_index, b_size):
+        """Slices a batch of ``devel_X`` for given batch index and batch size.
+
+        :type b_index: int
+        :param b_index: The order of the batch in the dataset (0 for first,
+                        1 for second, etc.)
+
+        :type b_size: int
+        :param b_size: The size of one batch.
+
+        :returns: A slice of the shared variable ``devel_X`` starting at
+                  ``b_index * b_size`` and ending at ``(b_index + 1) *
+                  b_size``.
+
+        :raises: ValueError
+        """
+        return self._get_batch('devel', 'X', b_index, b_size)
+
+    def test_X_batch(self, b_index, b_size):
+        """Slices a batch of ``test_X`` for given batch index and batch size.
+
+        :type b_index: int
+        :param b_index: The order of the batch in the dataset (0 for first,
+                        1 for second, etc.)
+
+        :type b_size: int
+        :param b_size: The size of one batch.
+
+        :returns: A slice of the shared variable ``test_X`` starting at
+                  ``b_index * b_size`` and ending at ``(b_index + 1) *
+                  b_size``.
+
+        :raises: ValueError
+        """
+        return self._get_batch('test', 'X', b_index, b_size)
+
+    def _get_batch(self, subset, kind, b_index, b_size,
+                   dtype=theano.config.floatX):
+        """Retrieves a segment of the data, specified by the arguments.
+
+        :type subset: str
+        :param subset: One of ``'train'``, ``'devel'`` or ``'test'``.
+            Specifies which subset of the dataset should be used.
+
+        :type kind: str
+        :param kind: One of ``'X'`` or ``'y'``. Specifies whether we want
+            the inputs or the response.
+
+        :type b_index: int
+        :param b_index: The order of the batch in the dataset (0 for first,
+            1 for second, etc.)
+
+        :type b_size: int
+        :param b_size: Size of one batch.
+
+        :raises: ValueError
+
         """
 
-        assert len(data) == 3, 'Dataset initialized with incorrect train-devel-test ternary structure.'
-        # TODO: assertions about dimensionality?
-        # TODO: check for type, so that we're not sharing already shared variables
+        lbound = b_index * b_size
 
-        self.n_in = n_in # Input row dimension/shape
+        if subset == 'train':
+            if kind == 'X':
+                if lbound + b_size > self._devel_doc_offset:
+                    raise ValueError('Too high batch index and/or batch size'
+                                     ' (%d, %d); training dataset has only %d documents.' % (b_index, b_size, self._devel_doc_offset))
+                batch = self._build_batch(lbound, b_size, dtype)
+                return batch
+            else:
+                raise ValueError('Wrong batch kind specified:'
+                                 ' %s (unsupervised datasets only support \'X\')' % kind)
 
-        self.train = data[0]
-        self.devel = data[1]
-        self.test = data[2]
+        elif subset == 'devel':
+            if kind == 'X':
+                lbound += self._devel_doc_offset
+                if lbound + b_size > self._test_doc_offset:
+                    raise ValueError('Too high batch index and/or batch size'
+                                     ' (%d, %d); devel dataset has only %d documents.' % (b_index, b_size, self._test_doc_offset - self._devel_doc_offset))
+                batch = self._build_batch(lbound, b_size, dtype)
+                return batch
+            else:
+                raise ValueError('Wrong batch kind specified: '
+                                 '%s (unsupervised datasets only support \'X\')' % kind)
 
-    def _get_batch(self, subset, kind, b_index, b_size):
-        raise NotImplementedError
+        elif subset == 'test':
+            if kind == 'X':
+                lbound += self._test_doc_offset
+                if lbound > len(self):
+                    raise ValueError('Too high batch index and/or batch size'
+                                     ' (%d, %d); testing dataset has only %d documents.' % (b_index, b_size, len(self) - self._test_doc_offset))
+                batch = self._build_batch(lbound, b_size, dtype)
+                return batch
+            else:
+                raise ValueError('Wrong batch kind specified: %s (unsupervised'
+                                 ' datasets only support \'X\')' % kind)
 
+        else:
+            raise ValueError('Wrong batch subset specified: %s (datasets only supports \'train\', \'devel\', \'test\').' % subset)
+
+    def _build_batch(self, lbound, batch_size, dtype=theano.config.floatX):
+        """Given the first index of a batch and batch size, builds the batch
+        from the corpus.
+        """
+        result = self[lbound:lbound+batch_size]
+        return result
+
+    def __getitem__(self, key):
+        return self.data[key]
+
+    def __len__(self):
+        return len(self.data)
