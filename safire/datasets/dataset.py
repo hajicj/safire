@@ -5,101 +5,103 @@ import theano
 import safire.utils.transcorp
 
 
+#class DatasetABC(gensim.utils.SaveLoad):
+"""Base class for datasets. A dataset is a wrapper around something
+that supports slice retrieval and adds the following functionality:
+
+* batch retrieval
+* may advertise the space in which the data lives
+
+Retrieval through ``__getitem__`` calls is still possible.
+
+The dataset does *not* define the format of the retrieved data (dense vs.
+sparse, numpy vs. gensim...). Use a DataFormatter for that. [NOT
+IMPLEMENTED]
+
+>>> corpus = [[(1, 22.3), (3, 1.8), (4, 0.97)], [(2, 0.5) (3, 11.6)]]
+>>> dataset = DatasetABC(data=corpus, dim=4)
+>>> dataset.train_X_batch(0, 1)
+[[(1, 22.3), (3, 1.8), (4, 0.97)]]
+>>> dataset.train_X_batch(0, 2)
+[[(1, 22.3), (3, 1.8), (4, 0.97)], [(2, 0.5) (3, 11.6)]]
+
+Note that the dataset always returns **batches**: even if your batch size
+is just one item, it will be the first member of a single-member iterable
+(by default a list, as seen in the example).
+
+The data lives in various *spaces*. A space is just a fancy name for the
+structure of a data point. The items in our dataset are four-dimensional
+vectors, so the dimension of the dataset is simply 4. (Constructor argument
+``dim``.)
+
+Dimensionality information is very important for conversions between
+different output formats (dense vs. sparse) and for models.
+
+Supervised vs. Unsupervised datasets
+------------------------------------
+
+A simple dataset is unsupervised. All "columns" have the same role. In this
+perspective, making a dataset supervised is the matter of the *model*: the
+model should interpret certain columns as input variables and certain
+columns as output variables. However, to set up a model, the dimension of
+the input and output must be known.
+
+!!!BRAINSTORMING!!!
+^^^^^^^^^^^^^^^^^^^
+
+TODO: design a solution
+- Split: initialization time vs. runtime
+- Init time: read dimensionality, determine inputs structure?
+- Runtime: feed data to inputs (as: model_handle.train(*inputs!)
+
+Question: do I have to know at dataset build time which vars are input
+and which are response? (SupervisionTransformer/SupervisedDataset?)
+
+Case study with Word2VecSamplingTransformer: when will the sampling be
+applied? What about a *supervised* setting with the sampler?
+
+Principle: **There should only be a dataset when feeding data into a model.
+No intermediate datasets, everything that actually works with the data
+is a corpus/transformer.** A Dataset is an interface into the model.
+
+Typically, the dataset will work with a TransformedCorpus... but we need
+indexing: what about a TransformedIndexedCorpus that subclasses
+TransformedCorpus and adds __getitem__ that just passes the output of
+a __getitem__ call on the underlying corpus through the ``obj``?
+(Make a utility function that can construct this indexable TransformedCorpus
+if both the ``corpus`` and the ``obj`` member support slicing calls?)
+
+In the end: we need a **reshaper** that can map from one space to another.
+
+What next:
+^^^^^^^^^^
+
+0. Write a basic wrapper that implements the old Dataset functionality.
+1. Get a basic pipeline to work: only create a simple dataset that can feed
+   batches for an unsupervised model.
+2. Decide on support for supervised datasets. May coincide heavily with
+   refactoring the cost function outside the models.
+
+Internals
+---------
+
+The default implementation assumes that there is an underlying object
+that supports slicing operation on ``__getitem__`` call and can return its
+``__len__`` that gets passed as the ``data`` parameter to the constructor.
+
+Datasets are containers: they are fully specified at initialization
+and afterwards are only accessed.
+
+Train/dev/test split is handled at the dataset level.
+"""
+#    pass
+
+
 class DatasetABC(gensim.utils.SaveLoad):
-    """Base class for datasets. A dataset is a wrapper around something
-    that supports slice retrieval and adds the following functionality:
-
-    * batch retrieval
-    * may advertise the space in which the data lives
-
-    Retrieval through ``__getitem__`` calls is still possible.
-
-    The dataset does *not* define the format of the retrieved data (dense vs.
-    sparse, numpy vs. gensim...). Use a DataFormatter for that. [NOT
-    IMPLEMENTED]
-
-    >>> corpus = [[(1, 22.3), (3, 1.8), (4, 0.97)], [(2, 0.5) (3, 11.6)]]
-    >>> dataset = DatasetABC(data=corpus, dim=4)
-    >>> dataset.train_X_batch(0, 1)
-    [[(1, 22.3), (3, 1.8), (4, 0.97)]]
-    >>> dataset.train_X_batch(0, 2)
-    [[(1, 22.3), (3, 1.8), (4, 0.97)], [(2, 0.5) (3, 11.6)]]
-
-    Note that the dataset always returns **batches**: even if your batch size
-    is just one item, it will be the first member of a single-member iterable
-    (by default a list, as seen in the example).
-
-    The data lives in various *spaces*. A space is just a fancy name for the
-    structure of a data point. The items in our dataset are four-dimensional
-    vectors, so the dimension of the dataset is simply 4. (Constructor argument
-    ``dim``.)
-
-    Dimensionality information is very important for conversions between
-    different output formats (dense vs. sparse) and for models.
-
-    Supervised vs. Unsupervised datasets
-    ------------------------------------
-
-    A simple dataset is unsupervised. All "columns" have the same role. In this
-    perspective, making a dataset supervised is the matter of the *model*: the
-    model should interpret certain columns as input variables and certain
-    columns as output variables. However, to set up a model, the dimension of
-    the input and output must be known.
-
-    !!!BRAINSTORMING!!!
-    ^^^^^^^^^^^^^^^^^^^
-
-    TODO: design a solution
-    - Split: initialization time vs. runtime
-    - Init time: read dimensionality, determine inputs structure?
-    - Runtime: feed data to inputs (as: model_handle.train(*inputs!)
-
-    Question: do I have to know at dataset build time which vars are input
-    and which are response? (SupervisionTransformer/SupervisedDataset?)
-
-    Case study with Word2VecSamplingTransformer: when will the sampling be
-    applied? What about a *supervised* setting with the sampler?
-
-    Principle: **There should only be a dataset when feeding data into a model.
-    No intermediate datasets, everything that actually works with the data
-    is a corpus/transformer.** A Dataset is an interface into the model.
-
-    Typically, the dataset will work with a TransformedCorpus... but we need
-    indexing: what about a TransformedIndexedCorpus that subclasses
-    TransformedCorpus and adds __getitem__ that just passes the output of
-    a __getitem__ call on the underlying corpus through the ``obj``?
-    (Make a utility function that can construct this indexable TransformedCorpus
-    if both the ``corpus`` and the ``obj`` member support slicing calls?)
-
-    In the end: we need a **reshaper** that can map from one space to another.
-
-    What next:
-    ^^^^^^^^^^
-
-    0. Write a basic wrapper that implements the old Dataset functionality.
-    1. Get a basic pipeline to work: only create a simple dataset that can feed
-       batches for an unsupervised model.
-    2. Decide on support for supervised datasets. May coincide heavily with
-       refactoring the cost function outside the models.
-
-    Internals
-    ---------
-
-    The default implementation assumes that there is an underlying object
-    that supports slicing operation on ``__getitem__`` call and can return its
-    ``__len__`` that gets passed as the ``data`` parameter to the constructor.
-
-    Datasets are containers: they are fully specified at initialization
-    and afterwards are only accessed.
-
-    Train/dev/test split is handled at the dataset level.
-    """
-    pass
-
-
-class Dataset(DatasetABC):
     """This is the old Dataset, reworked into a wrapper for an IndexedCorpus
-    (like, for instance, the ShardedCorpus)."""
+    (like, for instance, the ShardedCorpus). It can also serve as a wrapper
+    for a Dataset, in order to be subclassable to something that performs
+    an on-the-fly transformation of the data."""
     def __init__(self, data, dim=None, test_p=None, devel_p=None):
         """Constructs a Dataset wrapper for the given data.
 
@@ -314,16 +316,20 @@ class Dataset(DatasetABC):
     def __len__(self):
         return len(self.data)
 
-    def derive_dimension(self, data):
+    @staticmethod
+    def derive_dimension(data):
         """Derives the dimension (space) of the data. This method is
         called during initialization and should be overridden by
         SimpleDataset and CompositeDataset to enforce constraints on
         data structure."""
-        logging.warn('Calling Dataset.__derive_dimension()')
         return safire.utils.transcorp.dimension(data)
 
 
-class SimpleDataset(Dataset):
+class Dataset(DatasetABC):
+    pass
+
+
+class SimpleDataset(DatasetABC):
     """This is essentially a renaming of the Dataset class. Indicates
     a Simple/Composite split architecture. Most datasets will be Composite.
 
@@ -332,54 +338,66 @@ class SimpleDataset(Dataset):
     pass
 
 
-class CompositeDataset(Dataset):
-    """Allows using a dictionary of Datasets instead of single data. The keys
-    of the data dictionary can be used to look up specific subsets of the
-    CompositeDataset, for instance a split between ``train``, ``dev`` and
-    ``test`` data.
+class CompositeDatasetABC(DatasetABC):
+    """Allows combining datasets into more complex spaces. Also allows naming
+    datasets (this is useful for train/dev/test splits and features/targets
+    splits, as defined by specialization subclasses
 
-    >>> data1 = Dataset([[1], [2], [3]], dim=1)
-    >>> data2 = Dataset([[-1], [-2], [-3]], dim=1)
-    >>> composite = CompositeDataset({'data1': data1, 'data2': data2})
-    >>> composite.data1[2]
-    [3]
-    >>> composite.data2[1:3]
-    [[-2], [-3]]
+    Initialized with a tuple or list of Datasets (or something that can
+    act as a tuple, like a list).
+
+    >>> features = DatasetABC([[1], [2], [3]], dim=1)
+    >>> targets = DatasetABC([[-1], [-2], [-3]], dim=1)
+    >>> composite = CompositeDatasetABC((features, targets), names=('features', 'targets'))
     >>> composite[1:3]
-    {'data1': [[2], [3]], 'data2': [[-2], [-3]]}
-
-    The dimension of the corpus is derived automatically:
-
+    ([[2], [3]], [[-2], [-3]])
+    >>> composite['targets'][:2]
+    [[-1], [-2]]
     >>> composite.dim
-    {'data1': 1, 'data2': 1}
+    (1, 1)
 
-    You can also recursively combine composite (or simple) datasets:
-
-    >>> composite2 = ({'1data': data1, '2data': data2})
-    >>> recursive = CompositeDataset({'cdata1': composite, 'cdata2': data2})
-    >>> recursive[1:2]
-    {'cdata2': [[-2]], 'cdata1': {'data1': [[2]], 'data2': [[-2]]}}
-    >>> recursive.cdata1[1:3]
-    {'data1': [[2], [3]], 'data2': [[-2], [-3]]}
-    >>> recursive.dim
-    {'cdata2': 1, 'cdata1': {'data1': 1, 'data2': 1}}
-
-    Internals
-    ---------
-
-    The mechanism that allows selecting from batches like this is implemented
-    by overriding the ``__getattr__`` and ``__getitem__`` methods. Attribute
-    lookup is directed to the ``data`` dictionary for the ``recursive.cdata1``
-    syntax. ``__getitem__`` simply calls recursively travels the ``data``
-    tree.
     """
-    def __getattr__(self, item):
-        return self.data[item]
+    def __init__(self, data, dim=None, names=None,
+                 test_p=None, devel_p=None):
+
+        super(CompositeDatasetABC, self).__init__(data, dim=dim,
+                                                  test_p=test_p,
+                                                  devel_p=devel_p)
+
+        if names:
+            if len(names) != len(data):
+                raise AssertionError('Dataset names too many or too few'
+                                     ' ({0}) for {1} component'
+                                     ' datasets.'.format(len(names),
+                                                         len(data)))
+        else:
+            names = []
+        self.names = names
+        self.names_dict = {name: i for i, name in enumerate(self.names)}
+    #
+    # def __getattr__(self, item):
+    #     """Slightly non-trivial mechanism for allowing named sub-dataset
+    #     retrieval as attribute."""
+    #     if item in self.__getattribute__('names_dict'):
+    #         return self.data[self.names_dict[item]]
+    #     try:
+    #         return super(CompositeDatasetABC, self).__getattribute__(item)
+    #     except AttributeError:
+    #         raise AttributeError('Cannot retrieve data subset {0}: name'
+    #                              'not found (names available: {1})'.format(
+    #             item, self.names
+    #         ))
 
     def __getitem__(self, item):
-        return {name: self.__getattr__(name)[item]
-                for name in sorted(self.data)}
+        try:
+            return tuple(d[item] for d in self.data)
+        except TypeError:
+            if isinstance(item, str):
+                return self.data[self.names_dict[item]]
+            else:
+                raise
 
-    def derive_dimension(self, data):
-        logging.warn('Calling CompositeDataset.__derive_dimension')
-        return {name: data[name].dim for name in sorted(data.keys())}
+    @staticmethod
+    def derive_dimension(data):
+        return tuple(d.dim for d in data)
+

@@ -76,7 +76,10 @@ def dimension(corpus):
     output dimension."""
     current_corpus = corpus
     if isinstance(current_corpus, Dataset):
-        return current_corpus.n_in  # This is stupid! It's an *output* dimension.
+        if hasattr(current_corpus, 'dim'):
+            return current_corpus.dim
+        else:
+            return current_corpus.n_in  # This is stupid! It's an *output* dimension.
     if isinstance(current_corpus, TextCorpus):
         return len(current_corpus.dictionary)
     if isinstance(current_corpus, ImagenetCorpus):
