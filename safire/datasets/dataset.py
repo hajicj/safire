@@ -326,6 +326,7 @@ class DatasetABC(gensim.utils.SaveLoad):
 
 
 class Dataset(DatasetABC):
+    """What should be in the default Dataset?"""
     pass
 
 
@@ -338,7 +339,7 @@ class SimpleDataset(DatasetABC):
     pass
 
 
-class CompositeDatasetABC(DatasetABC):
+class CompositeDataset(DatasetABC):
     """Allows combining datasets into more complex spaces. Also allows naming
     datasets (this is useful for train/dev/test splits and features/targets
     splits, as defined by specialization subclasses
@@ -348,7 +349,7 @@ class CompositeDatasetABC(DatasetABC):
 
     >>> features = DatasetABC([[1], [2], [3]], dim=1)
     >>> targets = DatasetABC([[-1], [-2], [-3]], dim=1)
-    >>> composite = CompositeDatasetABC((features, targets), names=('features', 'targets'))
+    >>> composite = CompositeDataset((features, targets), names=('features', 'targets'))
     >>> composite[1:3]
     ([[2], [3]], [[-2], [-3]])
     >>> composite['targets'][:2]
@@ -356,13 +357,21 @@ class CompositeDatasetABC(DatasetABC):
     >>> composite.dim
     (1, 1)
 
+    Can also be recursive:
+
+    >>> recursive = CompositeDataset((composite, composite), names=('first', 'second'))
+    >>> recursive.dim
+    ((1, 1), (1, 1))
+    >>> recursive[1:3]
+    (([[2], [3]], [[-2], [-3]]), ([[2], [3]], [[-2], [-3]]))
+
     """
     def __init__(self, data, dim=None, names=None,
                  test_p=None, devel_p=None):
 
-        super(CompositeDatasetABC, self).__init__(data, dim=dim,
-                                                  test_p=test_p,
-                                                  devel_p=devel_p)
+        super(CompositeDataset, self).__init__(data, dim=dim,
+                                               test_p=test_p,
+                                               devel_p=devel_p)
 
         if names:
             if len(names) != len(data):
@@ -401,3 +410,11 @@ class CompositeDatasetABC(DatasetABC):
     def derive_dimension(data):
         return tuple(d.dim for d in data)
 
+
+class SupervisedDataset(CompositeDataset):
+
+    def __init__(self, data, test_p=None, devel_p=None):
+        super(SupervisedDataset, self).__init__(data,
+                                                names=('features', 'targets'),
+                                                test_p=test_p,
+                                                devel_p=devel_p)
