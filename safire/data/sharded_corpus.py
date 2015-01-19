@@ -559,7 +559,8 @@ class ShardedCorpus(IndexedCorpus):
             #  - if in ending shard, these are from 0
             #    to (stop - current_offset)
             shard_start = start - self.current_offset
-            shard_stop = self.offsets[self.current_shard_n + 1] - self.current_offset
+            shard_stop = self.offsets[self.current_shard_n + 1] - \
+                         self.current_offset
 
             #s_result[result_start:result_stop] = self.current_shard[
             #                                         shard_start:shard_stop]

@@ -1,223 +1,196 @@
 """
 Testing the test sharded corpus.
-
-TODO: rewrite tests to use mock_data instead of safire-based test data.
 """
-
-import logging
 import os
 import unittest
-
+import random
 import numpy
-from scipy import sparse
+import shutil
 
+from scipy import sparse
 from gensim.utils import is_corpus
 
+# TODO: refactor these imports (mock_data should go to gensim utils?)
 from safire.data.sharded_corpus import ShardedCorpus
-from safire.data.loaders import MultimodalShardedDatasetLoader, ShardedDatasetLoader
-from safire.learning.learners.base_sgd_learner import BaseSGDLearner
-from safire_test_case import SafireTestCase
+from safire.utils import mock_data
+
+#############################################################################
 
 
-class TestShardedCorpus(SafireTestCase):
+class TestShardedCorpus(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        super(TestShardedCorpus, cls).setUpClass(no_datasets=True)
+        cls.dim = 1000
+        cls.data = mock_data(dim=cls.dim)
+
+        random_string = ''.join([random.choice('1234567890') for _ in xrange(8)])
+
+        cls.tmp_dir = 'test-temp-' + random_string
+        os.makedirs(cls.tmp_dir)
+
+        cls.tmp_fname = os.path.join(cls.tmp_dir,
+                                     'shcorp.' + random_string + '.tmp')
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp_dir)
 
     def setUp(self):
-
-        self.loader = MultimodalShardedDatasetLoader(self.data_root,
-                                                     'test-data')
-        self.dloader = ShardedDatasetLoader(self.data_root,
-                                            'test-data')
-
-    def tearDown(self):
-
-        # Cleanup...
-        test_dir = os.path.join(self.data_root, 'datasets')
-        files = os.listdir(test_dir)
-        for f in files:
-            os.remove(os.path.join(test_dir, f))
+        self.corpus = ShardedCorpus(self.tmp_fname, self.data, dim=self.dim,
+                                    shardsize=100)
 
     def test_init(self):
 
-        icorp = self.loader.load_image_corpus()
-        output_prefix = self.dloader.output_prefix()
-        dataset = ShardedCorpus(output_prefix, icorp, shardsize=2)
-
-        # Test that the shards were actually created
-        self.assertTrue(os.path.isfile(output_prefix + '.1'))
+        # Test that the shards were actually created during setUp
+        self.assertTrue(os.path.isfile(self.tmp_fname + '.1'))
 
     def test_load(self):
 
-        icorp = self.loader.load_image_corpus()
-        output_prefix = self.dloader.output_prefix()
-        dataset = ShardedCorpus(output_prefix, icorp, shardsize=2)
-
         # Test that the shards were actually created
-        self.assertTrue(os.path.isfile(output_prefix + '.1'))
+        self.assertTrue(os.path.isfile(self.tmp_fname + '.1'))
 
-        dataset.save()
-        loaded_dataset = ShardedCorpus.load(output_prefix)
+        self.corpus.save()
+        loaded_corpus = ShardedCorpus.load(self.tmp_fname)
 
-        self.assertEqual(loaded_dataset.dim, dataset.dim)
-        self.assertEqual(loaded_dataset.n_shards, dataset.n_shards)
+        self.assertEqual(loaded_corpus.dim, self.corpus.dim)
+        self.assertEqual(loaded_corpus.n_shards, self.corpus.n_shards)
 
     def test_getitem(self):
 
-        icorp = self.loader.load_image_corpus()
-        output_prefix = self.dloader.output_prefix()
-        dataset = ShardedCorpus(output_prefix, icorp, shardsize=2)
+        _ = self.corpus[130]
+        # Does retrieving the item load the correct shard?
+        self.assertEqual(self.corpus.current_shard_n, 1)
 
-        item = dataset[3]
+        item = self.corpus[220:227]
 
-        #print item
+        self.assertEqual((7, self.corpus.dim), item.shape)
+        self.assertEqual(self.corpus.current_shard_n, 2)
 
-        self.assertEqual(dataset.current_shard_n, 1)
-
-        item = dataset[1:7]
-
-        #print item
-
-        self.assertEqual((6, dataset.n_in), item.shape)
-
-        for i in xrange(1, 7):
-            self.assertTrue(numpy.array_equal(dataset[i], item[i-1]))
+        for i in xrange(220, 227):
+            self.assertTrue(numpy.array_equal(self.corpus[i], item[i-220]))
 
     def test_sparse_serialization(self):
 
-        icorp = self.loader.load_image_corpus()
-        output_prefix = self.dloader.output_prefix()
         no_exception = True
         try:
-            dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
-                                     sparse_serialization=True)
+            dataset = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                                    dim=self.dim, sparse_serialization=True)
         except Exception:
             no_exception = False
             raise
-        self.assertTrue(no_exception)
+        finally:
+            self.assertTrue(no_exception)
 
     def test_getitem_dense2dense(self):
 
-        icorp = self.loader.load_image_corpus()
-        output_prefix = self.dloader.output_prefix()
-        dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
-                                 sparse_serialization=False,
-                                 sparse_retrieval=False)
+        corpus = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                               dim=self.dim, sparse_serialization=False,
+                               sparse_retrieval=False)
 
-        item = dataset[3]
+        item = corpus[3]
         self.assertIsInstance(item, numpy.ndarray)
-        self.assertEqual(item.shape, (dataset.n_out,))
+        self.assertEqual(item.shape, (corpus.n_out,))
 
-        dslice = dataset[2:6]
+        dslice = corpus[2:6]
         self.assertIsInstance(dslice, numpy.ndarray)
-        self.assertEqual(dslice.shape, (4, dataset.n_out))
+        self.assertEqual(dslice.shape, (4, corpus.n_out))
 
-        ilist = dataset[[2, 3, 4, 5]]
+        ilist = corpus[[2, 3, 4, 5]]
         self.assertIsInstance(ilist, numpy.ndarray)
-        self.assertEqual(ilist.shape, (4, dataset.n_out))
+        self.assertEqual(ilist.shape, (4, corpus.n_out))
 
         self.assertEqual(ilist.all(), dslice.all())
 
     def test_getitem_dense2sparse(self):
 
-        icorp = self.loader.load_image_corpus()
-        output_prefix = self.dloader.output_prefix()
-        dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
-                                 sparse_serialization=False,
-                                 sparse_retrieval=True)
+        corpus = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                               dim=self.dim, sparse_serialization=False,
+                               sparse_retrieval=True)
 
-        item = dataset[3]
+        item = corpus[3]
         self.assertIsInstance(item, sparse.csr_matrix)
-        self.assertEqual(item.shape, (1, dataset.n_out))
+        self.assertEqual(item.shape, (1, corpus.n_out))
 
-        dslice = dataset[2:6]
+        dslice = corpus[2:6]
         self.assertIsInstance(dslice, sparse.csr_matrix)
-        self.assertEqual(dslice.shape, (4, dataset.n_out))
+        self.assertEqual(dslice.shape, (4, corpus.n_out))
 
-        ilist = dataset[[2, 3, 4, 5]]
+        ilist = corpus[[2, 3, 4, 5]]
         self.assertIsInstance(ilist, sparse.csr_matrix)
-        self.assertEqual(ilist.shape, (4, dataset.n_out))
+        self.assertEqual(ilist.shape, (4, corpus.n_out))
 
         self.assertEqual((ilist != dslice).getnnz(), 0)
 
     def test_getitem_sparse2sparse(self):
 
-        icorp = self.loader.load_image_corpus()
-        sp_output_prefix = self.dloader.output_prefix(sparse_serialization=True)
-        dataset = ShardedCorpus(sp_output_prefix, icorp, shardsize=2,
-                                sparse_serialization=True,
-                                sparse_retrieval=True)
+        sp_tmp_fname = self.tmp_fname + '.sparse'
+        corpus = ShardedCorpus(sp_tmp_fname, self.data, shardsize=100,
+                               dim=self.dim, sparse_serialization=True,
+                               sparse_retrieval=True)
 
-        output_prefix = self.dloader.output_prefix()
-        dense_dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
-                                      sparse_serialization=False,
-                                      sparse_retrieval=True)
+        dense_corpus = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                                     dim=self.dim, sparse_serialization=False,
+                                     sparse_retrieval=True)
 
-        item = dataset[3]
+        item = corpus[3]
         self.assertIsInstance(item, sparse.csr_matrix)
-        self.assertEqual(item.shape, (1, dataset.n_out))
+        self.assertEqual(item.shape, (1, corpus.n_out))
 
-        dslice = dataset[2:6]
+        dslice = corpus[2:6]
         self.assertIsInstance(dslice, sparse.csr_matrix)
-        self.assertEqual(dslice.shape, (4, dataset.n_out))
+        self.assertEqual(dslice.shape, (4, corpus.n_out))
 
-        expected_nnz = 5810
+        expected_nnz = sum([len(self.data[i]) for i in range(2, 6)])
         self.assertEqual(dslice.getnnz(), expected_nnz)
 
-        ilist = dataset[[2, 3, 4, 5]]
+        ilist = corpus[[2, 3, 4, 5]]
         self.assertIsInstance(ilist, sparse.csr_matrix)
-        self.assertEqual(ilist.shape, (4, dataset.n_out))
+        self.assertEqual(ilist.shape, (4, corpus.n_out))
 
         # Also compare with what the dense dataset is giving us
-        d_dslice = dense_dataset[2:6]
+        d_dslice = dense_corpus[2:6]
         self.assertEqual((d_dslice != dslice).getnnz(), 0)
         self.assertEqual((ilist != dslice).getnnz(), 0)
 
     def test_getitem_sparse2dense(self):
+        sp_tmp_fname = self.tmp_fname + '.sparse'
+        corpus = ShardedCorpus(sp_tmp_fname, self.data, shardsize=100,
+                               dim=self.dim, sparse_serialization=True,
+                               sparse_retrieval=False)
 
-        icorp = self.loader.load_image_corpus()
-        sp_output_prefix = self.dloader.output_prefix(sparse_serialization=True)
-        dataset = ShardedCorpus(sp_output_prefix, icorp, shardsize=2,
-                                sparse_serialization=True,
-                                sparse_retrieval=False)
+        dense_corpus = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                                     dim=self.dim, sparse_serialization=False,
+                                     sparse_retrieval=False)
 
-        output_prefix = self.dloader.output_prefix()
-        dense_dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
-                                      sparse_serialization=False,
-                                      sparse_retrieval=False)
-
-        item = dataset[3]
+        item = corpus[3]
         self.assertIsInstance(item, numpy.ndarray)
-        self.assertEqual(item.shape, (1, dataset.n_out))
+        self.assertEqual(item.shape, (1, corpus.n_out))
 
-        dslice = dataset[2:6]
+        dslice = corpus[2:6]
         self.assertIsInstance(dslice, numpy.ndarray)
-        self.assertEqual(dslice.shape, (4, dataset.n_out))
+        self.assertEqual(dslice.shape, (4, corpus.n_out))
 
-        ilist = dataset[[2, 3, 4, 5]]
+        ilist = corpus[[2, 3, 4, 5]]
         self.assertIsInstance(ilist, numpy.ndarray)
-        self.assertEqual(ilist.shape, (4, dataset.n_out))
+        self.assertEqual(ilist.shape, (4, corpus.n_out))
 
         # Also compare with what the dense dataset is giving us
-        d_dslice = dense_dataset[2:6]
+        d_dslice = dense_corpus[2:6]
         self.assertEqual(dslice.all(), d_dslice.all())
         self.assertEqual(ilist.all(), dslice.all())
 
     def test_getitem_dense2gensim(self):
 
-        icorp = self.loader.load_image_corpus()
-        output_prefix = self.dloader.output_prefix()
-        dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
-                                sparse_serialization=False,
-                                gensim=True)
+        corpus = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                               dim=self.dim, sparse_serialization=False,
+                               gensim=True)
 
-        item = dataset[3]
+        item = corpus[3]
         self.assertIsInstance(item, list)
         self.assertIsInstance(item[0], tuple)
 
-        dslice = dataset[2:6]
+        dslice = corpus[2:6]
         self.assertTrue(hasattr(dslice, 'next'))
         dslice = list(dslice)
         self.assertIsInstance(dslice, list)
@@ -228,7 +201,7 @@ class TestShardedCorpus(SafireTestCase):
         self.assertTrue(iscorp, "Is the object returned by slice notation "
                                 "a gensim corpus?")
 
-        ilist = dataset[[2, 3, 4, 5]]
+        ilist = corpus[[2, 3, 4, 5]]
         self.assertTrue(hasattr(ilist, 'next'))
         ilist = list(ilist)
         self.assertIsInstance(ilist, list)
@@ -255,23 +228,17 @@ class TestShardedCorpus(SafireTestCase):
 
     def test_resize(self):
 
-        icorp = self.loader.load_image_corpus()
-        output_prefix = self.dloader.output_prefix()
-
-        dataset = ShardedCorpus(output_prefix, icorp, shardsize=2)
+        dataset = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                                dim=self.dim)
 
         self.assertEqual(10, dataset.n_shards)
 
-        dataset.resize_shards(4)
+        dataset.resize_shards(250)
 
-        self.assertEqual(5, dataset.n_shards)
+        self.assertEqual(4, dataset.n_shards)
         for n in xrange(dataset.n_shards):
             fname = dataset._shard_name(n)
             self.assertTrue(os.path.isfile(fname))
-
-        dataset.resize_shards(3)
-
-        #print dataset.n_shards
 
 ##############################################################################
 
