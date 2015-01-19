@@ -116,7 +116,9 @@ test/test-data/test-data.emtr.pkl
 test/test-data/test-data.im.ftrs.csv
 test/test-data/test-data.vtext-image-map.csv
 test/test-data/test-data.vtlist
+test/test-data/corpora/test-data.img.icorp
 test/test-data/corpora/test-data.img.mmcorp
+test/test-data/corpora/test-data.img.mmcorp.index
 test/test-data/corpora/test-data.vt.mmcorp
 test/test-data/corpora/test-data.vt.mmcorp.index
 test/test-data/corpora/test-data.vt.vtcorp

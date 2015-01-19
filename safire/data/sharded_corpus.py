@@ -47,6 +47,10 @@ class ShardedCorpus(IndexedCorpus):
 
     The ``output_prefix`` gives the path to the dataset file. The individual
     shards are saved as ``output_prefix.0``, ``output_prefix.1``, etc.
+    All shards must be of the same size. The shards can be re-sized (which
+    is essentially a re-serialization into new-size shards), but note that
+    this operation will temporarily take twice as much disk space, because
+    the old shards are not deleted until the new shards are safely in place.
 
     On further initialization with the same ``output_prefix`` (more precisely:
     the output prefix leading to the same file), will load the already built
@@ -253,13 +257,16 @@ class ShardedCorpus(IndexedCorpus):
             self.n_docs += shard.shape[0]
             self.n_shards += 1
 
+    #@profile
     def load_shard(self, n):
         """Loads (unpickles) the n-th shard as the "live" part of the dataset
         into the Dataset object."""
+        #logging.debug('ShardedCorpus loading shard {0}, '
+        #              'current shard: {1}'.format(n, self.current_shard_n))
 
         # No-op if the shard is already open.
         if self.current_shard_n == n:
-            pass
+            return
 
         filename = self._shard_name(n)
         if not os.path.isfile(filename):
@@ -277,21 +284,24 @@ class ShardedCorpus(IndexedCorpus):
         self.current_shard_n = None
         self.current_offset = None
 
+    #@profile
     def shard_by_offset(self, offset):
         """Determines which shard the given offset belongs to. If the offset
         is greater than the number of available documents, raises a
         ValueError."""
+        k = offset / self.shardsize
         if offset >= self.n_docs:
             raise ValueError('Too high offset specified (%d), available docs: %d' % (offset, self.n_docs))
         if offset < 0:
             raise ValueError('Negative offset {0} currently not'
                              ' supported.'.format(offset))
+        return k
 
         k = -1
         for i, o in enumerate(self.offsets):
-            if o > offset: # Condition should fire for every valid offset,
-                           # since the last offset is n_docs (one-past-end).
-                k = i - 1 # First offset is always 0, so i is at least 1.
+            if o > offset:  # Condition should fire for every valid offset,
+                            # since the last offset is n_docs (one-past-end).
+                k = i - 1   # First offset is always 0, so i is at least 1.
                 break
 
         return k
@@ -300,7 +310,7 @@ class ShardedCorpus(IndexedCorpus):
         """Determines whether the given offset falls within the current
         shard."""
         return (self.current_offset <= offset) \
-               and (offset < self.offsets[self.current_shard_n+1])
+                and (offset < self.offsets[self.current_shard_n+1])
 
     def in_next(self, offset):
         """Determines whether the given offset falls within the next shard.
@@ -484,8 +494,13 @@ class ShardedCorpus(IndexedCorpus):
 
             last_shard = self.n_shards - 1
             if not stop == self.n_docs:
-                last_shard = self.shard_by_offset(stop) # This fails on one-past
+                last_shard = self.shard_by_offset(stop)
+                # This fails on one-past
                 # slice indexing; that's why there's a code branch here.
+
+            #logging.debug('ShardedCorpus: Retrieving slice {0}: '
+            #              'shard {1}'.format((offset.start, offset.stop),
+            #                                 (first_shard, last_shard)))
 
             self.load_shard(first_shard)
 

@@ -257,7 +257,7 @@ def profile_run(function, *args, **kwargs):
     s = StringIO.StringIO()
     sortby = 'tottime'
     ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-    ps.print_stats(.33)
+    ps.print_stats(.50)
 
     return s, retval
 

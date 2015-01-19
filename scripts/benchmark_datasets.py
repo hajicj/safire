@@ -44,26 +44,16 @@ import logging
 import os
 from numpy.random import randint
 import shutil
+from safire.utils import profile_run
 
 from gensim.corpora import MmCorpus
 
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.utils import benchmark, mock_data
+from safire.datasets.dataset import Dataset, UnsupervisedDataset
 
 
 __author__ = 'Jan Hajic jr.'
-
-tasks = {
-    'serialize': {'name': 'serialization'},
-    'inord_iter': {'name': 'in-order iteration'},
-    'inord_chunks': {'name': 'in-order iteration by chunk'},
-    'inord_numpy': {'name': 'in-order iteration by numpy ndarray'},
-    'inord_csr': {'name': 'in-order iteration by scipy csr matrix'},
-    'random': {'name': 'random access'},
-    'random_chunks': {'name': 'random access by chunk'},
-    'shuffle_chunks': {'name': 'iterate by chunk, but in a random order.'}
-}
-
 
 #: How many data points should there be in the mock data
 n_items = 10000
@@ -97,7 +87,7 @@ def iter_inorder(corpus):
 
 
 def iter_random(corpus, n_accesses=1000):
-    indices = [randint(0, n_accesses-1) for _ in xrange(n_accesses)]
+    indices = [randint(0, len(corpus)-1) for _ in xrange(n_accesses)]
     _iter_random(corpus, indices)
 
 
@@ -110,6 +100,24 @@ def _iter_random(corpus, indices):
         if i % 500 == 0:
             logging.info('Retrieved doc no. {0}:\n{1}'.format(i, doc))
         ctr += len(doc)
+
+
+def batches_random(dataset, n_accesses=1000, batch_size=100):
+    indices = [randint(0, len(dataset)-(1+batch_size))
+               for _ in xrange(n_accesses)]
+    slices = [(idx, idx+batch_size) for idx in indices]
+    _batches_random(dataset, slices, batch_size)
+
+
+@benchmark
+def _batches_random(dataset, slices, batch_size):
+    ctr = 1
+    for i, s in enumerate(slices):
+        batch = dataset[s[0]:s[1]]
+        if i % 500 == 0:
+            logging.info('Retrieved batch no. {0}:\n{1}'.format(i, batch))
+            logging.info('Batch type: {0}'.format(type(batch)))
+        ctr += s[0]
 
 ###############################################################################
 
@@ -136,55 +144,87 @@ def main(args):
     shdat_fname = os.path.join(temp_dir, 'shdat-bench')
     serialize_sharded_dataset(shdat_fname, data, dim=args.dim,
                               shardsize=args.shardsize)
-
     print '      mmcorpus...'
     mmcorpus_fname = os.path.join(temp_dir, 'mmcorpus-bench')
     serialize_mmcorpus(mmcorpus_fname, data)
 
-    print '\nIn-order retrieval:'
-    print '-------------------\n'
-    shdat = ShardedCorpus.load(shdat_fname)
-    print '      shdat-dense2gensim...'
-    shdat.gensim = True
-    iter_inorder(shdat)
-    del shdat
+    if args.inord_iter:
+        print '\nIn-order retrieval:'
+        print '-------------------\n'
+        shdat = ShardedCorpus.load(shdat_fname)
+        print '      shdat-dense2gensim...'
+        shdat.gensim = True
+        iter_inorder(shdat)
+        del shdat
 
-    mmcorpus = MmCorpus(mmcorpus_fname)
-    print '      mmcorpus...'
-    iter_inorder(mmcorpus)
-    del mmcorpus
+        mmcorpus = MmCorpus(mmcorpus_fname)
+        print '      mmcorpus...'
+        iter_inorder(mmcorpus)
+        del mmcorpus
 
-    print '\nRandom-access iteration:'
-    print '------------------------\n'
-    indices = [randint(0, args.n_items-1) for _ in xrange(args.n_items)]
-    shdat = ShardedCorpus.load(shdat_fname)
-    print '      shdat-dense2gensim...'
-    shdat.gensim = True
-    _iter_random(shdat, indices)
-    del shdat
+    if args.random:
+        print '\nRandom-access iteration:'
+        print '------------------------\n'
+        indices = [randint(0, args.n_items-1) for _ in xrange(args.n_items)]
+        shdat = ShardedCorpus.load(shdat_fname)
+        print '      shdat-dense2gensim...'
+        shdat.gensim = True
+        _iter_random(shdat, indices)
+        del shdat
 
-    mmcorpus = MmCorpus(mmcorpus_fname)
-    print '      mmcorpus...'
-    _iter_random(mmcorpus, indices)
-    del mmcorpus
+        mmcorpus = MmCorpus(mmcorpus_fname)
+        print '      mmcorpus...'
+        _iter_random(mmcorpus, indices)
+        del mmcorpus
+
+    if args.random_batches:
+        print '\nDataset fixed-size random batch retrieval'
+        print '-----------------------------------------\n'
+        shdat = ShardedCorpus.load(shdat_fname)
+        mmcorp = MmCorpus(mmcorpus_fname)
+        sh_simple_dataset = Dataset(shdat, dim=args.dim)
+        mm_simple_dataset = Dataset(mmcorp, dim=args.dim)
+        print '      Sharded Dataset...'
+        report, _ = profile_run(batches_random,
+                                sh_simple_dataset, 10000, batch_size=50)
+        print report.getvalue()
+        #batches_random(sh_simple_dataset, 1000, batch_size=50)
+        print '      MmCorpus Dataset...'
+        report, _ = profile_run(batches_random,
+                                mm_simple_dataset, 10000, batch_size=50)
+        print report.getvalue()
+        # sh_composite_dataset = UnsupervisedDataset([sh_simple_dataset])
+        # print '      Sharded UnsupervisedDataset...'
+        # batches_random(sh_composite_dataset, 1000, batch_size=50)
+        # mm_composite_dataset = UnsupervisedDataset([mm_simple_dataset])
+        # print '      MmCorpus UnsupervisedDataset...'
+        # batches_random(mm_composite_dataset, 1000, batch_size=50)
+
 
     logging.info('Removing temp dir {0}'.format(temp_dir))
     shutil.rmtree(temp_dir)
 
     logging.info('Exiting benchmark_datasets.py.')
 
+###########################################################################
+
+#: Individual benchmarking task specification
+tasks = {
+    'serialize': {'name': 'serialization'},
+    'inord_iter': {'name': 'in-order iteration'},
+    'inord_chunks': {'name': 'in-order iteration by chunk'},
+    'inord_numpy': {'name': 'in-order iteration by numpy ndarray'},
+    'inord_csr': {'name': 'in-order iteration by scipy csr matrix'},
+    'random': {'name': 'random access'},
+    'random_batches': {'name': 'random access by batch'},
+    'shuffle_chunks': {'name': 'iterate by chunk, but in a random order.'}
+}
+
 
 def build_argument_parser():
 
     parser = argparse.ArgumentParser(description=__doc__, add_help=True)
 
-    # Will not need these arguments, will use mock data???
-    # parser.add_argument('-r', '--root', action='store', default=None,
-    #                     required=True, help='The path to'+
-    #                     ' the directory which is the root of a dataset.' +
-    #                     ' (Will be passed to a Loader as a root.)')
-    # parser.add_argument('-n', '--name', help='The dataset name passed to the'+
-    #                     'Loader. Has to correspond to the *.vtlist file name.')
     parser.add_argument('-n', '--n_items',
                         action='store', type=int, default=1000,
                         help='Use this many items in mock data.')
@@ -193,9 +233,9 @@ def build_argument_parser():
 
     # Options for individual tasks.
     for tname, task in tasks.items():
-        parser.add_argument('--%s' % task,
+        parser.add_argument('--{0}'.format(tname),
                             action='store_true',
-                            help='Run the %s task.' % task['name'])
+                            help='Run the {0} task.'.format(task['name']))
 
     # Options for ShardedCorpus initialization
     parser.add_argument('--shardsize', action='store', default=4096, type=int,

@@ -369,9 +369,16 @@ class CompositeDataset(DatasetABC):
     def __init__(self, data, dim=None, names=None,
                  test_p=None, devel_p=None):
 
+        # Check lengths
+        self.length = len(data[0])
         super(CompositeDataset, self).__init__(data, dim=dim,
                                                test_p=test_p,
                                                devel_p=devel_p)
+
+        for d in data:
+            if len(d) != self.length:
+                raise ValueError('All composite dataset components must have'
+                                 ' the same length.') # TODO: more informative
 
         if names:
             if len(names) != len(data):
@@ -383,19 +390,6 @@ class CompositeDataset(DatasetABC):
             names = []
         self.names = names
         self.names_dict = {name: i for i, name in enumerate(self.names)}
-    #
-    # def __getattr__(self, item):
-    #     """Slightly non-trivial mechanism for allowing named sub-dataset
-    #     retrieval as attribute."""
-    #     if item in self.__getattribute__('names_dict'):
-    #         return self.data[self.names_dict[item]]
-    #     try:
-    #         return super(CompositeDatasetABC, self).__getattribute__(item)
-    #     except AttributeError:
-    #         raise AttributeError('Cannot retrieve data subset {0}: name'
-    #                              'not found (names available: {1})'.format(
-    #             item, self.names
-    #         ))
 
     def __getitem__(self, item):
         try:
@@ -405,6 +399,9 @@ class CompositeDataset(DatasetABC):
                 return self.data[self.names_dict[item]]
             else:
                 raise
+
+    def __len__(self):
+        return self.length
 
     @staticmethod
     def derive_dimension(data):
@@ -418,3 +415,18 @@ class SupervisedDataset(CompositeDataset):
                                                 names=('features', 'targets'),
                                                 test_p=test_p,
                                                 devel_p=devel_p)
+
+
+# This only makes sense when implementing some extra batch
+# retrieval methods and NOT using __getitem__ directly (would return
+# a 1-tuple).
+class UnsupervisedDataset(CompositeDataset):
+
+    def __init__(self, data, test_p=None, devel_p=None):
+        if len(data) != 1:
+            raise ValueError('UnsupervisedDataset is composed of only 1'
+                             'component dataset (not {0})'.format(len(data)))
+        super(UnsupervisedDataset, self).__init__(data,
+                                                  names=['features'],
+                                                  test_p=test_p,
+                                                  devel_p=devel_p)

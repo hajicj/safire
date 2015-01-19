@@ -10,10 +10,10 @@ from gensim.models import TfidfModel
 
 from safire.data import FrequencyBasedTransformer, VTextCorpus
 from safire.data.sharded_corpus import ShardedCorpus
-from safire.datasets.dataset import Dataset
+#from safire.datasets.dataset import Dataset
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
-from safire.datasets.transformations import DatasetTransformer
+#from safire.datasets.transformations import DatasetTransformer
 
 
 __author__ = "Jan Hajic jr."
@@ -75,11 +75,10 @@ def dimension(corpus):
     """Finds the topmost corpus that can provide information about its
     output dimension."""
     current_corpus = corpus
-    if isinstance(current_corpus, Dataset):
-        if hasattr(current_corpus, 'dim'):
-            return current_corpus.dim
-        else:
-            return current_corpus.n_in  # This is stupid! It's an *output* dimension.
+    if hasattr(current_corpus, 'dim'):
+        return current_corpus.dim
+    else:
+        return current_corpus.n_in  # This is stupid! It's an *output* dimension.
     if isinstance(current_corpus, TextCorpus):
         return len(current_corpus.dictionary)
     if isinstance(current_corpus, ImagenetCorpus):
