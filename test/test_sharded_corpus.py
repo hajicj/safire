@@ -1,5 +1,7 @@
 """
-Testing the test procedure itself.
+Testing the test sharded corpus.
+
+TODO: rewrite tests to use mock_data instead of safire-based test data.
 """
 
 import logging
@@ -145,13 +147,13 @@ class TestShardedCorpus(SafireTestCase):
         icorp = self.loader.load_image_corpus()
         sp_output_prefix = self.dloader.output_prefix(sparse_serialization=True)
         dataset = ShardedCorpus(sp_output_prefix, icorp, shardsize=2,
-                                 sparse_serialization=True,
-                                 sparse_retrieval=True)
+                                sparse_serialization=True,
+                                sparse_retrieval=True)
 
         output_prefix = self.dloader.output_prefix()
         dense_dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
-                                       sparse_serialization=False,
-                                       sparse_retrieval=True)
+                                      sparse_serialization=False,
+                                      sparse_retrieval=True)
 
         item = dataset[3]
         self.assertIsInstance(item, sparse.csr_matrix)
@@ -178,13 +180,13 @@ class TestShardedCorpus(SafireTestCase):
         icorp = self.loader.load_image_corpus()
         sp_output_prefix = self.dloader.output_prefix(sparse_serialization=True)
         dataset = ShardedCorpus(sp_output_prefix, icorp, shardsize=2,
-                                 sparse_serialization=True,
-                                 sparse_retrieval=False)
+                                sparse_serialization=True,
+                                sparse_retrieval=False)
 
         output_prefix = self.dloader.output_prefix()
         dense_dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
-                                       sparse_serialization=False,
-                                       sparse_retrieval=False)
+                                      sparse_serialization=False,
+                                      sparse_retrieval=False)
 
         item = dataset[3]
         self.assertIsInstance(item, numpy.ndarray)
@@ -208,14 +210,16 @@ class TestShardedCorpus(SafireTestCase):
         icorp = self.loader.load_image_corpus()
         output_prefix = self.dloader.output_prefix()
         dataset = ShardedCorpus(output_prefix, icorp, shardsize=2,
-                                 sparse_serialization=False,
-                                 gensim=True)
+                                sparse_serialization=False,
+                                gensim=True)
 
         item = dataset[3]
         self.assertIsInstance(item, list)
         self.assertIsInstance(item[0], tuple)
 
         dslice = dataset[2:6]
+        self.assertTrue(hasattr(dslice, 'next'))
+        dslice = list(dslice)
         self.assertIsInstance(dslice, list)
         self.assertIsInstance(dslice[0], list)
         self.assertIsInstance(dslice[0][0], tuple)
@@ -225,9 +229,13 @@ class TestShardedCorpus(SafireTestCase):
                                 "a gensim corpus?")
 
         ilist = dataset[[2, 3, 4, 5]]
+        self.assertTrue(hasattr(ilist, 'next'))
+        ilist = list(ilist)
         self.assertIsInstance(ilist, list)
         self.assertIsInstance(ilist[0], list)
         self.assertIsInstance(ilist[0][0], tuple)
+
+        # From generators to lists
 
         self.assertEqual(len(ilist), len(dslice))
         for i in xrange(len(ilist)):

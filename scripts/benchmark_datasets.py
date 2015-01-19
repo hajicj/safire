@@ -44,7 +44,7 @@ import logging
 import os
 from numpy.random import randint
 import shutil
-from safire.utils import profile_run
+from safire.utils import profile_run, gensim2ndarray
 
 from gensim.corpora import MmCorpus
 
@@ -102,22 +102,39 @@ def _iter_random(corpus, indices):
         ctr += len(doc)
 
 
-def batches_random(dataset, n_accesses=1000, batch_size=100):
+def batches_random(dataset, n_accesses=1000, batch_size=100,
+                   gensim2numpy=False):
     indices = [randint(0, len(dataset)-(1+batch_size))
                for _ in xrange(n_accesses)]
     slices = [(idx, idx+batch_size) for idx in indices]
-    _batches_random(dataset, slices, batch_size)
+    if gensim2numpy:
+        _batches_random_gensim2numpy(dataset, slices, dim=dataset.dim)
+    else:
+        _batches_random(dataset, slices)
 
 
 @benchmark
-def _batches_random(dataset, slices, batch_size):
+def _batches_random(dataset, slices):
     ctr = 1
     for i, s in enumerate(slices):
         batch = dataset[s[0]:s[1]]
         if i % 500 == 0:
-            logging.info('Retrieved batch no. {0}:\n{1}'.format(i, batch))
+            logging.info('Retrieved batch no. {0}:'.format(i))
             logging.info('Batch type: {0}'.format(type(batch)))
         ctr += s[0]
+
+@benchmark
+def _batches_random_gensim2numpy(dataset, slices, dim):
+    """Like _batches_random, but assumes dataset returns gensim-style
+     batches and forces conversion to numpy ndarray."""
+    ctr = 1
+    for i, s in enumerate(slices):
+        batch = gensim2ndarray(dataset[s[0]:s[1]], dim, s[1]-s[0])
+        if i % 500 == 0:
+            logging.info('Retrieved batch no. {0}:'.format(i))
+            logging.info('Batch type: {0}'.format(type(batch)))
+        ctr += s[0]
+
 
 ###############################################################################
 
@@ -177,10 +194,11 @@ def main(args):
         _iter_random(mmcorpus, indices)
         del mmcorpus
 
-    if args.random_batches:
-        print '\nDataset fixed-size random batch retrieval'
-        print '-----------------------------------------\n'
+    if args.random_batches_gensim:
+        print '\nFixed-size random batch retrieval (gensim output)'
+        print '-------------------------------------------------\n'
         shdat = ShardedCorpus.load(shdat_fname)
+        shdat.gensim = True
         mmcorp = MmCorpus(mmcorpus_fname)
         sh_simple_dataset = Dataset(shdat, dim=args.dim)
         mm_simple_dataset = Dataset(mmcorp, dim=args.dim)
@@ -188,17 +206,31 @@ def main(args):
         report, _ = profile_run(batches_random,
                                 sh_simple_dataset, 10000, batch_size=50)
         print report.getvalue()
-        #batches_random(sh_simple_dataset, 1000, batch_size=50)
         print '      MmCorpus Dataset...'
         report, _ = profile_run(batches_random,
                                 mm_simple_dataset, 10000, batch_size=50)
         print report.getvalue()
-        # sh_composite_dataset = UnsupervisedDataset([sh_simple_dataset])
-        # print '      Sharded UnsupervisedDataset...'
-        # batches_random(sh_composite_dataset, 1000, batch_size=50)
-        # mm_composite_dataset = UnsupervisedDataset([mm_simple_dataset])
-        # print '      MmCorpus UnsupervisedDataset...'
-        # batches_random(mm_composite_dataset, 1000, batch_size=50)
+        del shdat
+        del mmcorp
+
+    if args.random_batches:
+        print '\nFixed-size random batch retrieval (numpy output)'
+        print '------------------------------------------------\n'
+        shdat = ShardedCorpus.load(shdat_fname)
+        mmcorp = MmCorpus(mmcorpus_fname)
+        sh_simple_dataset = Dataset(shdat, dim=args.dim)
+        mm_simple_dataset = Dataset(mmcorp, dim=args.dim)
+        print '      Sharded Dataset...'
+        report, _ = profile_run(batches_random,
+                                sh_simple_dataset, 1000, batch_size=50)
+        print report.getvalue()
+        print '      MmCorpus Dataset...'
+        report, _ = profile_run(batches_random,
+                                mm_simple_dataset, 1000, batch_size=50,
+                                gensim2numpy=True)
+        print report.getvalue()
+        del shdat
+        del mmcorp
 
 
     logging.info('Removing temp dir {0}'.format(temp_dir))
@@ -216,8 +248,11 @@ tasks = {
     'inord_numpy': {'name': 'in-order iteration by numpy ndarray'},
     'inord_csr': {'name': 'in-order iteration by scipy csr matrix'},
     'random': {'name': 'random access'},
-    'random_batches': {'name': 'random access by batch'},
-    'shuffle_chunks': {'name': 'iterate by chunk, but in a random order.'}
+    'random_batches_gensim': {'name': 'random access by batch with '
+                                      'gensim-style output'},
+    'random_batches': {'name': 'random access by batch with '
+                               'numpy ndarray output'},
+    'shuffle_chunks': {'name': 'iterate by chunk, but in a random order'}
 }
 
 

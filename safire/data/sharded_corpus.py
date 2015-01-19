@@ -1,8 +1,12 @@
 """
-Implements a dataset class that stores its data in separate files called
+Implements a corpus class that stores its data in separate files called
 "shards". This is a compromise between speed (keeping the whole dataset
 in memory) and memory footprint (keeping the data on disk and reading from it
 on demand).
+
+The corpus is intended for situations where you need to use your data
+as numpy arrays for some iterative processing (like training something
+using SGD, which usually involves heavy matrix multiplication).
 """
 import logging
 import os
@@ -10,23 +14,31 @@ import cPickle
 import math
 import numpy
 import scipy.sparse as sparse
-import theano
+
+#: Specifies which dtype should be used for serializing the shards.
+_default_dtype = float
+try:
+    import theano
+    _default_dtype = theano.config.floatX
+except ImportError:
+    logging.info('Could not import Theano, will use standard float'
+                 'for default ShardedCorpus dtype.')
+    pass
+
 import time
 
 import gensim
 from gensim.corpora import IndexedCorpus
 from gensim.interfaces import TransformedCorpus
 
-import safire.utils
-
 __author__ = 'Jan Hajic jr.'
 
 
 class ShardedCorpus(IndexedCorpus):
     """This class is designed for situations where you need to train a model
-    on dense data, with a large number of iterations (when you need sequential
-    and fast access to your data). It should be faster than gensim's other
-    IndexedCorpus implementations; check the ``benchmark_datasets.py`` script.
+    on matrices, with a large number of iterations. It should be faster than
+    gensim's other IndexedCorpus implementations; check the
+    ``benchmark_datasets.py`` script.
 
     The dataset stores its data in separate files called
     "shards". This is a compromise between speed (keeping the whole dataset
@@ -169,7 +181,7 @@ class ShardedCorpus(IndexedCorpus):
         self.n_out = self.dim
 
     def init_shards(self, output_prefix, corpus, shardsize=4096,
-                    dtype=theano.config.floatX):
+                    dtype=_default_dtype):
         """Initializes the shards from the corpus."""
 
         if not gensim.utils.is_corpus(corpus):
@@ -198,10 +210,10 @@ class ShardedCorpus(IndexedCorpus):
                                                            chunksize=shardsize)):
             logging.info('Chunk no. %d at %d s' % (n, time.clock() - start_time))
 
-            current_offset = self.offsets[-1]
             current_shard = numpy.zeros((len(doc_chunk), self.dim),
                                         dtype=dtype)
-            logging.debug('Current chunk dimension: %d x %d' % (len(doc_chunk), self.dim))
+            logging.debug('Current chunk dimension: '
+                          '{0} x {1}'.format(len(doc_chunk), self.dim))
 
             for i, doc in enumerate(doc_chunk):
                 doc = dict(doc)
@@ -416,21 +428,28 @@ class ShardedCorpus(IndexedCorpus):
             # print 'Guessing from \'num_terms\' attribute.'
             n_features = corpus.num_terms
         elif isinstance(corpus, TransformedCorpus):
-            # print 'TransformedCorpus - guessing using transcorp.dimension()'
-            return safire.utils.transcorp.dimension(corpus)
+            # TransformedCorpus: first check if the transformer object
+            # defines some output dimension; if it doesn't, relegate guessing
+            # to the corpus that is being transformed. This may easily fail!
+            try:
+                return self._guess_n_features(corpus.obj)
+            except TypeError:
+                return self._guess_n_features(corpus.corpus)
         else:
             if not self.dim:
                 print self.dim
-                raise ValueError('Couldn\'t find number of features, '
+                raise TypeError('Couldn\'t find number of features, '
                                  'refusing to guess.'
                                  '(Type of corpus: %s' % type(corpus))
             else:
                 logging.warn('Couldn\'t find number of features, trusting '
                              'supplied dimension ({0})'.format(self.dim))
                 n_features = self.dim
+
         if self.dim and n_features != self.dim:
-            logging.warn('Discovered inconsistent dataset dim (%i) and feature count from corpus (%i). Coercing to corpus dim.' % (self.dim, n_features))
-            #n_features = self.dim
+            logging.warn('Discovered inconsistent dataset dim ({0}) and '
+                         'feature count from corpus ({1}). Coercing to dimension'
+                         ' given by argument.'.format(self.dim, n_features))
 
         return n_features
 
@@ -469,13 +488,13 @@ class ShardedCorpus(IndexedCorpus):
                 l_result = sparse.vstack([self.get_by_offset(i)
                                           for i in offset])
                 if self.gensim:
-                    l_result = self.__getitem_sparse2gensim(l_result)
+                    l_result = self._getitem_sparse2gensim(l_result)
                 elif not self.sparse_retrieval:
                     l_result = numpy.array(l_result.todense())
             else:
                 l_result = numpy.array([self.get_by_offset(i) for i in offset])
                 if self.gensim:
-                    l_result = self.__getitem_dense2gensim(l_result)
+                    l_result = self._getitem_dense2gensim(l_result)
                 elif self.sparse_retrieval:
                     l_result = sparse.csr_matrix(l_result)
 
@@ -509,7 +528,7 @@ class ShardedCorpus(IndexedCorpus):
                 s_result = self.current_shard[start - self.current_offset:
                                             stop - self.current_offset]
                 # Handle different sparsity settings:
-                s_result = self.__getitem_format(s_result)
+                s_result = self._getitem_format(s_result)
 
                 return s_result
 
@@ -570,13 +589,13 @@ class ShardedCorpus(IndexedCorpus):
             s_result = self.__add_to_slice(s_result, result_start, result_stop,
                                            shard_start, shard_stop)
 
-            s_result = self.__getitem_format(s_result)
+            s_result = self._getitem_format(s_result)
 
             return s_result
 
         else:
             s_result = self.get_by_offset(offset)
-            s_result = self.__getitem_format(s_result)
+            s_result = self._getitem_format(s_result)
 
             return s_result
 
@@ -626,20 +645,20 @@ class ShardedCorpus(IndexedCorpus):
             s_result = sparse.vstack([s_result, tmp_matrix])
             return s_result
 
-    def __getitem_format(self, s_result):
+    def _getitem_format(self, s_result):
         if self.sparse_serialization:
             if self.gensim:
-                s_result = self.__getitem_sparse2gensim(s_result)
+                s_result = self._getitem_sparse2gensim(s_result)
             elif not self.sparse_retrieval:
                 s_result = numpy.array(s_result.todense())
         else:
             if self.gensim:
-                s_result = self.__getitem_dense2gensim(s_result)
+                s_result = self._getitem_dense2gensim(s_result)
             elif self.sparse_retrieval:
                 s_result = sparse.csr_matrix(s_result)
         return s_result
 
-    def __getitem_sparse2gensim(self, result):
+    def _getitem_sparse2gensim(self, result):
         """Change given sparse result matrix to gensim sparse vectors.
 
         Uses the insides of the sparse matrix to make this fast.
@@ -651,13 +670,13 @@ class ShardedCorpus(IndexedCorpus):
             output[row_idx] = g_row
         return output
 
-    def __getitem_dense2gensim(self, result):
+    def _getitem_dense2gensim(self, result):
         """Change given dense result matrix to gensim sparse vectors."""
         if len(result.shape) == 1:
             output = gensim.matutils.full2sparse(result)
         else:
-            output = [gensim.matutils.full2sparse(result[i])
-                      for i in xrange(result.shape[0])]
+            output = (gensim.matutils.full2sparse(result[i])
+                      for i in xrange(result.shape[0]))
         return output
 
     # Overriding the IndexedCorpus and other corpus superclass methods

@@ -19,7 +19,7 @@ from sys import getsizeof, stderr
 from itertools import chain
 from collections import deque
 
-from gensim.matutils import full2sparse
+from gensim.matutils import full2sparse, sparse2full, corpus2dense
 
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
@@ -758,4 +758,10 @@ def mock_data(n_items=1000, dim=1000, prob_nnz=0.5, lam=1.0):
 # Conversions: ndarray2gensim, gensim2ndarray
 def ndarray2gensim(array):
     """Convert a numpy ndarray into a gensim-style list of list of tuples."""
-    return [full2sparse(row) for row in array]
+    return (full2sparse(row) for row in array)
+
+
+def gensim2ndarray(corpus, dim, num_docs=None):
+    """Convert a gensim-style list of list of tuples into a numpy ndarray.
+    Mirror function to ``ndarray2gensim``."""
+    return corpus2dense(corpus, dim, num_docs=num_docs).T
