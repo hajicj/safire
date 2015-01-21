@@ -12,16 +12,14 @@ from safire.learning.models.denoising_autoencoder import DenoisingAutoencoder
 from safire.learning.learners.base_sgd_learner import BaseSGDLearner
 
 import theano
+from test.safire_test_case import SafireTestCase
 
-class TestModelSaveLoad(unittest.TestCase):
+
+class TestModelSaveLoad(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
-
-        cls.testdir = os.path.dirname(__file__)
-        cls.data_root = os.path.join(cls.testdir, 'test-data')
-
-        cls.loader = MultimodalDatasetLoader(cls.data_root, 'test-data')
+        super(TestModelSaveLoad, cls).setUpClass()
 
         dataset = cls.loader.load_text()
 
@@ -42,6 +40,7 @@ class TestModelSaveLoad(unittest.TestCase):
         del cls.loader
 
         os.remove(cls.savename)
+        super(TestModelSaveLoad, cls).tearDownClass()
 
     def test_save_load(self):
 
@@ -58,7 +57,12 @@ class TestModelSaveLoad(unittest.TestCase):
 
         self.assertEqual(before_loading, after_loading)
 
+##############################################################################
 
 if __name__ == '__main__':
-    logging.root.setLevel(logging.WARNING)
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestModelSaveLoad)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

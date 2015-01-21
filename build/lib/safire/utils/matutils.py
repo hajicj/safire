@@ -8,6 +8,7 @@ import math
 
 __author__ = 'Jan Hajic jr.'
 
+
 def precision(prediction, true):
     """Computes the precision of the prediction item predicting members of the
     true item.
@@ -21,6 +22,7 @@ def precision(prediction, true):
     prec = hits / total
     return prec
 
+
 def recall(prediction, true):
     """Computes the precision of the prediction item predicting members of the
     true item.
@@ -33,6 +35,7 @@ def recall(prediction, true):
     hits = 1.0 * len([p for p in prediction if p in t])
     rec = hits / total
     return rec
+
 
 def f_score(prediction, true, w_prec=0.5, w_rec=0.5):
     """Computes the weighed f-score of the prediction item predicting members
@@ -77,6 +80,7 @@ def kappa(a1, a2, length=12.0):
 
 # Evaluation functions
 
+
 def avg_pairwise_mutual_precision(items):
     """Computes the average pairwise mutual precision of all the given items."""
     pairwise_mutual_precisions = []
@@ -86,6 +90,7 @@ def avg_pairwise_mutual_precision(items):
             pairwise_mutual_precisions.append(pmp)
     avg_pmp = avg(pairwise_mutual_precisions)
     return avg_pmp
+
 
 def pairwise_mutual_precision(i1, i2):
     """Computes the mutual precision of two items. Mutual precision is defined
@@ -99,6 +104,7 @@ def pairwise_mutual_precision(i1, i2):
     p2 = (1.0 * len([m for m in i2 if m in fi1])) / (1.0 * len(i2))
     p_avg = (p1 + p2) / 2.0
     return p_avg
+
 
 def avg(iterable, weights=None):
     """Returns the average from the iterable (assumes that the iterable can
@@ -116,6 +122,7 @@ def avg(iterable, weights=None):
                              for i, w in zip(iterable, normalized_weights)]
         return sum(weighed_iterable)
 
+
 def mse(x, y):
 
     assert len(x) == len(y), 'X and Y must be of the same length! (x: %d, y: %d)' % (len(x), len(y))
@@ -125,8 +132,10 @@ def mse(x, y):
     result = sum(squared_error) / N
     return result
 
+
 def rmse(x, y):
     return numpy.sqrt(mse(x,y))
+
 
 def rn_rmse(x, y):
     """Range-normalized RMSE."""
@@ -138,9 +147,11 @@ def rn_rmse(x, y):
     rnrmse = rmse(x,y) / (maximum - minimum)
     return rnrmse
 
+
 def crmse(x, y):
     """Mean-normalized RMSE."""
     return rmse(x,y) / (avg(x+y) / 2)
+
 
 def maxn_sparse_rmse(x, y):
     """Computes proportion of attainable RMSE. Assumes X and Y are sparse enough
@@ -156,12 +167,14 @@ def maxn_sparse_rmse(x, y):
     maxnrmse = actual_rmse / max_rmse
     return maxnrmse
 
+
 def mae(x, y):
     """Mean absolute error."""
     assert len(x) == len(y), 'X and Y must be of the same length! (x: %d, y: %d)' % (len(x), len(y))
     return sum(numpy.absolute(x - y)) / float(len(x))
 
 ##############################################################################
+
 
 def scale_to_unit_covariance(array):
     """Transform the array so that all columns have the same covariance."""
@@ -200,6 +213,7 @@ def generate_grid(matrix, fn, use_cols=None, cols=True):
 
     return mses
 
+
 def avg_grid(grid, use_cols=None, cols=True):
     """Computes average MSE between given matrix columns."""
 
@@ -219,6 +233,7 @@ def avg_grid(grid, use_cols=None, cols=True):
 
     return s / N
 
+
 def grid2sym_matrix(grid):
     """Unrolls the grid into a 2d ndarray. Assumes that the grid is an upper
     diagonal. Doesn't symmetrize (the rest is left at 0.0)."""
@@ -236,13 +251,13 @@ def grid2sym_matrix(grid):
 
     return m
 
+
 def grid_max(grid):
     m = max(max(grid.keys()), max([max(grid[i].keys()) for i in grid]))
     return m
 
-
-
 ##############################################################################
+
 
 def zero_masking(X, p, theano_rng):
     """
@@ -257,6 +272,28 @@ def zero_masking(X, p, theano_rng):
     """
     return theano_rng.binomial(size=X.shape, n=1, p=p) * X
 
+
 def uniform_noise(X, p, theano_rng):
     """Adds uniform noise to the given X."""
     return theano_rng.uniform(X, low=0.0, high=p)
+
+##############################################################################
+
+
+def splice_csr(target, t_from, t_to, source, s_from, s_to):
+    """Efficiently takes a slice from a sparse matrix and inserts it into the
+    new matrix. Works in-place.
+
+    :param target: The sparse matrix to which the data will be copied.
+
+    :param t_from: The index of the first row of overwritten region.
+
+    :param t_to: The index one-past of the last row of overwritten region.
+
+    :param source: The sparse matrix from which data will be copied.
+
+    :param s_from: The index of the first row of the source data to copy.
+
+    :param s_to: The index one-past of the last row of the source data to copy.
+    """
+    # Will need to change all indptrs past the row column.

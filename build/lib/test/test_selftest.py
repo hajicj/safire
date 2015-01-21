@@ -4,9 +4,10 @@ Testing the test procedure itself.
 
 import logging
 import unittest
+from safire_test_case import SafireTestCase
 
 
-class TestSelfTest(unittest.TestCase):
+class TestSelfTest(SafireTestCase):
 
     def test_test(self):
         result = True
@@ -18,6 +19,12 @@ class TestSelfTest(unittest.TestCase):
         expected = True
         self.assertNotEqual(expected, result)
 
+##############################################################################
+
 if __name__ == '__main__':
-    logging.root.setLevel(logging.WARNING)
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestSelfTest)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

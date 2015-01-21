@@ -20,9 +20,10 @@ from safire.data.sharded_multimodal_dataset import \
     UnsupervisedShardedVTextCorpusDataset, \
     UnsupervisedShardedImagenetCorpusDataset
 from safire.data.vtextcorpus import VTextCorpus
+from test.safire_test_case import SafireTestCase
 
 
-class TestMultimodalShardedDatasetLoader(unittest.TestCase):
+class TestMultimodalShardedDatasetLoader(SafireTestCase):
 
     def setUp(self):
 
@@ -107,7 +108,12 @@ class TestMultimodalShardedDatasetLoader(unittest.TestCase):
 
         self.assertEqual(20, len(img_dataset))
 
+##############################################################################
+
 if __name__ == '__main__':
-    logging.root.setLevel(logging.INFO)
-    logging.info('Running Loader tests...')
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestMultimodalShardedDatasetLoader)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

@@ -16,9 +16,10 @@ from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.loaders import MultimodalDatasetLoader, ModelLoader
 from safire.data.multimodal_dataset import MultimodalDataset
 from safire.data.vtextcorpus import VTextCorpus
+from test.safire_test_case import SafireTestCase
 
 
-class TestMultimodalDatasetLoader(unittest.TestCase):
+class TestMultimodalDatasetLoader(SafireTestCase):
 
     def setUp(self):
 
@@ -103,7 +104,12 @@ class TestMultimodalDatasetLoader(unittest.TestCase):
         self.assertIsInstance(img_dataset, UnsupervisedImagenetCorpusDataset)
         self.assertEqual(20, len(img_dataset))
 
+##############################################################################
+
 if __name__ == '__main__':
-    logging.root.setLevel(logging.INFO)
-    logging.info('Running Loader tests...')
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestMultimodalDatasetLoader)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
