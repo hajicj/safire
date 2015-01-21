@@ -5,6 +5,7 @@ from safire.datasets.dataset import Dataset
 from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
 
+# TODO: refactor to work with new DatasetABC
 class TransformedDataset(UnsupervisedDataset):
     """A class that enables stacking dataset transformations in the training
     stage, similar to how corpus transformations are done during preprocessing.
@@ -104,3 +105,59 @@ class DatasetTransformer(TransformationABC):
 
         transformed_dataset = TransformedDataset(dataset=dataset, obj=self)
         return transformed_dataset
+
+
+class FlattenComposite(DatasetTransformer):
+    """This class flattens a composite dataset into a simple dataset. This
+    allows on-the-fly integration of various data sources into unstructured
+    batches.
+
+    >>> source1 = DatasetABC([[1], [2], [3]], dim=1)
+    >>> source2 = DatasetABC([[-1], [-2], [-3]], dim=1)
+    >>> composite = CompositeDataset((source1, source2), names=('source1', 'source2'))
+    >>> flatten = FlattenComposite(composite)
+    >>> flat = flatten[composite]
+    >>> flat[1:3]
+    array([[ 2, -2],
+           [ 3, -3]])
+
+    There are several options of how to flatten a composite dataset:
+
+    * One-by-one: assumes the datasets are aligned. Most restrictive but
+      fastest.
+    * Pairing: most general -- assumes nothing, gets an iterable of ``dim``-
+      shaped indices and outputs one dataset item per index. (For example,
+      to flatten a composite dataset consisting of two simple datasets, use
+      indices (x, y).)
+
+    To flatten the dataset using pairing data, you need to supply the pairings
+    at transformer initialization time.
+
+    >>> indexes = [(1, 2), (2, 1), (2, 2), (0, 2), (0, 1)]
+    >>> flatten_indexed = FlattenComposite(composite, indexes)
+    >>> flat = flatten_indexed(composite)
+    >>> flat[1:3]
+    array([[ 3, -2],
+           [ -3, 2]])
+
+    Note that when using the indexed approach with data serialized using
+    ShardedCorpus, it may significantly slow operations down, as a lot of
+    shard-jumping may be involved.
+
+    TODO: If that is the case, you can serialize
+    the flat dataset using the SerializationTransformer, which allows
+    serializing AND retaining the whole pipeline.
+
+    The idea is that you
+    load the entire pipeline, in order to have at your disposal everything
+    that you used to create a dataset, but you have already serialized your
+    data at some advanced point during the pipeline and will not be going
+    backwards from that point. This should allow sufficient introspection
+    (i.e. going back to the original text corpus for a dictionary...)
+    while retaining efficiency (preprocessing steps are not repeated).
+    The SerializationTransformer "swaps out" the incoming ``corpus`` for
+    a corpus given at initialization time.
+
+
+    """
+    pass

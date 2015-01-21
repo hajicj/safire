@@ -5,8 +5,7 @@ import theano
 import safire.utils.transcorp
 
 
-#class DatasetABC(gensim.utils.SaveLoad):
-"""Base class for datasets. A dataset is a wrapper around something
+"""Base class(es) for datasets. A dataset is a wrapper around something
 that supports slice retrieval and adds the following functionality:
 
 * batch retrieval
@@ -94,9 +93,9 @@ and afterwards are only accessed.
 
 Train/dev/test split is handled at the dataset level.
 """
-#    pass
 
 
+# Shouldn't DatasetABC implement the IndexedCorpus interface?
 class DatasetABC(gensim.utils.SaveLoad):
     """This is the old Dataset, reworked into a wrapper for an IndexedCorpus
     (like, for instance, the ShardedCorpus). It can also serve as a wrapper
@@ -315,6 +314,12 @@ class DatasetABC(gensim.utils.SaveLoad):
 
     def __len__(self):
         return len(self.data)
+
+    def __iter__(self):
+        """Implemented in order to be compatible with the CorpusABC
+        interface."""
+        for i in xrange(len(self)):
+            yield self[i]
 
     @staticmethod
     def derive_dimension(data):
