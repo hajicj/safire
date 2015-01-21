@@ -1,10 +1,3 @@
-"""Base class for safire datasets."""
-import logging
-import gensim
-import theano
-import safire.utils.transcorp
-
-
 """Base class(es) for datasets. A dataset is a wrapper around something
 that supports slice retrieval and adds the following functionality:
 
@@ -93,6 +86,13 @@ and afterwards are only accessed.
 
 Train/dev/test split is handled at the dataset level.
 """
+
+import logging
+import gensim
+import theano
+import safire.utils.transcorp
+
+
 
 
 # Shouldn't DatasetABC implement the IndexedCorpus interface?
