@@ -125,9 +125,6 @@ class UnsupervisedCorpusDataset(UnsupervisedDataset):
             else:
                 logging.warn('Attempted loading failed; cannot save dataset.')
 
-
-
-
     def n_train_batches(self, batch_size):
         """Determines how many batches of given size the training data will
         be split into.

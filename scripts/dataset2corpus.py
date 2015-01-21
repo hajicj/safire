@@ -186,7 +186,6 @@ def build_argument_parser():
                         help='If given, will profile frequency-based '
                              'transformation initialization time.')
 
-
     parser.add_argument('-v', '--verbose', action='store_true', help='Turn on'+
                         ' INFO logging messages.')
     parser.add_argument('--debug', action='store_true', help='Turn on debug '+

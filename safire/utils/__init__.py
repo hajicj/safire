@@ -8,19 +8,18 @@ image from a set of samples or weights.
 import cProfile
 import copy
 import logging
+import math
 import StringIO
 import pdb
 import pstats
 import random
+import time
 
 from sys import getsizeof, stderr
 from itertools import chain
 from collections import deque
-try:
-    from reprlib import repr
-except ImportError:
-    pass
 
+from gensim.matutils import full2sparse, sparse2full, corpus2dense
 
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
@@ -32,10 +31,9 @@ except ImportError:
     from PIL import Image
 
 import numpy
+import numpy.random
 import theano
 import theano.ifelse
-
-import math
 
 
 def check_kwargs(kwargs, names):
@@ -259,9 +257,22 @@ def profile_run(function, *args, **kwargs):
     s = StringIO.StringIO()
     sortby = 'tottime'
     ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-    ps.print_stats(.33)
+    ps.print_stats(.50)
 
     return s, retval
+
+
+# Let's try writing a decorator!
+def benchmark(fn):
+    """Simple timing decorator. Prints to stdout."""
+    def _benchmark(*args, **kwargs):
+        start = time.clock()
+        retval = fn(*args, **kwargs)
+        end = time.clock()
+        total = end - start
+        print 'Benchmark | {0} : {1}'.format(fn.__name__, total)
+        return retval
+    return _benchmark
 
 
 def total_size(o, handlers={}):
@@ -395,6 +406,8 @@ def shuffle_together(*lists):
 
 
 def iter_sample_fast(iterable, samplesize):
+    """Got this off stackoverwflow."""
+    # I can't remember why it works.
     results = []
     iterator = iter(iterable)
     # Fill in the first samplesize elements:
@@ -595,11 +608,42 @@ def add_header_image(image, header_image, header_size=(300,200), margin=20):
 def heatmap_matrix(matrix, title='', with_average=False,
                    colormap='coolwarm', vmin=0.0, vmax=1.0,
                    **kwargs):
+    """Creates and shows a heatmap of the given matrix. Optionally, will also
+    plot column averages. Doesn't return anything; will show() the figure.
+
+    You can specify heatmap color, bounds and other arguments for
+    matplotlib.pyplot.colormesh.
+
+    :type matrix: numpy.ndarray
+    :param matrix: The data to plot.
+
+    :type title: str
+    :param title: The title of the plotted figure.
+
+    :type with_average: bool
+    :param with_average: If set, will plot column averages above the heatmap.
+
+    :type colormap: str
+    :param colormap: The colormap to use in colormesh. Passed directly to
+        colormesh, so you can use anything you find in the corresponding
+        matplotlib doucmentation.
+
+    :type vmin: float
+    :param vmin: The value in the ``matrix`` which should correspond to the
+        "minimum" color in the heatmap.
+
+    :type vmax: float
+    :param vmax: The value in the ``matrix`` which should correspond to the
+        "maximum" color in the heatmap.
+
+    :param kwargs: Other arguments to maptlotlib.pyplot.colormesh
+
+    """
     plt.figure(figsize=(matrix.shape[1]*0.002, matrix.shape[0]*0.02),
                dpi=160,
                facecolor='white')
     if with_average:
-        gs = gridspec.GridSpec(2,1,height_ratios=[1,2])
+        gs = gridspec.GridSpec(2, 1, height_ratios=[1,2])
         plt.subplot(gs[0])
         plt.title('Average activations')
 
@@ -608,7 +652,7 @@ def heatmap_matrix(matrix, title='', with_average=False,
 
         # Sliding window average
         avg_windowsize = 20
-        vscale=2.0
+        vscale = 2.0
         wavgs = [ sum(avgs[i:i+avg_windowsize])*vscale / float(avg_windowsize)
                  for i in xrange(matrix.shape[1] - avg_windowsize) ]
         wavgs.extend([avgs[-1] for _ in xrange(avg_windowsize)])
@@ -625,9 +669,9 @@ def heatmap_matrix(matrix, title='', with_average=False,
 
         #plt.xlim([0, matrix.shape[1]])
         plt.subplot(gs[1])
-C
-    plt.xlim([0,matrix.shape[1]])
-    plt.ylim([0,matrix.shape[0]])
+
+    plt.xlim([0, matrix.shape[1]])
+    plt.ylim([0, matrix.shape[0]])
     plt.pcolormesh(matrix, cmap=colormap, vmin=vmin, vmax=vmax, **kwargs)
     if not with_average:
         plt.title(title)
@@ -692,5 +736,33 @@ def check_malformed_unicode(string):
             raise
 
 
+def mock_data_row(dim=1000, prob_nnz=0.5, lam=1.0):
+    """Creates a random gensim sparse vector. Each coordinate is nonzero with
+    probability ``prob_nnz``, each non-zero coordinate value is drawn from
+    a Poisson distribution with parameter lambda equal to ``lam``."""
+    nnz = numpy.random.uniform(size=(dim,))
+    data = [(i, float(numpy.random.poisson(lam=lam) + 1.0))
+            for i in xrange(dim) if nnz[i] < prob_nnz]
+    return data
 
 
+def mock_data(n_items=1000, dim=1000, prob_nnz=0.5, lam=1.0):
+    """Creates a mock gensim-style corpus (a list of lists of tuples (int,
+    float) to use as a mock corpus.
+    """
+    data = [mock_data_row(dim=dim, prob_nnz=prob_nnz, lam=lam)
+            for _ in xrange(n_items)]
+    return data
+
+
+# Conversions: ndarray2gensim, gensim2ndarray
+def ndarray2gensim(array):
+    """Convert a numpy ndarray into a gensim-style generator of lists of tuples."""
+    return (full2sparse(row) for row in array)
+
+
+def gensim2ndarray(corpus, dim, num_docs=None):
+    """Convert a gensim-style list of list of tuples into a numpy ndarray
+    with documents as rows.
+    Mirror function to ``ndarray2gensim``."""
+    return corpus2dense(corpus, dim, num_docs=num_docs).T

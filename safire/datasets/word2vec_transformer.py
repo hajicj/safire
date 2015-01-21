@@ -89,8 +89,6 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
         # Use embedding of given word as document vector.
         # - batch_projection is X * n_in,
         # - embeddings_matrix is n_in * n_out
-        #embeddings = theano.tensor.dot(batch_projection,
-        #                               self.embeddings_matrix)
         embeddings = numpy.dot(batch_projection, self.embeddings_matrix)
 
         return embeddings
@@ -112,7 +110,7 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
         row_sums = numpy.sum(batch, axis=1)
         normalized_batch = batch.T / row_sums
 
-        # Run through precompiled sampling function
+        # Run through pre-compiled sampling function
         sample = self.sampling_fn(normalized_batch.T)
         return sample
 

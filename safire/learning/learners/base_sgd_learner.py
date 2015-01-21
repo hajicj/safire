@@ -211,8 +211,9 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
             else:
                 resume_successful = True
                 # TODO: There should be a sanity check here!
-                # Also, the loading could possibly use TIDs - which would require,
+                # Also, the loading could use TIDs - which would require,
                 # however, a ModelLoader.
+                # XXX: WTF are TIDs?
                 model_handle.model_instance = resuming_instance
 
         try:
@@ -724,22 +725,7 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                                         with_average=False,
                                         colormap='afmhot',
                                         vmin=0.0, vmax=1.0)
-        #if with_no_bias:
-        #    forward_weights = model_handle.model_instance.W.get_value(borrow=True)
-        #    linear_activation = numpy.dot(sample_data, forward_weights)
-        #    safire.utils.heatmap_matrix(linear_activation,
-        #                                 title=title + ' - linear act.',
-        #                                 with_average=False,
-        #                                 colormap='afmhot',
-        #                                 vmin=min(linear_activation),
-        #                                 vmax=max(linear_activation))
 
-
-        # safire.utils.heatmap_matrix(transformed_data,
-        #                             title=title + '(abs. 0-1 scale)',
-        #                             with_average=True,
-        #                             colormap='afmhot',
-        #                             vmin=0.0, vmax=1.0)
         safire.utils.heatmap_matrix(transformed_data,
                                     title=title + '(rel. min-max scale)',
                                     with_average=True,
@@ -808,9 +794,6 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
         print 'Transformed mean: %.8f, total sq. dev. %.8f, mean sq. dev %.8f' % (
             tr_mean, tr_sqdev, tr_mean_sqdev
         )
-
-        # Compute correlation of
-
 
     def report_weights(self, model, submatrix=[[[0,0],[0,9]],[[9,0],[9,9]]]):
         """Reports the weight submatrix from the first layer of the model."""

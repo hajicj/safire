@@ -48,6 +48,7 @@ PACKAGES = ['test',
 PACKAGE_DATA = { 'test' : walk_tail_dir('test/test-data') }
 
 SCRIPTS = ['scripts/annotation_stats.py',
+           'scripts/benchmark_datasets.py',
            'scripts/dataset2corpus.py',
            'scripts/dataset_stats.py',
            'scripts/clean.py',
@@ -71,7 +72,7 @@ if __name__ == '__main__':
 
     setup(
         name='safire',
-        version='0.0.1r2',
+        version='0.0.1r3',
         url='http://ufal.mff.cuni.cz/grants/cemi',
         license='LGPL',
         author='Jan Hajic jr.',

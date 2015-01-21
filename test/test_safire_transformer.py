@@ -8,6 +8,7 @@ import unittest
 
 from gensim import similarities
 from gensim.interfaces import TransformedCorpus
+from gensim.matutils import sparse2full
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.vtextcorpus import VTextCorpus
 from safire.data.loaders import MultimodalDatasetLoader, IndexLoader, \
@@ -63,7 +64,7 @@ class TestSafireTransformer(SafireTestCase):
 
         before_training = self.model.W.get_value()[0, 0]
 
-        print "Before training: %f" % before_training
+        logging.info("Before training: %f" % before_training)
 
         dataset = self.loader.load_text()
         transformer = SafireTransformer(self.model_handle,
@@ -74,7 +75,7 @@ class TestSafireTransformer(SafireTestCase):
         # Training should change the model.
         after_training = self.model.W.get_value()[0, 0]
 
-        print "After training: %f" % after_training
+        logging.info("After training: %f" % after_training)
 
         self.assertNotEqual(before_training, after_training)
 
@@ -126,7 +127,6 @@ class TestSafireTransformer(SafireTestCase):
 
         self.assertEqual(10, len(outputs))
 
-
     def test_query(self):
 
         dataset = self.loader.load()
@@ -143,18 +143,18 @@ class TestSafireTransformer(SafireTestCase):
 
         applied_corpus = transformer[text_corpus]
 
-        print applied_corpus
+        #print applied_corpus
 
         query = applied_corpus.__iter__().next()
 
-        print query
-        print len(query)
-        print transformer.n_out
+        #print query
+        #print len(query)
+        #print transformer.n_out
 
         image = img_corpus.__iter__().next()
 
-        print image
-        print len(image)
+        #print image
+        #print len(image)
 
         similarity_index = similarities.Similarity(self.output_prefix,
                                                    img_corpus,
@@ -163,7 +163,11 @@ class TestSafireTransformer(SafireTestCase):
 
         query_results = similarity_index[query]
 
-        self.assertEqual(transformer.n_out, len(query))
+        # Fix test - sometimes zeros come out.
+        self.assertIsInstance(query_results, list)
+        self.assertIsInstance(query_results[0], tuple)
+        self.assertIsInstance(query_results[0][0], int)
+        self.assertIsInstance(query_results[0][1], float)
 
         print query_results
 

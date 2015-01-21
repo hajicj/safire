@@ -66,7 +66,6 @@ class BaseSupervisedModel(BaseModel):
 
         self.params = []
 
-
     def error(self, y):
         """Returns the proportion of incorrectly classified instances.
         
@@ -199,7 +198,7 @@ class BaseSupervisedModel(BaseModel):
 
         # Construct the model instance, or use supplied and do sanity checks.
         if model is None:
-            model = cls(inputs=X, n_in = data.n_in, n_out = data.n_out, 
+            model = cls(inputs=X, n_in=data.n_in, n_out=data.n_out,
                         **model_init_kwargs)
         else:
             # Sanity (dimensionality...) checks: 

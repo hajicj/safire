@@ -1555,12 +1555,15 @@ class ShardedDatasetLoader(object):
 
         return index
 
-    def output_prefix(self, infix=None):
+    def output_prefix(self, infix=None, sparse_serialization=False):
         """Builds the output_prefix parameter for a ShardedDataset object
         so that the dataset can then be correctly saved/loaded."""
         infix = self.__default_infix(infix)
 
         dataset_file = self.layout.get_dataset_file(infix)
+        if sparse_serialization:
+            dataset_file += '.sp'
+
         return os.path.join(self.root, dataset_file)
 
     def __default_infix(self, infix):
@@ -1739,7 +1742,6 @@ class MultimodalShardedDatasetLoader(MultimodalDatasetLoader):
             raise ValueError('Text corpora unavailable in SAFIRE dataset '+
                              'at %s with infix %s' % (os.path.join(self.root,
                              self.layout.corpus_dir), text_infix))
-
 
         corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
 

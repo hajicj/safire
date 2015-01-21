@@ -1,6 +1,6 @@
 import os
 import gensim
-from safire.data.layouts import clean_data_root
+from safire.data.layouts import clean_data_root, init_data_root
 from safire.data.loaders import MultimodalShardedDatasetLoader
 
 __author__ = 'hajicj'
@@ -24,12 +24,16 @@ class SafireTestCase(unittest.TestCase):
     """
     #@profile
     @classmethod
-    def setUpClass(cls, clean_only=False):
+    def setUpClass(cls, clean_only=False, no_datasets=False):
         """Sets up the default data root structure (clean root + default
         corpora and datasets).
 
         :param clean_only: If set, will not create default corpora/datasets.
         :type clean_only: bool
+
+        :param no_datasets: If set, will only create corpora, not
+            ShardedDatasets.
+        :type no_datasets: bool
         """
 
         cls.testdir = os.path.dirname(__file__)
@@ -37,7 +41,7 @@ class SafireTestCase(unittest.TestCase):
 
         # Clean the test data - in case the previous TestCase was NOT
         # a SafireTestCase
-        clean_data_root(cls.data_root)
+        init_data_root(cls.data_root, overwrite=True)
 
         if clean_only:
             return
@@ -49,13 +53,16 @@ class SafireTestCase(unittest.TestCase):
         cls.loader.build_default_image_corpora(
             serializer=gensim.corpora.MmCorpus)
 
-        default_vtcorp = cls.loader.load_text_corpus()
-        cls.loader.build_text(default_vtcorp,
-                              dataset_init_args={'overwrite': True})
+        cls._no_datasets = no_datasets
+        if not no_datasets:
+            default_vtcorp = cls.loader.load_text_corpus()
+            cls.loader.build_text(default_vtcorp,
+                                  dataset_init_args={'overwrite': True})
 
-        default_icorp = cls.loader.load_image_corpus()
-        cls.loader.build_img(default_icorp,
-                             dataset_init_args={'overwrite': True})
+            default_icorp = cls.loader.load_image_corpus()
+            cls.loader.build_img(default_icorp,
+                                 dataset_init_args={'overwrite': True})
+
 
     @classmethod
     def tearDownClass(cls):
@@ -72,8 +79,9 @@ class SafireTestCase(unittest.TestCase):
         try:
             self.loader.load_text_corpus()
             self.loader.load_image_corpus()
-            self.loader.load_text()
-            self.loader.load_img()
+            if not self._no_datasets:
+                self.loader.load_text()
+                self.loader.load_img()
             no_exceptions = True
         except ValueError:
             pass
