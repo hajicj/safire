@@ -50,7 +50,6 @@ class VTextCorpus(TextCorpus):
                  token_transformer='strip_UFAL',
                  pfilter=None, pfilter_full_freqs=False,
                  filter_capital=False,
-                 #tfidf=None,
                  label=None):
         """Initializes the text corpus.
 
@@ -246,7 +245,7 @@ class VTextCorpus(TextCorpus):
             input_handle = open(self.input)
 
         for docno, doc in enumerate(input_handle):
-            #logger.debug('Processing doc no. %d: %s' % (docno, doc.strip()))
+            # logger.debug('Processing doc no. %d: %s' % (docno, doc.strip()))
 
             doc = doc.strip()
 

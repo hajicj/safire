@@ -3,13 +3,17 @@ This module contains utility functions for working with gensim TransformedCorpus
 stacks.
 """
 import logging
+
 from gensim.corpora import TextCorpus
 from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
+
 from safire.data import FrequencyBasedTransformer, VTextCorpus
-from safire.data.dataset import Dataset
+from safire.datasets.dataset import Dataset
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
+from safire.datasets.transformations import DatasetTransformer
+
 
 __author__ = "Jan Hajic jr."
 
@@ -42,6 +46,7 @@ def id2word(corpus, wid):
 def get_id2word_obj(corpus):
     """Retrieves the valid id2word object that can handle ``__getitem__``
     requests on word IDs to return the words themselves."""
+    # TODO: Move this mechanism into transformers themselves?
     if isinstance(corpus, VTextCorpus):
         return corpus.dictionary
     elif isinstance(corpus, TransformedCorpus):
@@ -66,11 +71,11 @@ def bottom_corpus(corpus):
 
 
 def dimension(corpus):
-    """Finds the topomost corpus that can provide information about its
+    """Finds the topmost corpus that can provide information about its
     output dimension."""
     current_corpus = corpus
     if isinstance(current_corpus, Dataset):
-        return current_corpus.n_in
+        return current_corpus.n_in  # This is stupid! It's an *output* dimension.
     if isinstance(current_corpus, TextCorpus):
         return len(current_corpus.dictionary)
     if isinstance(current_corpus, ImagenetCorpus):
@@ -83,6 +88,7 @@ def dimension(corpus):
     # the output dimension).
     if isinstance(current_corpus, TransformedCorpus):
         if isinstance(current_corpus.obj, FrequencyBasedTransformer):
+            # This should change to something more consistent (dictionary size?)
             return current_corpus.obj.k - current_corpus.obj.discard_top
         # Optimization, TfidfModel doesn't change model dimension
         elif isinstance(current_corpus.obj, TfidfModel):
@@ -92,6 +98,7 @@ def dimension(corpus):
             return current_corpus.obj.n_out
         else:
             return dimension(current_corpus.corpus)
+
     else:
         raise ValueError('Cannot find output dimension of corpus %s' % str(corpus))
 

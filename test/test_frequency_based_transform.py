@@ -16,18 +16,15 @@ from gensim.interfaces import TransformedCorpus
 from safire.data.loaders import MultimodalDatasetLoader
 from safire.data.vtextcorpus import VTextCorpus
 from safire.data.frequency_based_transform import FrequencyBasedTransformer
+from test.safire_test_case import SafireTestCase
 
-class TestFrequencyBasedTransform(unittest.TestCase):
+
+class TestFrequencyBasedTransform(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
+        super(TestFrequencyBasedTransform, cls).setUpClass()
 
-        cls.testdir = os.path.dirname(__file__)
-        cls.data_root = os.path.join(cls.testdir, 'test-data')
-
-        # We will use the loader for easy access to data files.
-        cls.loader = MultimodalDatasetLoader(cls.data_root,
-                                              'test-data')
         cls.full_vtlist_path = os.path.join(cls.data_root,
                                             cls.loader.layout.vtlist)
 
@@ -46,6 +43,7 @@ class TestFrequencyBasedTransform(unittest.TestCase):
 
         if hasattr(cls, 'loader'):
             del cls.loader
+        super(TestFrequencyBasedTransform, cls).tearDownClass()
 
     def setUp(self):
 
@@ -113,13 +111,14 @@ class TestFrequencyBasedTransform(unittest.TestCase):
         # for f in feature_report:
         #     print '\t'.join([unicode(ff) for ff in f])
 
-
-
-
-
+##############################################################################
 
 if __name__ == '__main__':
-    logging.root.setLevel(logging.INFO)
-    logging.info('Running Loader tests...')
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestFrequencyBasedTransform)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
+
 

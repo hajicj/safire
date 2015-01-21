@@ -5,18 +5,19 @@ from safire.data import VTextCorpus, FrequencyBasedTransformer
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.text_browser import TextBrowser
+from test.safire_test_case import SafireTestCase
 
 __author__ = 'Lenovo'
 
 import unittest
 
 
-class TestTextBrowser(unittest.TestCase):
+class TestTextBrowser(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.testdir = os.path.dirname(__file__)
-        cls.data_root = os.path.join(cls.testdir, 'test-data')
+        super(TestTextBrowser, cls).setUpClass()
+
         cls.vtlist = os.path.join(cls.data_root, 'test-data.vtlist')
 
         cls.token_filter = PositionalTagTokenFilter(['N'], 0)
@@ -70,6 +71,12 @@ class TestTextBrowser(unittest.TestCase):
 
         self.assertEqual(len(document), len(wdocument))
 
+##############################################################################
 
 if __name__ == '__main__':
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestTextBrowser)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

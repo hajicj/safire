@@ -6,18 +6,19 @@ from safire.learning.interfaces.clamped_sampler import MultimodalClampedSampler
 from safire.learning.learners import BaseSGDLearner
 from safire.learning.models import RestrictedBoltzmannMachine
 
+from test.safire_test_case import SafireTestCase
+
 __author__ = 'Lenovo'
 
 import unittest
 
 
-class TestClampedSampler(unittest.TestCase):
+class TestClampedSampler(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
+        super(TestClampedSampler, cls).setUpClass()
 
-        cls.testdir = os.path.dirname(__file__)
-        cls.data_root = os.path.join(cls.testdir, 'test-data')
         cls.loader = MultimodalShardedDatasetLoader(cls.data_root, 'test-data')
 
         dataset = cls.loader.load()
@@ -38,6 +39,8 @@ class TestClampedSampler(unittest.TestCase):
         del cls.learner
         del cls.model_handle
         del cls.loader
+
+        super(TestClampedSampler, cls).tearDownClass()
 
     def test_training(self):
 
@@ -83,6 +86,12 @@ class TestClampedSampler(unittest.TestCase):
         img_lm = self.sampler.t2i_run_chain_mean_last(text, k=10)
         print img_lm
 
+##############################################################################
+
 if __name__ == '__main__':
-    logging.root.setLevel(logging.WARN)
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestClampedSampler)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

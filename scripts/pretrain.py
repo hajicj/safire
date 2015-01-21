@@ -30,7 +30,6 @@ print theano.config.compute_test_value
 __author__ = 'Jan Hajic jr.'
 
 
-
 def init_activation(activation_str):
     """Resolves which activation function to use."""
     activation = theano.tensor.tanh
@@ -241,6 +240,9 @@ def main(args):
     elif args.text_label:
         logging.info('Loading sharded dataset with text label %s' % args.text_label)
         dataset = mdloader.load_text(args.text_label)
+    else:
+        raise argparse.ArgumentError('Must supply either --img_label'
+                                     'or --text_label.')
 
     logging.info('Setting up %s handle with output dimension %d' % (args.model,
                                                                     args.n_out))
@@ -356,7 +358,6 @@ def main(args):
         plt.plot(vc_x, vc_y, 'g')
 
         plt.savefig(args.plot_monitors)
-
 
     if not args.no_save_transformer:
 

@@ -3,13 +3,17 @@ This module contains utility functions for working with gensim TransformedCorpus
 stacks.
 """
 import logging
+
 from gensim.corpora import TextCorpus
 from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
+
 from safire.data import FrequencyBasedTransformer, VTextCorpus
-from safire.data.dataset import Dataset
+from safire.datasets.dataset import Dataset
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
+from safire.datasets.transformations import DatasetTransformer
+
 
 __author__ = "Jan Hajic jr."
 
@@ -94,6 +98,7 @@ def dimension(corpus):
             return current_corpus.obj.n_out
         else:
             return dimension(current_corpus.corpus)
+
     else:
         raise ValueError('Cannot find output dimension of corpus %s' % str(corpus))
 
@@ -132,7 +137,8 @@ def reset_vtcorp_input(corpus, filename, input_root=None, lock=True,
         Don't use (stick with True)!**"""
     vtcorp = bottom_corpus(corpus)
     if not isinstance(vtcorp, VTextCorpus):
-        raise ValueError('Bottom corpus %s instead of VTextCorpus.' % type(vtcorp))
+        raise ValueError('Bottom corpus '
+                         '%s instead of VTextCorpus.' % type(vtcorp))
     vtcorp.reset_input(filename, input_root=input_root, lock=lock)
 
 

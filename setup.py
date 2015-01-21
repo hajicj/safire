@@ -17,7 +17,9 @@ def walk_tail_dir(path):
         if '.svn' in dirs:
             dirs.remove('.svn')
 
-        fnames.extend([ os.path.join(rootpath[from_idx:], f) for f in files if not f.startswith('.svn')])
+        fnames.extend(dirs)
+        fnames.extend([ os.path.join(rootpath[from_idx:], f)
+                        for f in files if not f.startswith('.svn')])
 
     return fnames
 
@@ -32,7 +34,9 @@ DEPENDENCIES = ['numpy>=1.8.0',
 
 PACKAGES = ['test',
             'safire',
+            'safire.corpora',
             'safire.data',
+            'safire.datasets',
             'safire.data.filters',
             'safire.utils',
             'safire.learning',

@@ -11,13 +11,14 @@ from safire.learning.learners import BaseSGDLearner
 from safire.learning.models import RestrictedBoltzmannMachine, \
     DenoisingAutoencoder
 from safire.utils.transcorp import reset_vtcorp_input, dimension
+from test.safire_test_case import SafireTestCase
 
 __author__ = 'Lenovo'
 
 import unittest
 
 
-class TestMultilayerPipeline(unittest.TestCase):
+class TestMultilayerPipeline(SafireTestCase):
     """Tests a multi-layer pipeline.
 
     Initialization:
@@ -46,9 +47,7 @@ class TestMultilayerPipeline(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-
-        cls.testdir = os.path.dirname(__file__)
-        cls.data_root = os.path.join(cls.testdir, 'test-data')
+        super(TestMultilayerPipeline, cls).setUpClass()
 
         cls.training_root = cls.data_root
         cls.name = 'test-data'
@@ -245,6 +244,12 @@ class TestMultilayerPipeline(unittest.TestCase):
         self.assertEqual(i1_transformer.n_in, i1_backward_transformer.n_out)
 
 
+##############################################################################
+
 if __name__ == '__main__':
-    logging.root.setLevel(logging.INFO)
-    unittest.main()
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestMultilayerPipeline)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
