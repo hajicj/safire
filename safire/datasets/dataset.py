@@ -93,9 +93,8 @@ import theano
 import safire.utils.transcorp
 
 
-
-
-# Shouldn't DatasetABC implement the IndexedCorpus interface?
+# Doesn't DatasetABC implement the IndexedCorpus interface?
+# Should it be made explicit?
 class DatasetABC(gensim.utils.SaveLoad):
     """This is the old Dataset, reworked into a wrapper for an IndexedCorpus
     (like, for instance, the ShardedCorpus). It can also serve as a wrapper
