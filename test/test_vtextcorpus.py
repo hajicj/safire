@@ -28,7 +28,7 @@ class TestVTextCorpus(SafireTestCase):
 
         cls.vtlist_file = os.path.join(cls.data_root, 'test-data.vtlist')
         with open(cls.vtlist_file) as vtlist_handle:
-            cls.vtlist = [ line.strip() for line in open(cls.vtlist_file)]
+            cls.vtlist = [line.strip() for line in open(cls.vtlist_file)]
 
         cls.token_filter = PositionalTagTokenFilter(['N', 'A', 'D', 'V'], 0)
 
@@ -36,8 +36,8 @@ class TestVTextCorpus(SafireTestCase):
 
         self.corpus = VTextCorpus(self.vtlist_file, input_root=self.data_root)
         self.filtered_corpus = VTextCorpus(self.vtlist_file,
-                                          input_root=self.data_root,
-                                          token_filter=self.token_filter)
+                                           input_root=self.data_root,
+                                           token_filter=self.token_filter)
         self.pfiltered_corpus = VTextCorpus(self.vtlist_file,
                                             input_root=self.data_root,
                                             pfilter=0.3,
@@ -160,6 +160,15 @@ class TestVTextCorpus(SafireTestCase):
             raise
         else:
             self.assertTrue(True)
+
+    def test_getitem_intkey(self):
+
+        doc = self.corpus[7]
+        with gzip.open(os.path.join(self.data_root, self.vtlist[7])) as vt_handle:
+            doc_direct, _ = self.corpus.parse_document_and_sentences(vt_handle)
+            doc_direct = self.corpus.doc2bow(doc_direct, allow_update=True)
+
+        self.assertEqual(doc, doc_direct)
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()

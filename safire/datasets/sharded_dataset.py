@@ -106,6 +106,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
 
         """
         self.n_docs = 0
+        self.output_prefix = output_prefix
 
         self.offsets = []
         self.n_shards = 0

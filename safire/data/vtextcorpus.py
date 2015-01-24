@@ -13,11 +13,11 @@ import os
 from gensim.corpora.textcorpus import TextCorpus
 from gensim.corpora.dictionary import Dictionary
 import itertools
-from gensim.models import TfidfModel
 
 import filters.positional_filters as pfilters
 
 logger = logging.getLogger(__name__)
+
 
 def _strip_UFAL(token):
     """
@@ -40,7 +40,6 @@ class VTextCorpus(TextCorpus):
 
     Which columns should be returned is also specified on init.
     """
-
     def __init__(self, input=None, colnames=['form', 'lemma', 'tag'],
                  retcol='lemma', input_root=None,
                  delimiter='\t', gzipped=True,
@@ -50,7 +49,7 @@ class VTextCorpus(TextCorpus):
                  token_transformer='strip_UFAL',
                  pfilter=None, pfilter_full_freqs=False,
                  filter_capital=False,
-                 label=None):
+                 label=None, precompute_vtlist=True):
         """Initializes the text corpus.
 
         :param input: The input for a VTextCorpus is a handle
@@ -122,6 +121,13 @@ class VTextCorpus(TextCorpus):
 
         :param label: A "name" the corpus carries with it for identification.
 
+        :param precompute_vtlist: If set, will load the list of vtext files in
+            the ``input`` file on initialization. This will then enable running
+            ``__getitem__`` with an integer lookup key (will retrieve the key-th
+            document) and caching. Set to True by default. The only reason to
+            unset this is when the list of *.vt files does not fit into memory;
+            this may be an issue at around several hundred million *.vt files,
+            so for example all Wikipedias in all languages are fine.
         """
         self.label = label
 
@@ -139,6 +145,13 @@ class VTextCorpus(TextCorpus):
         self.input = input
         self.gzipped = gzipped
         self.input_root = input_root
+
+        # Precompute list of *.vt files?
+
+        self.precompute_vtlist = precompute_vtlist
+        self.vtlist = []
+        if self.precompute_vtlist:
+            self.vtlist = self._precompute_vtlist(self.input)
 
         # Initialize dictionary
         if dictionary is None:
@@ -187,21 +200,6 @@ class VTextCorpus(TextCorpus):
         self.n_processed = 0
         self.n_words_processed = 0
 
-        self.tfidf = None
-
-        #if isinstance(tfidf, bool) and tfidf:
-        #    self.tfidf = self.setup_tfidf()
-        #elif isinstance(tfidf, TfidfModel):
-        #    self.tfidf = tfidf
-
-    def setup_tfidf(self):
-        """Prepare the TfidfModel that should transform the corpus outputs.
-        Runs through the corpus, so it may be slow.
-        """
-        logging.info('Initializing TF-IDF model from self...')
-        tfidf = TfidfModel(self)
-        return tfidf
-
     def __iter__(self):
         """
         The function that defines a corpus.
@@ -219,15 +217,23 @@ class VTextCorpus(TextCorpus):
             allow_update=self.allow_dict_updates
         bow = self.dictionary.doc2bow(text,
                                       allow_update=allow_update)
-        #if self.tfidf:
-        #    bow = self.tfidf[bow]
 
         return bow
+
+    def doc_full_path(self, doc):
+        """Given a vtlist entry, returns the full path to the vtlist file.
+        (Simply combines ``self.input_root`` and ``doc``"""
+        if self.input_root is not None:
+            doc = os.path.join(self.input_root, doc.strip())
+            #logger.debug(
+            #    'Doc name after prepending with input root: %s' % doc)
+        return doc
 
     def get_texts(self):
         """
         One iteration of get_texts() should yield one document, which means
-        one file.
+        one file. Note that get_texts() can work even with vtlists that do not
+        fit into memory, which would be a very rare occasion indeed.
         """
         batch_no = 1
         timed_batch_size = 1000
@@ -254,10 +260,9 @@ class VTextCorpus(TextCorpus):
             # from the corpus root. This is the preferred ID of documents.
             doc_short_name = doc
 
-            if self.input_root is not None:
-                doc = os.path.join(self.input_root, doc)
-                #logger.debug(
-                #    'Doc name after prepending with input root: %s' % doc)
+            doc = self.doc_full_path(doc)
+            if not self.precompute_vtlist:
+                self.vtlist.append(doc)
 
             # This is where the actual parsing happens.
             with self._get_doc_handle(doc) as doc_handle:
@@ -265,7 +270,7 @@ class VTextCorpus(TextCorpus):
                 document, sentences = self.parse_document_and_sentences(
                     doc_handle)
 
-            # This will probably get deprecated.
+            # This will probably get deprecated (no sentences)
             if not self.sentences:
 
                 docid = doc_short_name
@@ -390,7 +395,7 @@ class VTextCorpus(TextCorpus):
 
     def locked(self):
         """Checks whether the corpus is locked."""
-        return (self.locked and (self.allow_dict_updates == False))
+        return self.locked and (self.allow_dict_updates == False)
 
     def unlock(self):
         self.allow_dict_updates = True
@@ -426,24 +431,64 @@ class VTextCorpus(TextCorpus):
         if input_root:
             self.input_root = input_root
         self.input = vtlist_filename
+        self.vtlist = []
+        if self.precompute_vtlist:
+            self.vtlist = self._precompute_vtlist(self.input)
         self.doc2id = {}
         self.id2doc = []
         if lock:
             self.lock()
 
-    def __len__(self):  # Number of documents processed
-        return self.n_processed
+    def _precompute_vtlist(self, input):
+        if not isinstance(input, str):
+            raise TypeError('Cannot precompute vtlist from a handle,'
+                            ' must supply parameter input as filename.')
+        vtlist = [self.doc_full_path(vtname)
+                  for vtname in open(input)]
+        return vtlist
+
+    def __len__(self):
+        """Computes the number of known documents in the corpus.
+
+        If the list of
+        *.vt files to process was precomputed, returns the total expected number
+        of documents. If it was not precomputed, returns the number of documents
+        processed from the current input. Note that resetting the input will
+        also reset corpus length; for a total of documents retrieved from the
+        corpus, see the ``n_processed`` attribute."""
+        return len(self.vtlist)
 
     def __del__(self):
         if self.__do_cleanup:
             self.input.close()
 
-    def __getitem__(self, vthandle):
-        """Item is a *.vt file handle. Returns the document representation."""
-        document, sentences = self.parse_document_and_sentences(vthandle)
-        #print '%d sentences, document: %s' % (len(sentences), str(document))
-        out = self.doc2bow(document, allow_update=False)
-        #print 'Out: %s' % out
+    def __getitem__(self, item, allow_update=True):
+        """If item is a *.vt file handle, returns the document representation.
+        If item is an integer, returns representation of the item-th document
+        from the current vtlist.
+
+        .. note:: Retrieval by vthandle will update the dictionary unless
+            ``allow_update`` is explicitly set to False!
+
+        .. note::
+
+            Retrieval by integer key will probably be the preferred method;
+            retrieval by *.vt handle will probably be moved to a
+            VTextCorpusTransformer class, as the usage pattern more closely
+            mirrors a transformation of vertical text documents.
+
+        Does NOT support retrieving sentences."""
+        if isinstance(item, int):
+            if not self.precompute_vtlist:
+                raise TypeError('Doesn\'t support indexing without precomputing'
+                                'the vtlist.')
+            with self._get_doc_handle(self.vtlist[item]) as vthandle:
+                document, _ = self.parse_document_and_sentences(vthandle)
+
+            return self.doc2bow(document, allow_update=allow_update)
+
+        document, _ = self.parse_document_and_sentences(item)
+        out = self.doc2bow(document, allow_update=allow_update)
         return out
 
     def _init_positional_filter(self, positional_filter, positional_full_freqs):
@@ -484,5 +529,3 @@ class VTextCorpus(TextCorpus):
             return doc_reader(gz_fh)
         else:
             return codecs.open(doc, 'r', 'utf-8')
-
-

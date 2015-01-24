@@ -188,16 +188,31 @@ class ShardedCorpus(IndexedCorpus):
             raise ValueError('Cannot initialize shards without a corpus to read'
                              ' from! (Got corpus type: %s)' % type(corpus))
 
+        # Derive dimension from input corpus/init argument
         proposed_dim = self._guess_n_features(corpus)
+        logging.warn('Dataset dimension derived from input corpus'
+                     ' is {0}, are you sure everything is all '
+                     'right?'.format(proposed_dim))
+
         if proposed_dim != self.dim:
             if self.dim is None:
                 logging.info('Deriving dataset dimension from corpus: '
-                             '%d' % proposed_dim)
+                             '%d'.format(proposed_dim))
             else:
-                logging.warn('Dataset dimension derived from input corpus diffe'
-                             'rs from initialization argument, using corpus.'
-                             '(corpus %d, init arg %d)' % (proposed_dim,
-                                                           self.dim))
+                if proposed_dim <= 0:
+                    logging.warn('Dataset dimension derived from input corpus '
+                                 'differs from initialization argument, using '
+                                 'init arg. (corpus {0}, init arg {1})'.format(
+                        proposed_dim,
+                        self.dim))
+                    proposed_dim = self.dim
+
+                else:
+                    logging.warn('Dataset dimension derived from input corpus '
+                                 'differs from initialization argument, using '
+                                 'corpus. (corpus {0}, init arg {1})'.format(
+                        proposed_dim,
+                        self.dim))
 
         self.dim = proposed_dim
         self.offsets = [0]
@@ -217,6 +232,8 @@ class ShardedCorpus(IndexedCorpus):
 
             for i, doc in enumerate(doc_chunk):
                 doc = dict(doc)
+                #logging.warn('Doc: {0}, chunk {1}'.format(doc, doc_chunk))
+                logging.warn('Current shard shape: {0}'.format(current_shard.shape))
                 current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
 
             # Handles the updating as well.

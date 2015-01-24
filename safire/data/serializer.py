@@ -3,6 +3,7 @@ This module contains classes that ...
 """
 import logging
 from gensim.interfaces import TransformationABC, TransformedCorpus
+from gensim.utils import is_corpus
 
 __author__ = "Jan Hajic jr."
 
@@ -30,19 +31,41 @@ class Serializer(TransformationABC):
         :param serializer_class: The class to use for serialization. Must
             have the ``serialize()`` classmethod.
 
-        :param fname:
-        :param serializer_init_kwargs:
-        :return:
+        :param fname: The ``fname`` parameter passed to the ``serialize()``
+            class method of ``serializer_class``. (For different serializers,
+            this filename has a different role, but all need it to operate).
+
+        :param serializer_init_kwargs: Other initialization arguments for the
+            serializer.
+
+            When using ShardedCorpus as the serialization class,
+            you will need to supply the dimension of a data point. This is
+            especially problematic with text corpora, where ShardedCorpus
+            derives the dimension from their vocabulary: if the corpus is new
+            and should be serialized in this raw form, the dimension will be
+            incorrectly derived as 0.
         """
         # This serializes the data
         serializer_class.serialize(fname=fname, corpus=corpus,
                                    **serializer_init_kwargs)
         self.fname = fname  # Used for loading the serialized corpus later.
         self.serializer_class = serializer_class
+        self.serialized_data = self.serializer_class.load(self.fname)
+
+    def __getitem__(self, item):
+
+        iscorpus, _ = is_corpus(item)
+
+        if iscorpus:
+            return self._apply(item)
+        else:
+            #raise ValueError('Cannot apply serializer to individual documents.')
+            # Will this work?
+            return self.serialized_data[item]
 
     def _apply(self, corpus, chunksize=None):
 
-        return SwapoutCorpus(corpus, self.serializer_class.load(self.fname))
+        return SwapoutCorpus(self.serializer_class.load(self.fname), corpus)
 
 
 class SwapoutCorpus(TransformedCorpus):
@@ -62,6 +85,8 @@ class SwapoutCorpus(TransformedCorpus):
         self.metadata = False
 
     def __getitem__(self, key):
+        # if isinstance(key, slice):
+        #     logging.warn('Are you sure the swapped corpus is sliceable?')
         return self.obj[key]
 
     def __iter__(self):
