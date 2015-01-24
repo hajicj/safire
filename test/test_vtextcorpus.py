@@ -170,6 +170,8 @@ class TestVTextCorpus(SafireTestCase):
 
         self.assertEqual(doc, doc_direct)
 
+    # TODO: tests for doc2id, id2doc
+
 if __name__ == '__main__':
     suite = unittest.TestSuite()
     loader = unittest.TestLoader()

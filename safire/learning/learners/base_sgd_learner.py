@@ -650,12 +650,12 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
         if isinstance(model, BaseSupervisedModel):
             if not isinstance(dataset, SupervisedDataset):
-                raise TypeError('Attempting to validate supervised model'+
-                        ' without a supervised dataset (dataset type: %s) ' % (
-                        str(type(dataset))))
+                raise TypeError('Attempting to validate supervised model'
+                        ' without a supervised dataset (dataset type: '
+                        '{0}) '.format(type(dataset)))
 
-            logging.debug('Batch index type: %s' % type(batch_index))
-            logging.debug('Batch size type: %s' % type(self.b_size))
+            logging.debug('Batch index type: {0}'.format(type(batch_index)))
+            logging.debug('Batch size type: {0}'.format(type(self.b_size)))
 
             devel_X = dataset.devel_X_batch(batch_index, self.b_size)
             devel_y = dataset.devel_y_batch(batch_index, self.b_size)
@@ -664,7 +664,6 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
         elif isinstance(model, BaseUnsupervisedModel):
             devel_X = dataset.devel_X_batch(batch_index, self.b_size)
-
             batch_loss = model_handle.validate(devel_X)
 
         return batch_loss

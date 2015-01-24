@@ -72,6 +72,16 @@ class VTextCorpus(TextCorpus):
         :param sentences: Set to True if docs should not be entire files
             but rather sentences.
 
+            .. warning::
+
+                This option is scheduled for deprecation.
+
+            .. warning::
+
+                If you set ``sentences``, you MUST unset ``precompute_vtlist``,
+                as the ``doc2id`` and ``id2doc`` mappings do NOT get precomputed
+                on a per-sentence basis.
+
         :param dictionary: If specified, the corpus will share a dictionary.
             Useful for multiple VTextCorpus instances running on a single
             dataset.
@@ -146,13 +156,6 @@ class VTextCorpus(TextCorpus):
         self.gzipped = gzipped
         self.input_root = input_root
 
-        # Precompute list of *.vt files?
-
-        self.precompute_vtlist = precompute_vtlist
-        self.vtlist = []
-        if self.precompute_vtlist:
-            self.vtlist = self._precompute_vtlist(self.input)
-
         # Initialize dictionary
         if dictionary is None:
             dictionary = Dictionary()
@@ -199,6 +202,12 @@ class VTextCorpus(TextCorpus):
         # Processing stats
         self.n_processed = 0
         self.n_words_processed = 0
+
+        # Precompute list of *.vt files?
+        self.precompute_vtlist = precompute_vtlist
+        self.vtlist = []
+        if self.precompute_vtlist:
+            self.vtlist = self._precompute_vtlist(self.input)
 
     def __iter__(self):
         """
@@ -273,9 +282,10 @@ class VTextCorpus(TextCorpus):
             # This will probably get deprecated (no sentences)
             if not self.sentences:
 
-                docid = doc_short_name
-                self.doc2id[docid] = total_yielded
-                self.id2doc.append(docid)
+                if not self.precompute_vtlist:
+                    docid = doc_short_name
+                    self.doc2id[docid] = total_yielded
+                    self.id2doc.append(docid)
 
                 total_yielded += 1
 
@@ -432,20 +442,12 @@ class VTextCorpus(TextCorpus):
             self.input_root = input_root
         self.input = vtlist_filename
         self.vtlist = []
-        if self.precompute_vtlist:
-            self.vtlist = self._precompute_vtlist(self.input)
         self.doc2id = {}
         self.id2doc = []
+        if self.precompute_vtlist:
+            self.vtlist = self._precompute_vtlist(self.input)
         if lock:
             self.lock()
-
-    def _precompute_vtlist(self, input):
-        if not isinstance(input, str):
-            raise TypeError('Cannot precompute vtlist from a handle,'
-                            ' must supply parameter input as filename.')
-        vtlist = [self.doc_full_path(vtname)
-                  for vtname in open(input)]
-        return vtlist
 
     def __len__(self):
         """Computes the number of known documents in the corpus.
@@ -478,6 +480,9 @@ class VTextCorpus(TextCorpus):
             mirrors a transformation of vertical text documents.
 
         Does NOT support retrieving sentences."""
+        if self.sentences:
+            raise ValueError('__getitem__ calls not supported when retrieving'
+                             'sentences as documents.')
         if isinstance(item, int):
             if not self.precompute_vtlist:
                 raise TypeError('Doesn\'t support indexing without precomputing'
@@ -529,3 +534,20 @@ class VTextCorpus(TextCorpus):
             return doc_reader(gz_fh)
         else:
             return codecs.open(doc, 'r', 'utf-8')
+
+    def _precompute_vtlist(self, input):
+        # Should also compute the doc2id and id2doc mapping.
+        # Does NOT support sentences.
+        if not isinstance(input, str):
+            raise TypeError('Cannot precompute vtlist from a handle,'
+                            ' must supply parameter input as filename.')
+        vtlist = []
+        with open(input) as vtl_handle:
+            for i, vtname in enumerate(vtl_handle):
+                doc_short_name = vtname.strip()
+                self.id2doc.append(doc_short_name)
+                self.doc2id[doc_short_name] = i
+
+                doc_full_name = self.doc_full_path(doc_short_name)
+                vtlist.append(doc_full_name)
+        return vtlist

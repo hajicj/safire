@@ -30,7 +30,8 @@ DEPENDENCIES = ['numpy>=1.8.0',
                 'matplotlib>=1.1.3',
                 'gensim>=0.10.0',
                 'theano>=0.6.0',
-                'pillow']
+                'pillow',
+                'joblib>=0.7.1']
 
 PACKAGES = ['test',
             'safire',
