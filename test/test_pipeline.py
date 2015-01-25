@@ -31,6 +31,8 @@ __author__ = 'hajicj@ufal.mff.cuni.cz'
 
 import unittest
 
+# Pipeline settings. These will be migrated to some Config class (thin wrapper
+# around YAML?)
 vtcorp_settings = {'token_filter': PositionalTagTokenFilter(['N', 'A', 'V'], 0),
                    'pfilter': 0.2,
                    'pfilter_full_freqs': True,
@@ -52,8 +54,8 @@ else:
     homepath = os.getenv('HOME')
 
 w2v_data_root = os.path.join(homepath, 'word2vec')
-edict_pkl_fname = os.path.join(w2v_data_root, 'test-data.edict.pkl')
-e_matrix_fname = os.path.join(w2v_data_root, 'test-data.emtr.pkl')
+edict_pkl_fname = os.path.join(w2v_data_root, 'ces_wiki.edict.pkl')
+e_matrix_fname = os.path.join(w2v_data_root, 'ces_wiki.emtr.pkl')
 
 ##############################################################################
 
@@ -62,9 +64,11 @@ class TestPipeline(SafireTestCase):
 
     @classmethod
     def setUpClass(cls, clean_only=False, no_datasets=False):
-        super(TestPipeline, cls).setUpClass()
+        super(TestPipeline, cls).setUpClass(clean_only=clean_only,
+                                            no_datasets=no_datasets)
 
-        self.w2v = Word2VecSamplingDatasetTransformer()
+        cls.w2v = Word2VecSamplingDatasetTransformer(
+            embeddings_matrix=e_matrix_fname)
 
     def setUp(self):
         self.vtlist = os.path.join(self.data_root, vtlist_fname)
@@ -107,22 +111,32 @@ class TestPipeline(SafireTestCase):
                                   self.loader.layout.image_vectors)
         icorp = ImagenetCorpus(image_file, delimiter=';', dim=4096, label='')
 
+        print 'Initializing image serialization...'
         serialization_ifile = os.path.join(self.data_root, serialization_iname)
         iserializer = Serializer(icorp, ShardedCorpus,
-                                 fname=serialization_ifile)
+                                 fname=serialization_ifile,
+                                 overwrite=True)
         ipipeline = iserializer[icorp]
+
+        print 'Image pipeline type: {0}'.format(type(ipipeline))
+
 
         # Building datasets
         text_dataset = Dataset(self.pipeline, dim=dimension(self.pipeline))
 
-        w2v_dtransformer = Word2VecSamplingDatasetTransformer()
+        text_dataset = self.w2v[text_dataset]
+
         img_dataset = Dataset(ipipeline, dim=dimension(ipipeline))
+
+        print 'Image dataset length: {0}'.format(len(img_dataset))
 
         multimodal_dataset = CompositeDataset((text_dataset, img_dataset),
                                               names=('txt', 'img'),
-                                              test_p=0.1, devel_p=0.1)
-        flatten = FlattenComposite(multimodal_dataset)
-        flat_multimodal_dataset = flatten[multimodal_dataset]
+                                              test_p=0.1, devel_p=0.1,
+                                              aligned=False)
+        flatten = FlattenComposite(multimodal_dataset) # Missing: indexes
+        flat_multimodal_corpus = flatten[multimodal_dataset]
+        flat_multimodal_dataset = Dataset(flat_multimodal_corpus)
 
         self.model_handle = DenoisingAutoencoder.setup(flat_multimodal_dataset,
             n_out=10,
@@ -139,6 +153,7 @@ class TestPipeline(SafireTestCase):
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
     suite = unittest.TestSuite()
     loader = unittest.TestLoader()
     tests = loader.loadTestsFromTestCase(TestPipeline)

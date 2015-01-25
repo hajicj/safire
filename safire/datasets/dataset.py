@@ -374,18 +374,41 @@ class CompositeDataset(DatasetABC):
     will fail.
     """
     def __init__(self, data, dim=None, names=None,
-                 test_p=None, devel_p=None):
+                 test_p=None, devel_p=None, aligned=True):
+        """Initializes a CompositeDataset.
 
+        :param data:
+
+        :param dim:
+
+        :param names:
+
+        :param test_p:
+
+        :param devel_p:
+
+        :type aligned: bool
+        :param aligned: If set, will expect that all the individual datasets
+            from ``data`` have the same length. If unset, will not check this
+            and advertise the length of the first given dataset as its length;
+            only do this if you are flattening the dataset immediately after
+            initialization!
+
+        """
+        self.aligned = aligned
         # Check lengths
-        self.length = len(data[0])
+        self.length = len(data[0])  # TODO: This is very temporary.
         super(CompositeDataset, self).__init__(data, dim=dim,
                                                test_p=test_p,
                                                devel_p=devel_p)
 
-        for d in data:
-            if len(d) != self.length:
-                raise ValueError('All composite dataset components must have'
-                                 ' the same length.') # TODO: more informative
+        if self.aligned:
+            for d in data:
+                if len(d) != self.length:
+                    raise ValueError('All composite dataset components must '
+                                     'have the same length. (Lengths: '
+                                     '{0})'.format(tuple((len(d) for d in data))
+                    ))
 
         if names:
             if len(names) != len(data):
@@ -408,6 +431,10 @@ class CompositeDataset(DatasetABC):
                 raise
 
     def __len__(self):
+        # Ugly hack - returns a structure instead of a number... doesn't work
+        # with test_p and devel_p, though, so I disabled it temporarily.
+        #if not self.aligned:
+        #    return tuple([len(d) for d in self.data])
         return self.length
 
     @staticmethod

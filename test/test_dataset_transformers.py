@@ -6,7 +6,7 @@ __author__ = 'Lenovo'
 import numpy
 import unittest
 
-from safire.datasets.transformations import FlattenComposite, FlattenedDataset
+from safire.datasets.transformations import FlattenComposite, FlattenedDatasetCorpus
 from safire.data.serializer import Serializer
 
 

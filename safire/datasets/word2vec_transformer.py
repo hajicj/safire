@@ -61,6 +61,7 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
 
         self.n_in = self.embeddings_matrix.shape[0]   # This is misc.
         self.n_out = self.embeddings_matrix.shape[1]  # This is important.
+        self.dim = self.embeddings_matrix.shape[1]    # This is important.
 
         if pickle_embeddings_matrix:
             with open(pickle_embeddings_matrix, 'wb') as phandle:

@@ -116,6 +116,7 @@ class TestWord2VecDatasetTransformer(SafireTestCase):
 ###############################################################################
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
     suite = unittest.TestSuite()
     loader = unittest.TestLoader()
     tests = loader.loadTestsFromTestCase(TestWord2VecDatasetTransformer)

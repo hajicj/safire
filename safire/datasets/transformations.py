@@ -3,6 +3,7 @@ import logging
 from gensim.interfaces import TransformationABC, TransformedCorpus
 from gensim.utils import is_corpus
 import numpy
+from safire.utils.transcorp import dimension
 from safire.datasets.dataset import Dataset, DatasetABC
 from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
@@ -10,8 +11,8 @@ from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 # TODO: refactor to work with new DatasetABC
 from safire.utils import flatten_composite_item
 
-
-class TransformedDataset(UnsupervisedDataset):
+# This may be deprecated/rewritten as a wrapper around TransformedCorpus...
+class TransformedDataset(Dataset):
     """A class that enables stacking dataset transformations in the training
     stage, similar to how corpus transformations are done during preprocessing.
 
@@ -30,10 +31,11 @@ class TransformedDataset(UnsupervisedDataset):
             overridden.
 
         """
-        self.dataset = dataset
+        self.data = dataset
         self.obj = obj
 
         self.n_out = self.obj.n_out
+        self.dim = dimension(obj)  # This is the preferred interface.
 
         # This is a naming hack, because the model setup() method expects
         # model.n_in == data.n_in. Note that this doesn't matter much: this
@@ -60,10 +62,10 @@ class TransformedDataset(UnsupervisedDataset):
 
         :return:
         """
-        batch = self.dataset._get_batch(subset=subset,
-                                        kind=kind,
-                                        b_index=b_index,
-                                        b_size=b_size)
+        batch = self.data._get_batch(subset=subset,
+                                     kind=kind,
+                                     b_index=b_index,
+                                     b_size=b_size)
         transformed_batch = self.obj[batch]
         return transformed_batch
 
@@ -172,7 +174,7 @@ class FlattenComposite(DatasetTransformer):
         self.indexes = indexes
 
     def _apply(self, dataset, chunksize=None):
-        return FlattenedDataset(self, dataset)
+        return FlattenedDatasetCorpus(self, dataset)
 
     def __getitem__(self, item):
 
@@ -184,12 +186,16 @@ class FlattenComposite(DatasetTransformer):
             raise ValueError('Cannot apply serializer to individual documents.')
 
 
-class FlattenedDataset(TransformedCorpus):
+class FlattenedDatasetCorpus(TransformedCorpus):
     def __init__(self, flatten, dataset):
 
         self.obj = flatten
         self.indexes = flatten.indexes
         self.corpus = dataset
+
+        self.dim = self.derive_dimension(self.corpus)
+        self.n_in = self.dim
+        self.n_out = self.dim
 
     def __getitem__(self, item):
         """This is where on-the-fly construction of the flattened dataset
@@ -206,20 +212,35 @@ class FlattenedDataset(TransformedCorpus):
         output = self.item2flat(retrieved)
         return output
 
+    def derive_dimension(self, composite):
+        return FlattenedDatasetCorpus.flattened_dimension(composite.dim)
+
     @staticmethod
     def item2flat(item):
         """Flattens a (recursive) tuple of numpy ndarrays/scipy sparse matrices
         and stacks them next to each other (i.e.: rows stay rows, columns
         change).
 
-    >>> x = numpy.array([[1], [2], [3], [4]])
-    >>> y = numpy.array([[-1], [-3], [-5], [-7]])
-    >>> z = numpy.array([[10, 20], [11, 21], [12, 22], [13, 23]])
-    >>> item = (x, (y, z))
-    >>> FlattenComposite.item2flat(item)
-    [1,2,3]
+        >>> x = numpy.array([[1], [2], [3], [4]])
+        >>> y = numpy.array([[-1], [-3], [-5], [-7]])
+        >>> z = numpy.array([[10, 20], [11, 21], [12, 22], [13, 23]])
+        >>> item = (x, (y, z))
+        >>> FlattenComposite.item2flat(item)
+        [1,2,3]
 
         """
         flattened = list(flatten_composite_item(item))
         stacked = numpy.hstack(flattened)
         return stacked
+
+    @staticmethod
+    def flattened_dimension(composite_dim):
+
+        total = 0
+        print 'Composite dim: {0}'.format(composite_dim)
+        for d in composite_dim:
+            if isinstance(d, tuple):
+                total += FlattenedDatasetCorpus.flattened_dimension(d)
+            else:
+                total += d
+        return total
