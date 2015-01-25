@@ -365,7 +365,8 @@ def detect_nan(i, node, fn):
 
 
 def merciless_print(i, node, fn):
-    """Debugging theano. Prints inputs and outputs at every point."""
+    """Debugging theano. Prints inputs and outputs at every point.
+    In case NaN, Inf or -Inf is detected, fires up the pdb debugger."""
     print ''
     print '-------------------------------------------------------'
     print 'Node %s' % str(i)
@@ -400,7 +401,7 @@ def shuffle_together(*lists):
     random.shuffle(zipped_lists)
     unzipped_lists = map(list, zip(*zipped_lists))
 
-    print unzipped_lists
+    #print unzipped_lists
 
     return unzipped_lists
 
@@ -423,6 +424,27 @@ def iter_sample_fast(iterable, samplesize):
         raise ValueError("Sample larger than population.")
     return results
 
+
+def flatten_composite_item(item):
+    """Simply flattens a (recursive) tuple of ndarrays. Is a generator,
+    so you have to use ``list(flatten_composite_item(item))``.
+
+    >>> x = numpy.array([1, 2, 3, 4])
+    >>> y = numpy.array([-1, -3, -5, -7])
+    >>> z = numpy.array([[10, 20], [11, 21], [12, 22], [13, 23]])
+    >>> item = (x, (y, z))
+    >>> list(flatten_composite_item(item))
+    [array([1, 2, 3, 4]), array([-1, -3, -5, -7]), array([[10, 20],
+           [11, 21],
+           [12, 22],
+           [13, 23]])]
+    """
+    for i in item:
+        if isinstance(i, tuple):
+            for j in flatten_composite_item(i):
+                yield j
+        else:
+            yield i
 
 def uniform_steps(iterable, k):
     """Chooses K items from the iterable so that they are a constant step size

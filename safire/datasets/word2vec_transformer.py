@@ -21,7 +21,7 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
 
     TODO: write doctests
     """
-    def __init__(self, w2v_transformer, embeddings_matrix=None,
+    def __init__(self, w2v_transformer=None, embeddings_matrix=None,
                  pickle_embeddings_matrix=None, n_samples=1):
         """Initializes the transformer -- specifically the word2vec embeddings.
 
@@ -51,6 +51,11 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
                 self.embeddings_matrix = cPickle.load(phandle)
             self._embedding_matrix_file = os.path.abspath(embeddings_matrix)
         else:
+            if not w2v_transformer:
+                raise ValueError('Cannot initialize without either embeddings'
+                                 ' matrix (given: {0}) or Word2VecTransformer'
+                                 ' (given: {1})'.format(embeddings_matrix,
+                                                         w2v_transformer))
             self.embeddings_matrix = \
                 self.w2v_transformer_to_embedding_matrix(w2v_transformer)
 

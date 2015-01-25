@@ -10,10 +10,17 @@ import os
 from gensim.models import TfidfModel
 import logging
 import numpy
+from safire.datasets.word2vec_transformer import \
+    Word2VecSamplingDatasetTransformer
+from safire.learning.interfaces import SafireTransformer
+from safire.learning.learners import BaseSGDLearner
+from safire.learning.models import DenoisingAutoencoder
+from safire.data.imagenetcorpus import ImagenetCorpus
+from safire.datasets.transformations import FlattenComposite
 from safire.utils.transcorp import dimension
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
-from safire.datasets.dataset import Dataset
+from safire.datasets.dataset import Dataset, CompositeDataset
 from safire.utils.transformers import LeCunnVarianceScalingTransform, \
     GeneralFunctionTransform
 from safire.data import VTextCorpus, FrequencyBasedTransformer
@@ -36,12 +43,28 @@ freqfilter_settings = {'k': 110,
 
 tanh = 0.5
 
-serialization_fname = 'serialized.shcorp'
+serialization_vtname = 'serialized.vt.shcorp'
+serialization_iname = 'serialized.i.shcorp'
+
+if not os.getenv('HOME'):
+    homepath = os.getenv('USERPROFILE')
+else:
+    homepath = os.getenv('HOME')
+
+w2v_data_root = os.path.join(homepath, 'word2vec')
+edict_pkl_fname = os.path.join(w2v_data_root, 'test-data.edict.pkl')
+e_matrix_fname = os.path.join(w2v_data_root, 'test-data.emtr.pkl')
 
 ##############################################################################
 
 
 class TestPipeline(SafireTestCase):
+
+    @classmethod
+    def setUpClass(cls, clean_only=False, no_datasets=False):
+        super(TestPipeline, cls).setUpClass()
+
+        self.w2v = Word2VecSamplingDatasetTransformer()
 
     def setUp(self):
         self.vtlist = os.path.join(self.data_root, vtlist_fname)
@@ -65,10 +88,10 @@ class TestPipeline(SafireTestCase):
                                              multiplicative_coef=tanh)
         pipeline = self.tanh[pipeline]
 
-        serization_file = os.path.join(self.data_root, 'corpora',
-                                       serialization_fname)
+        serization_vtfile = os.path.join(self.data_root, 'corpora',
+                                       serialization_vtname)
         self.serializer = Serializer(pipeline, ShardedCorpus,
-                                     fname=serization_file)
+                                     fname=serization_vtfile)
         self.pipeline = self.serializer[pipeline]  # Swapout corpus
 
     def test_cast_to_dataset(self):
@@ -78,7 +101,42 @@ class TestPipeline(SafireTestCase):
         batch = dataset[1:4]
         print batch
 
+    def test_setup_multimodal(self):
+
+        image_file = os.path.join(self.data_root,
+                                  self.loader.layout.image_vectors)
+        icorp = ImagenetCorpus(image_file, delimiter=';', dim=4096, label='')
+
+        serialization_ifile = os.path.join(self.data_root, serialization_iname)
+        iserializer = Serializer(icorp, ShardedCorpus,
+                                 fname=serialization_ifile)
+        ipipeline = iserializer[icorp]
+
+        # Building datasets
+        text_dataset = Dataset(self.pipeline, dim=dimension(self.pipeline))
+
+        w2v_dtransformer = Word2VecSamplingDatasetTransformer()
+        img_dataset = Dataset(ipipeline, dim=dimension(ipipeline))
+
+        multimodal_dataset = CompositeDataset((text_dataset, img_dataset),
+                                              names=('txt', 'img'),
+                                              test_p=0.1, devel_p=0.1)
+        flatten = FlattenComposite(multimodal_dataset)
+        flat_multimodal_dataset = flatten[multimodal_dataset]
+
+        self.model_handle = DenoisingAutoencoder.setup(flat_multimodal_dataset,
+            n_out=10,
+            reconstruction='cross-entropy',
+            heavy_debug=False)
+        self.learner = BaseSGDLearner(3, 1, validation_frequency=4)
+
+        sftrans = SafireTransformer(self.model_handle,
+                                    flat_multimodal_dataset,
+                                    self.learner)
+        output = sftrans[flat_multimodal_dataset]
+
 ###############################################################################
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()

@@ -7,6 +7,7 @@ import logging
 from gensim.corpora import TextCorpus
 from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
+import numpy
 
 from safire.data import FrequencyBasedTransformer, VTextCorpus
 from safire.data.sharded_corpus import ShardedCorpus
@@ -74,6 +75,8 @@ def bottom_corpus(corpus):
 def dimension(corpus):
     """Finds the topmost corpus that can provide information about its
     output dimension."""
+    if isinstance(corpus, numpy.ndarray) and len(corpus.shape) == 2:
+        return corpus.shape
     current_corpus = corpus
     if hasattr(current_corpus, 'dim'):
         return current_corpus.dim

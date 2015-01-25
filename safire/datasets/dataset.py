@@ -106,7 +106,7 @@ class DatasetABC(gensim.utils.SaveLoad):
         The default train-dev-test split is by proportion of data.
         Subclasses may override it.
         
-        :type data: gensim.corpora.IndexedCorpus
+        :type data: gensim.corpora.IndexedCorpus, numpy.ndarray
         :param data: An indexed corpus, or anything that supports
             slice retrieval.
 
@@ -369,6 +369,9 @@ class CompositeDataset(DatasetABC):
     >>> recursive[1:3]
     (([[2], [3]], [[-2], [-3]]), ([[2], [3]], [[-2], [-3]]))
 
+    However, it only currently supports building this tree-like structure one
+    by one. Trying ``composite = CompositeDataset(((data1, data2), data3))``
+    will fail.
     """
     def __init__(self, data, dim=None, names=None,
                  test_p=None, devel_p=None):

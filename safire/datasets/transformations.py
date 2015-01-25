@@ -1,11 +1,16 @@
 import argparse
 import logging
-from gensim.interfaces import TransformationABC
-from safire.datasets.dataset import Dataset
+from gensim.interfaces import TransformationABC, TransformedCorpus
+from gensim.utils import is_corpus
+import numpy
+from safire.datasets.dataset import Dataset, DatasetABC
 from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
 
 # TODO: refactor to work with new DatasetABC
+from safire.utils import flatten_composite_item
+
+
 class TransformedDataset(UnsupervisedDataset):
     """A class that enables stacking dataset transformations in the training
     stage, similar to how corpus transformations are done during preprocessing.
@@ -135,7 +140,7 @@ class FlattenComposite(DatasetTransformer):
 
     >>> indexes = [(1, 2), (2, 1), (2, 2), (0, 2), (0, 1)]
     >>> flatten_indexed = FlattenComposite(composite, indexes)
-    >>> flat = flatten_indexed(composite)
+    >>> flat = flatten_indexed[composite]
     >>> flat[1:3]
     array([[ 3, -2],
            [ -3, 2]])
@@ -157,7 +162,64 @@ class FlattenComposite(DatasetTransformer):
     while retaining efficiency (preprocessing steps are not repeated).
     The SerializationTransformer "swaps out" the incoming ``corpus`` for
     a corpus given at initialization time.
-
-
     """
-    pass
+    def __init__(self, composite, indexes=None):
+        """Does nothing, only initializes self.composite and self.indexes.
+        Everything happens on-the-fly in __getitem__.
+
+        Future: incorporate a ``precompute`` and/or ``preserialize`` flag."""
+        self.composite = composite
+        self.indexes = indexes
+
+    def _apply(self, dataset, chunksize=None):
+        return FlattenedDataset(self, dataset)
+
+    def __getitem__(self, item):
+
+        iscorpus, _ = is_corpus(item)
+
+        if iscorpus or isinstance(item, DatasetABC):
+            return self._apply(item)
+        else:
+            raise ValueError('Cannot apply serializer to individual documents.')
+
+
+class FlattenedDataset(TransformedCorpus):
+    def __init__(self, flatten, dataset):
+
+        self.obj = flatten
+        self.indexes = flatten.indexes
+        self.corpus = dataset
+
+    def __getitem__(self, item):
+        """This is where on-the-fly construction of the flattened dataset
+        happens. (Note: will be cached.)
+
+        :param item: An index or slice.
+
+        :return: numpy.ndarray
+        """
+        if self.indexes is None:
+            retrieved = self.corpus[item]
+        else:
+            retrieved = self.corpus[self.indexes[item]]
+        output = self.item2flat(retrieved)
+        return output
+
+    @staticmethod
+    def item2flat(item):
+        """Flattens a (recursive) tuple of numpy ndarrays/scipy sparse matrices
+        and stacks them next to each other (i.e.: rows stay rows, columns
+        change).
+
+    >>> x = numpy.array([[1], [2], [3], [4]])
+    >>> y = numpy.array([[-1], [-3], [-5], [-7]])
+    >>> z = numpy.array([[10, 20], [11, 21], [12, 22], [13, 23]])
+    >>> item = (x, (y, z))
+    >>> FlattenComposite.item2flat(item)
+    [1,2,3]
+
+        """
+        flattened = list(flatten_composite_item(item))
+        stacked = numpy.hstack(flattened)
+        return stacked

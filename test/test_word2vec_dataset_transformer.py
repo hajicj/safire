@@ -71,8 +71,13 @@ class TestWord2VecDatasetTransformer(SafireTestCase):
     def setUp(self):
 
         report, _ = profile_run(self._setup_profileable)
-        print 'Setup profiling report:'
-        print report.getvalue()
+        #print 'Setup profiling report:'
+        print self.dataset
+        print self.dataset.data
+        print self.dataset.data.offsets
+        print len(self.dataset.vtcorp)
+        print len(self.dataset.data)
+        print self.dataset.indexed_corpus
 
     def test_get_batch_sample(self):
 
