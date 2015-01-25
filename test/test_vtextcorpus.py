@@ -149,26 +149,24 @@ class TestVTextCorpus(SafireTestCase):
 
         self.corpus.dry_run()
 
-        try:
-            with gzip.open(os.path.join(self.data_root, self.vtlist[0])) as vt_handle:
-
-                output = self.corpus[vt_handle]
-
-            print output
-        except Exception:
-            self.assertEqual(True, False)
-            raise
-        else:
-            self.assertTrue(True)
-
-    def test_getitem_intkey(self):
-
         doc = self.corpus[7]
         with gzip.open(os.path.join(self.data_root, self.vtlist[7])) as vt_handle:
             doc_direct, _ = self.corpus.parse_document_and_sentences(vt_handle)
             doc_direct = self.corpus.doc2bow(doc_direct, allow_update=True)
 
         self.assertEqual(doc, doc_direct)
+        #
+        # try:
+        #     with gzip.open(os.path.join(self.data_root, self.vtlist[0])) as vt_handle:
+        #
+        #         output = self.corpus[vt_handle]
+        #
+        #     print output
+        # except Exception:
+        #     self.assertEqual(True, False)
+        #     raise
+        # else:
+        #     self.assertTrue(True)
 
     # TODO: tests for doc2id, id2doc
 

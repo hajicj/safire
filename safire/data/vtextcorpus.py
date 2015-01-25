@@ -7,6 +7,8 @@ import logging
 import re
 import gzip
 import os
+from tempfile import mkdtemp
+from joblib import memory
 #import cPickle
 
 #from gensim import interfaces, utils
@@ -209,16 +211,29 @@ class VTextCorpus(TextCorpus):
         if self.precompute_vtlist:
             self.vtlist = self._precompute_vtlist(self.input)
 
+        # Caching
+        self._cachedir = mkdtemp()
+        self._memory = memory.Memory(cachedir=self._cachedir, verbose=0)
+
+        self.__getitem__ = self._memory.cache(self.__getitem__)
+
     def __iter__(self):
         """
         The function that defines a corpus.
 
         Iterating over the corpus must yield sparse vectors, one for each
-        document.
+        document. In our case, behavior will depend on whether
+        ``precompute_vtlist`` was set during initialization.
         """
-        for text in self.get_texts():
-            #logging.debug('__iter__ Yielding text: %s' % str(text))
-            yield self.doc2bow(text)
+        if self.precompute_vtlist and not self.sentences:
+            for i in xrange(len(self)):
+                out = self[i]
+                self.n_processed += 1
+                self.n_words_processed += len(out)
+                yield out
+        else:
+            for text in self.get_texts():
+                yield self.doc2bow(text)
 
     def doc2bow(self, text, allow_update=None):
         """Mini-method for generating BOW representation of text."""
@@ -255,18 +270,18 @@ class VTextCorpus(TextCorpus):
         self.n_processed = 0
         self.n_words_processed = 0
 
+        # Better: use the cached results from __getitem__, if a dry_run() was
+        # performed earlier!
+
         input_handle = self.input
         if isinstance(self.input, str):
             input_handle = open(self.input)
 
         for docno, doc in enumerate(input_handle):
-            # logger.debug('Processing doc no. %d: %s' % (docno, doc.strip()))
-
-            doc = doc.strip()
-
             # NOTE: doc_short_name is the document name *before*
             # self.input_root is applied - it's the path to the file
             # from the corpus root. This is the preferred ID of documents.
+            doc = doc.strip()
             doc_short_name = doc
 
             doc = self.doc_full_path(doc)
@@ -275,35 +290,28 @@ class VTextCorpus(TextCorpus):
 
             # This is where the actual parsing happens.
             with self._get_doc_handle(doc) as doc_handle:
-
                 document, sentences = self.parse_document_and_sentences(
                     doc_handle)
 
-            # This will probably get deprecated (no sentences)
+            # This may get deprecated (no sentences)
             if not self.sentences:
-
+                # Update document mappings
                 if not self.precompute_vtlist:
                     docid = doc_short_name
                     self.doc2id[docid] = total_yielded
                     self.id2doc.append(docid)
-
                 total_yielded += 1
-
                 yield document
 
             else:
-
                 for sentno, sentence in enumerate(sentences):
                     docid = doc_short_name + '.' + str(sentno)
                     self.doc2id[docid] = total_yielded
                     self.id2doc.append(docid)
-
-                    #logger.debug('get_texts: Yielding sentence: %s' % str(
-                    #    [tok for tok in sentence]))
                     total_yielded += 1
-
                     yield sentence
 
+            # Logging
             self.n_processed += 1
             if self.n_processed % timed_batch_size == 0:
                 batch_end_time = time.clock()
@@ -394,8 +402,12 @@ class VTextCorpus(TextCorpus):
         """Loops through the entire corpus without outputting the documents
         themselves, to generate the corpus infrastructure: document ID mapping,
         dictionary, etc."""
-        for _ in self:
-            pass
+        if self.precompute_vtlist:
+            for i in xrange(len(self)):     # Caches results!
+                _ = self[i]
+        else:
+            for _ in self:
+                pass
 
     def lock(self):
         """In order to use the corpus as a transformer, it has to be locked: it
@@ -420,6 +432,9 @@ class VTextCorpus(TextCorpus):
           This is to reflect the usage: to load a VTextCorpus that was used
           for training and use it to correctly feed data to the higher-level
           corpora.
+
+        There is currently no support for retaining the old doc2id/id2doc
+        mappings (and it is not planned for the immediate future).
 
         :type vtlist_filename: str
         :param vtlist_filename: The new vtlist filename. To be consistent, this
@@ -446,6 +461,7 @@ class VTextCorpus(TextCorpus):
         self.id2doc = []
         if self.precompute_vtlist:
             self.vtlist = self._precompute_vtlist(self.input)
+        self._memory.clear()
         if lock:
             self.lock()
 
@@ -464,10 +480,16 @@ class VTextCorpus(TextCorpus):
         if self.__do_cleanup:
             self.input.close()
 
+    #@self._memory.cache  # ??? How to make this work? _memory and _tempdir
+                          # as class attributes?
     def __getitem__(self, item, allow_update=True):
-        """If item is a *.vt file handle, returns the document representation.
-        If item is an integer, returns representation of the item-th document
+        """If item is an integer, returns representation of the item-th document
         from the current vtlist.
+        (If item is a *.vt file handle, returns the document representation.)
+
+        .. warn::
+
+            Vthandle usage DEPRECATED!!!
 
         .. note:: Retrieval by vthandle will update the dictionary unless
             ``allow_update`` is explicitly set to False!
@@ -492,9 +514,10 @@ class VTextCorpus(TextCorpus):
 
             return self.doc2bow(document, allow_update=allow_update)
 
-        document, _ = self.parse_document_and_sentences(item)
-        out = self.doc2bow(document, allow_update=allow_update)
-        return out
+        raise TypeError('Calling __getitem__ with a handle has been deprecated.')
+        #document, _ = self.parse_document_and_sentences(item)
+        #out = self.doc2bow(document, allow_update=allow_update)
+        #return out
 
     def _init_positional_filter(self, positional_filter, positional_full_freqs):
         """Initializes position-based filtering."""
@@ -551,3 +574,12 @@ class VTextCorpus(TextCorpus):
                 doc_full_name = self.doc_full_path(doc_short_name)
                 vtlist.append(doc_full_name)
         return vtlist
+
+    def save(self, *args, **kwargs):
+        attrs_to_ignore = ['__getitem__']
+        if 'ignore' not in kwargs:
+            kwargs['ignore'] = frozenset(attrs_to_ignore)
+        else:
+            kwargs['ignore'] = frozenset([v for v in kwargs['ignore']]
+                                         + attrs_to_ignore)
+        super(VTextCorpus, self).save(*args, **kwargs)

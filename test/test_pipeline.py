@@ -27,7 +27,8 @@ import unittest
 vtcorp_settings = {'token_filter': PositionalTagTokenFilter(['N', 'A', 'V'], 0),
                    'pfilter': 0.2,
                    'pfilter_full_freqs': True,
-                   'filter_capital': True}
+                   'filter_capital': True,
+                   'precompute_vtlist': True}
 vtlist_fname = 'test-data.vtlist'
 
 freqfilter_settings = {'k': 110,
@@ -39,6 +40,7 @@ serialization_fname = 'serialized.shcorp'
 
 ##############################################################################
 
+
 class TestPipeline(SafireTestCase):
 
     def setUp(self):
@@ -46,21 +48,22 @@ class TestPipeline(SafireTestCase):
 
         self.vtcorp = VTextCorpus(self.vtlist, input_root=self.data_root,
                                   **vtcorp_settings)
+        self.vtcorp.dry_run()
         pipeline = self.vtcorp
 
-        #self.tfidf = TfidfModel(self.vtcorp)
-        #pipeline = self.tfidf[pipeline]
+        self.tfidf = TfidfModel(self.vtcorp)
+        pipeline = self.tfidf[pipeline]
 
-        #self.freqfilter = FrequencyBasedTransformer(pipeline,
-        #                                            **freqfilter_settings)
-        #pipeline = self.freqfilter[pipeline]
+        self.freqfilter = FrequencyBasedTransformer(pipeline,
+                                                    **freqfilter_settings)
+        pipeline = self.freqfilter[pipeline]
 
-        #self.ucov = LeCunnVarianceScalingTransform(pipeline)
-        #pipeline = self.ucov[pipeline]
+        self.ucov = LeCunnVarianceScalingTransform(pipeline)
+        pipeline = self.ucov[pipeline]
 
-        #self.tanh = GeneralFunctionTransform(numpy.tanh,
-        #                                     multiplicative_coef=tanh)
-        #pipeline = self.tanh[pipeline]
+        self.tanh = GeneralFunctionTransform(numpy.tanh,
+                                             multiplicative_coef=tanh)
+        pipeline = self.tanh[pipeline]
 
         serization_file = os.path.join(self.data_root, 'corpora',
                                        serialization_fname)
