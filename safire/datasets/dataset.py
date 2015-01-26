@@ -422,8 +422,23 @@ class CompositeDataset(DatasetABC):
         self.names_dict = {name: i for i, name in enumerate(self.names)}
 
     def __getitem__(self, item):
+        """Retrieval from a composite dataset has several modes:
+
+        >>> features = DatasetABC([[1], [2], [3]], dim=1)
+        >>> targets = DatasetABC([[-1], [-2], [-3]], dim=1)
+        >>> composite = CompositeDataset((features, targets), names=('features', 'targets'))
+        >>> composite[1:3]
+        ([[2], [3]], [[-2], [-3]])
+        >>> composite.__getitem__((1, 2))
+        ([2], [-3])
+
+        """
         try:
-            return tuple(d[item] for d in self.data)
+            # For retrieving a different index from each data point
+            if isinstance(item, tuple):
+                return tuple([d[item[i]] for i, d in enumerate(self.data)])
+            else:
+                return tuple([d[item] for d in self.data])
         except TypeError:
             if isinstance(item, str):
                 return self.data[self.names_dict[item]]

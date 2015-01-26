@@ -15,6 +15,7 @@ from safire.data.sharded_corpus import ShardedCorpus
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
 #from safire.datasets.transformations import DatasetTransformer
+import safire.datasets.dataset
 
 
 __author__ = "Jan Hajic jr."
@@ -64,11 +65,13 @@ def get_id2word_obj(corpus):
 
 
 def bottom_corpus(corpus):
-    """Jumps through a stack of TransformedCorpus objects all the way to the
-    bottom corpus."""
+    """Jumps through a stack of TransformedCorpus or Dataset
+    objects all the way to the bottom corpus."""
     current_corpus = corpus
-    while isinstance(current_corpus, TransformedCorpus):
-        current_corpus = current_corpus.corpus
+    if isinstance(current_corpus, TransformedCorpus):
+        return bottom_corpus(current_corpus.corpus)
+    if isinstance(current_corpus, safire.datasets.dataset.DatasetABC):
+        return bottom_corpus(current_corpus.data)
     return current_corpus
 
 
@@ -76,7 +79,7 @@ def dimension(corpus):
     """Finds the topmost corpus that can provide information about its
     output dimension."""
     if isinstance(corpus, numpy.ndarray) and len(corpus.shape) == 2:
-        return corpus.shape
+        return corpus.shape[1]
     current_corpus = corpus
     if hasattr(current_corpus, 'dim'):
         return current_corpus.dim

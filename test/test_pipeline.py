@@ -10,6 +10,7 @@ import os
 from gensim.models import TfidfModel
 import logging
 import numpy
+from safire.data.word2vec_transformer import Word2VecTransformer
 from safire.datasets.word2vec_transformer import \
     Word2VecSamplingDatasetTransformer
 from safire.learning.interfaces import SafireTransformer
@@ -17,7 +18,7 @@ from safire.learning.learners import BaseSGDLearner
 from safire.learning.models import DenoisingAutoencoder
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.datasets.transformations import FlattenComposite
-from safire.utils.transcorp import dimension
+from safire.utils.transcorp import dimension, get_id2word_obj
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.datasets.dataset import Dataset, CompositeDataset
@@ -48,14 +49,6 @@ tanh = 0.5
 serialization_vtname = 'serialized.vt.shcorp'
 serialization_iname = 'serialized.i.shcorp'
 
-if not os.getenv('HOME'):
-    homepath = os.getenv('USERPROFILE')
-else:
-    homepath = os.getenv('HOME')
-
-w2v_data_root = os.path.join(homepath, 'word2vec')
-edict_pkl_fname = os.path.join(w2v_data_root, 'ces_wiki.edict.pkl')
-e_matrix_fname = os.path.join(w2v_data_root, 'ces_wiki.emtr.pkl')
 
 ##############################################################################
 
@@ -67,8 +60,14 @@ class TestPipeline(SafireTestCase):
         super(TestPipeline, cls).setUpClass(clean_only=clean_only,
                                             no_datasets=no_datasets)
 
-        cls.w2v = Word2VecSamplingDatasetTransformer(
-            embeddings_matrix=e_matrix_fname)
+        if not os.getenv('HOME'):
+            homepath = os.getenv('USERPROFILE')
+        else:
+            homepath = os.getenv('HOME')
+
+        #cls.w2v_data_root = os.path.join(homepath, 'word2vec')
+        cls.edict_pkl_fname = os.path.join(cls.data_root, 'test-data.edict.pkl')
+        cls.e_matrix_fname = os.path.join(cls.data_root, 'test-data.emtr.pkl')
 
     def setUp(self):
         self.vtlist = os.path.join(self.data_root, vtlist_fname)
@@ -92,8 +91,9 @@ class TestPipeline(SafireTestCase):
                                              multiplicative_coef=tanh)
         pipeline = self.tanh[pipeline]
 
-        serization_vtfile = os.path.join(self.data_root, 'corpora',
-                                       serialization_vtname)
+        serization_vtfile = os.path.join(self.data_root,
+                                         self.loader.layout.corpus_dir,
+                                         serialization_vtname)
         self.serializer = Serializer(pipeline, ShardedCorpus,
                                      fname=serization_vtfile)
         self.pipeline = self.serializer[pipeline]  # Swapout corpus
@@ -112,7 +112,9 @@ class TestPipeline(SafireTestCase):
         icorp = ImagenetCorpus(image_file, delimiter=';', dim=4096, label='')
 
         print 'Initializing image serialization...'
-        serialization_ifile = os.path.join(self.data_root, serialization_iname)
+        serialization_ifile = os.path.join(self.data_root,
+                                           self.loader.layout.corpus_dir,
+                                           serialization_iname)
         iserializer = Serializer(icorp, ShardedCorpus,
                                  fname=serialization_ifile,
                                  overwrite=True)
@@ -120,11 +122,15 @@ class TestPipeline(SafireTestCase):
 
         print 'Image pipeline type: {0}'.format(type(ipipeline))
 
+        self.w2v_t = Word2VecTransformer(self.edict_pkl_fname,
+                                         id2word=get_id2word_obj(self.pipeline))
+
 
         # Building datasets
         text_dataset = Dataset(self.pipeline, dim=dimension(self.pipeline))
-
         text_dataset = self.w2v[text_dataset]
+
+        print 'Text dataset: {0}'.format(text_dataset)
 
         img_dataset = Dataset(ipipeline, dim=dimension(ipipeline))
 
@@ -141,7 +147,10 @@ class TestPipeline(SafireTestCase):
         self.model_handle = DenoisingAutoencoder.setup(flat_multimodal_dataset,
             n_out=10,
             reconstruction='cross-entropy',
-            heavy_debug=False)
+            heavy_debug=True)
+        batch = flat_multimodal_dataset.train_X_batch(0, 1)
+        print batch.shape
+
         self.learner = BaseSGDLearner(3, 1, validation_frequency=4)
 
         sftrans = SafireTransformer(self.model_handle,

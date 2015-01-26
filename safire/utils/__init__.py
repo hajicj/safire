@@ -788,3 +788,25 @@ def gensim2ndarray(corpus, dim, num_docs=None):
     with documents as rows.
     Mirror function to ``ndarray2gensim``."""
     return corpus2dense(corpus, dim, num_docs=num_docs).T
+
+
+# Parsing some elementary data files
+def parse_textdoc2imdoc_map(textdoc2imdoc):
+    """Given a file with tab-separated docname/imagename pairs, returns
+    a dict with docname keys and list of imagenames values.
+    """
+    if textdoc2imdoc is None:
+        return None
+
+    t2i_map = {}
+
+    with open(textdoc2imdoc) as t2i_handle:
+
+        for i, line in enumerate(t2i_handle):
+            text, img = line.strip().split('\t')
+            if text not in t2i_map:
+                t2i_map[text] = [img]
+            else:
+                t2i_map[text].append(img)
+
+    return t2i_map

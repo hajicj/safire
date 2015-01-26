@@ -607,7 +607,7 @@ class MultimodalDataset(SupervisedDataset):
 
         sorted_indexed_text2im = sorted(indexed_text2im,
                                         key=operator.itemgetter(2, 3))
-        sorted_text2im = map(operator.itemgetter(0,1), sorted_indexed_text2im)
+        sorted_text2im = map(operator.itemgetter(0, 1), sorted_indexed_text2im)
         return sorted_text2im
 
     def cache_full(self):

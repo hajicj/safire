@@ -3,7 +3,7 @@ import logging
 from gensim.interfaces import TransformationABC, TransformedCorpus
 from gensim.utils import is_corpus
 import numpy
-from safire.utils.transcorp import dimension
+from safire.utils.transcorp import dimension, bottom_corpus
 from safire.datasets.dataset import Dataset, DatasetABC
 from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
@@ -207,9 +207,16 @@ class FlattenedDatasetCorpus(TransformedCorpus):
         """
         if self.indexes is None:
             retrieved = self.corpus[item]
+            output = self.item2flat(retrieved)
         else:
-            retrieved = self.corpus[self.indexes[item]]
-        output = self.item2flat(retrieved)
+            indexes = self.indexes[item]
+            idxs_by_dataset = map(list, zip(*indexes))
+            retrieved = []
+            for dataset, idxs in zip(self.corpus.data, idxs_by_dataset):
+                partial = numpy.array([dataset[i] for i in idxs])
+                retrieved.append(partial)
+            output = self.item2flat(retrieved)
+
         return output
 
     def derive_dimension(self, composite):
@@ -226,7 +233,7 @@ class FlattenedDatasetCorpus(TransformedCorpus):
         >>> z = numpy.array([[10, 20], [11, 21], [12, 22], [13, 23]])
         >>> item = (x, (y, z))
         >>> FlattenComposite.item2flat(item)
-        [1,2,3]
+        >>> [1,2,3] # TODO result!
 
         """
         flattened = list(flatten_composite_item(item))
@@ -244,3 +251,32 @@ class FlattenedDatasetCorpus(TransformedCorpus):
             else:
                 total += d
         return total
+
+
+def docnames2indexes(data, docnames):
+    """Converts a mapping of document names to indexes into the given datasets.
+    Utility function for flattening datasets that provide a doc2id mapping.
+
+    .. note::
+
+        Currently only supports a non-recursive composite dataset.
+
+    :type data: safire.datasets.dataset.CompositeDataset
+    :param data: A composite dataset from which to extract indexing. (This will
+        be the dataset you then pass to FlattenDataset.) Currently only works
+        with
+
+    :type docnames: list[tuple[str]]
+    :param docnames: A list of the document names that should be flattened into
+        one item when ``data`` is flattened.
+
+    :rtype: list[tuple[int]]
+    :returns: A list of indices into the individual components of the ``data``
+        composite dataset.
+    """
+    doc2ids = [bottom_corpus(d).doc2id for d in data.data]
+    output = []
+    for name_item in docnames:
+        idxs = tuple(doc2ids[i][name] for i, name in enumerate(name_item))
+        output.append(idxs)
+    return output
