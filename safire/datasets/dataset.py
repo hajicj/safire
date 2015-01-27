@@ -88,6 +88,8 @@ Train/dev/test split is handled at the dataset level.
 """
 
 import logging
+from tempfile import mkdtemp
+from joblib import memory
 import gensim
 import theano
 import safire.utils.transcorp
@@ -146,6 +148,11 @@ class DatasetABC(gensim.utils.SaveLoad):
             self.devel_p = devel_p
         self._devel_doc_offset = self._test_doc_offset \
                                  - int(len(self) * self.devel_p)
+
+        # Caching retrieval results
+        self._cache = mkdtemp()
+        self._memory = memory.Memory(self._cache, mmap_mode='r', verbose=0)
+        self.__getitem__ = self._memory.cache(self.__getitem__)
 
     def n_train_batches(self, batch_size):
         """Determines how many batches of given size the training data will
@@ -318,6 +325,15 @@ class DatasetABC(gensim.utils.SaveLoad):
         interface."""
         for i in xrange(len(self)):
             yield self[i]
+
+    def save(self, fname,
+             separately=None, sep_limit=10 * 1024**2,
+             ignore=frozenset()):
+
+        #ignore = frozenset(['__getitem__'] + [i for i in ignore])
+
+        super(DatasetABC, self).save(fname=fname, separately=separately,
+                                     sep_limit=sep_limit, ignore=ignore)
 
     @staticmethod
     def derive_dimension(data):
