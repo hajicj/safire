@@ -342,10 +342,18 @@ if __name__ == '__main__':
     model_handle = DenoisingAutoencoder.setup(mmdata,
                                               n_out=100,
                                               reconstruction='cross-entropy')
+    # The setup() method provides a model handle, with a .train(), .validate(),
+    # .test() and .run() method.
+
     learner = BaseSGDLearner(n_epochs=3, batch_size=1, validation_frequency=4)
+    # The learner will run the training iterations. Not yet, though.
+
     sftrans = SafireTransformer(model_handle,
                                 mmdata,
                                 learner)
     output = sftrans[mmdata]
+    # And -- the SafireTransformer is again just one more pipeline block!
     # There are now the 100-dimensional representations of the joint text-image
-    # model in output.
+    # model in output. Woot!
+    # The training process was all run during SafireTransformer initialization.
+
