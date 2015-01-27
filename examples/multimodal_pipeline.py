@@ -9,6 +9,9 @@ import logging
 import os
 from gensim.models import TfidfModel
 import numpy
+from safire.learning.interfaces import SafireTransformer
+from safire.learning.learners import BaseSGDLearner
+from safire.learning.models import DenoisingAutoencoder
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
@@ -275,7 +278,7 @@ def build_multimodal_pipeline(text_pipeline, image_pipeline):
     # We add the names mainly for clarity (although CompositeDataset allows
     # retrieving data from individual sub-sets by name as well).
 
-    # Now for a more complicated part: we need to tell the composite dataset
+    # Now for a slighlty complicated part: we need to tell the composite dataset
     # which text fits to which image. There is no one-line shortcut for this
     # action yet.
     t2i_file = os.path.join(data_root,
@@ -308,7 +311,7 @@ def build_multimodal_pipeline(text_pipeline, image_pipeline):
 
     flatten = FlattenComposite(multimodal_dataset,
                                t2i_indexes)
-    flat_multimodal_dataset = flatten(multimodal_dataset)
+    flat_multimodal_dataset = flatten[multimodal_dataset]
     # FlattenComposite is just another transformation block, although
     # specifically designed to deal with composite datasets (it will refuse to
     # work on anything else). Its role is to stitch items from individual
@@ -317,10 +320,10 @@ def build_multimodal_pipeline(text_pipeline, image_pipeline):
     serializer = Serializer(flat_multimodal_dataset,
                             ShardedCorpus,
                             serialization_mmname)
-    multimodal_pipeline = serializer[flat_multimodal_dataset]
+    pipeline = serializer[flat_multimodal_dataset]
     # Finally, we serialize the flattened results.
 
-    return multimodal_pipeline
+    return pipeline
 
 ###############################################################################
 
@@ -332,4 +335,17 @@ if __name__ == '__main__':
     multimodal_pipeline = build_multimodal_pipeline(text_pipeline,
                                                     image_pipeline)
 
-    print 'Now we can train something! But that is for another tutorial.'
+    print 'Now we can train something! ' \
+          'But that will be explained in another tutorial.'
+
+    mmdata = Dataset(multimodal_pipeline, devel_p=0.1, test_p=0.1)
+    model_handle = DenoisingAutoencoder.setup(mmdata,
+                                              n_out=100,
+                                              reconstruction='cross-entropy')
+    learner = BaseSGDLearner(n_epochs=3, batch_size=1, validation_frequency=4)
+    sftrans = SafireTransformer(model_handle,
+                                mmdata,
+                                learner)
+    output = sftrans[mmdata]
+    # There are now the 100-dimensional representations of the joint text-image
+    # model in output.
