@@ -406,7 +406,9 @@ class CompositeDataset(DatasetABC):
                 if len(d) != self.length:
                     raise ValueError('All composite dataset components must '
                                      'have the same length. (Lengths: '
-                                     '{0})'.format(tuple((len(d) for d in data))
+                                     '{0}) Are you sure the CompositeDataset'
+                                     'should be aligned?'
+                                     ''.format(tuple((len(d) for d in data))
                     ))
 
         if names:
