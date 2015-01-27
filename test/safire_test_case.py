@@ -1,5 +1,6 @@
 import os
 import gensim
+import logging
 from safire.data.layouts import clean_data_root, init_data_root
 from safire.data.loaders import MultimodalShardedDatasetLoader
 
@@ -43,7 +44,8 @@ class SafireTestCase(unittest.TestCase):
         # a SafireTestCase
         init_data_root(cls.data_root, overwrite=True)
 
-        if clean_only:
+        cls._clean_only = clean_only
+        if cls._clean_only:
             return
 
         # Re-generate the default corpora/datasets.
@@ -75,6 +77,10 @@ class SafireTestCase(unittest.TestCase):
         """Checks that the default corpora and datasets were created
         successfully."""
         # None of these should raise an exception.
+        if self._clean_only:
+            logging.info('Clean-only SafireTestCase, not performing check'
+                         'for default corpus/dataset existence.')
+            return
         no_exceptions = False
         try:
             self.loader.load_text_corpus()

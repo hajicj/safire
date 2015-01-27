@@ -16,6 +16,7 @@ safire/data/imagenetcorpus.py
 safire/data/layouts.py
 safire/data/loaders.py
 safire/data/parameter_space.py
+safire/data/serializer.py
 safire/data/sharded_corpus.py
 safire/data/text_browser.py
 safire/data/utils.py
@@ -88,6 +89,7 @@ test/safire_test_case.py
 test/test_base_sgd_learner.py
 test/test_clamped_sampler.py
 test/test_da_unsupervised_training.py
+test/test_dataset_transformers.py
 test/test_frequency_based_transform.py
 test/test_handle_saveload.py
 test/test_layouts.py
@@ -98,6 +100,7 @@ test/test_multilayer_pipeline.py
 test/test_multimodal_dataset.py
 test/test_multimodal_dataset_loader.py
 test/test_multimodal_sharded_dataset_loader.py
+test/test_pipeline.py
 test/test_rbm_unsupervised_training.py
 test/test_rsm_unsupervised_training.py
 test/test_safire_transformer.py
@@ -111,17 +114,13 @@ test/test_word2vec_dataset_transformer.py
 test/test-data/.test-data.vtlist.swp
 test/test-data/im.ftrs.csv
 test/test-data/runtime.vtlist
+test/test-data/serialized.i.shcorp
+test/test-data/serialized.i.shcorp.0
 test/test-data/test-data.edict.pkl
 test/test-data/test-data.emtr.pkl
 test/test-data/test-data.im.ftrs.csv
 test/test-data/test-data.vtext-image-map.csv
 test/test-data/test-data.vtlist
-test/test-data/corpora/test-data.img.icorp
-test/test-data/corpora/test-data.img.mmcorp
-test/test-data/corpora/test-data.img.mmcorp.index
-test/test-data/corpora/test-data.vt.mmcorp
-test/test-data/corpora/test-data.vt.mmcorp.index
-test/test-data/corpora/test-data.vt.vtcorp
 test/test-data/img/0000000323.jpg
 test/test-data/img/0000000326.jpg
 test/test-data/img/0000000714.jpg

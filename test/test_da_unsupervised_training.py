@@ -27,8 +27,8 @@ class TestUnsupervisedTraining(SafireTestCase):
         # Let's compress the dataset to 10 dimensions, for testing speed.
         # (Testing will take long anyway, due to compilation.)
         cls.model_handle = DenoisingAutoencoder.setup(dataset, n_out=10,
-                                                      reconstruction='cross-entropy',
-                                                      heavy_debug=False)
+                                            reconstruction='cross-entropy',
+                                            heavy_debug=False)
 
         cls.learner = BaseSGDLearner(3, 1, validation_frequency=4)
 
@@ -42,7 +42,6 @@ class TestUnsupervisedTraining(SafireTestCase):
         super(TestUnsupervisedTraining, cls).tearDownClass()
 
     def test_training(self):
-
 
         self.assertIsInstance(self.model_handle, ModelHandle)
         self.assertTrue(hasattr(self.model_handle, 'train'))

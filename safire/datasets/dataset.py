@@ -93,9 +93,8 @@ import theano
 import safire.utils.transcorp
 
 
-
-
-# Shouldn't DatasetABC implement the IndexedCorpus interface?
+# Doesn't DatasetABC implement the IndexedCorpus interface?
+# Should it be made explicit?
 class DatasetABC(gensim.utils.SaveLoad):
     """This is the old Dataset, reworked into a wrapper for an IndexedCorpus
     (like, for instance, the ShardedCorpus). It can also serve as a wrapper
@@ -107,7 +106,7 @@ class DatasetABC(gensim.utils.SaveLoad):
         The default train-dev-test split is by proportion of data.
         Subclasses may override it.
         
-        :type data: gensim.corpora.IndexedCorpus
+        :type data: gensim.corpora.IndexedCorpus, numpy.ndarray
         :param data: An indexed corpus, or anything that supports
             slice retrieval.
 
@@ -122,10 +121,9 @@ class DatasetABC(gensim.utils.SaveLoad):
             Will be taken from before the test set.
         """
         try:
-            x = data[0:1]
+            logging.debug('Dataset init: inspecting sliceability...')
+            x = data[0:2]
         except TypeError:
-            #raise TypeError('Dataset initialized with non-sliceable type'
-            #                ' ({0})'.format(type(data)))
             logging.warn('Dataset initialized with non-sliceable type'
                          ' ({0})'.format(type(data)))
 
@@ -370,20 +368,46 @@ class CompositeDataset(DatasetABC):
     >>> recursive[1:3]
     (([[2], [3]], [[-2], [-3]]), ([[2], [3]], [[-2], [-3]]))
 
+    However, it only currently supports building this tree-like structure one
+    by one. Trying ``composite = CompositeDataset(((data1, data2), data3))``
+    will fail.
     """
     def __init__(self, data, dim=None, names=None,
-                 test_p=None, devel_p=None):
+                 test_p=None, devel_p=None, aligned=True):
+        """Initializes a CompositeDataset.
 
+        :param data:
+
+        :param dim:
+
+        :param names:
+
+        :param test_p:
+
+        :param devel_p:
+
+        :type aligned: bool
+        :param aligned: If set, will expect that all the individual datasets
+            from ``data`` have the same length. If unset, will not check this
+            and advertise the length of the first given dataset as its length;
+            only do this if you are flattening the dataset immediately after
+            initialization!
+
+        """
+        self.aligned = aligned
         # Check lengths
-        self.length = len(data[0])
+        self.length = len(data[0])  # TODO: This is very temporary.
         super(CompositeDataset, self).__init__(data, dim=dim,
                                                test_p=test_p,
                                                devel_p=devel_p)
 
-        for d in data:
-            if len(d) != self.length:
-                raise ValueError('All composite dataset components must have'
-                                 ' the same length.') # TODO: more informative
+        if self.aligned:
+            for d in data:
+                if len(d) != self.length:
+                    raise ValueError('All composite dataset components must '
+                                     'have the same length. (Lengths: '
+                                     '{0})'.format(tuple((len(d) for d in data))
+                    ))
 
         if names:
             if len(names) != len(data):
@@ -397,8 +421,23 @@ class CompositeDataset(DatasetABC):
         self.names_dict = {name: i for i, name in enumerate(self.names)}
 
     def __getitem__(self, item):
+        """Retrieval from a composite dataset has several modes:
+
+        >>> features = DatasetABC([[1], [2], [3]], dim=1)
+        >>> targets = DatasetABC([[-1], [-2], [-3]], dim=1)
+        >>> composite = CompositeDataset((features, targets), names=('features', 'targets'))
+        >>> composite[1:3]
+        ([[2], [3]], [[-2], [-3]])
+        >>> composite.__getitem__((1, 2))
+        ([2], [-3])
+
+        """
         try:
-            return tuple(d[item] for d in self.data)
+            # For retrieving a different index from each data point
+            if isinstance(item, tuple):
+                return tuple([d[item[i]] for i, d in enumerate(self.data)])
+            else:
+                return tuple([d[item] for d in self.data])
         except TypeError:
             if isinstance(item, str):
                 return self.data[self.names_dict[item]]
@@ -406,6 +445,10 @@ class CompositeDataset(DatasetABC):
                 raise
 
     def __len__(self):
+        # Ugly hack - returns a structure instead of a number... doesn't work
+        # with test_p and devel_p, though, so I disabled it temporarily.
+        #if not self.aligned:
+        #    return tuple([len(d) for d in self.data])
         return self.length
 
     @staticmethod

@@ -21,7 +21,7 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
 
     TODO: write doctests
     """
-    def __init__(self, w2v_transformer, embeddings_matrix=None,
+    def __init__(self, w2v_transformer=None, embeddings_matrix=None,
                  pickle_embeddings_matrix=None, n_samples=1):
         """Initializes the transformer -- specifically the word2vec embeddings.
 
@@ -51,11 +51,17 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
                 self.embeddings_matrix = cPickle.load(phandle)
             self._embedding_matrix_file = os.path.abspath(embeddings_matrix)
         else:
+            if not w2v_transformer:
+                raise ValueError('Cannot initialize without either embeddings'
+                                 ' matrix (given: {0}) or Word2VecTransformer'
+                                 ' (given: {1})'.format(embeddings_matrix,
+                                                         w2v_transformer))
             self.embeddings_matrix = \
                 self.w2v_transformer_to_embedding_matrix(w2v_transformer)
 
         self.n_in = self.embeddings_matrix.shape[0]   # This is misc.
         self.n_out = self.embeddings_matrix.shape[1]  # This is important.
+        self.dim = self.embeddings_matrix.shape[1]    # This is important.
 
         if pickle_embeddings_matrix:
             with open(pickle_embeddings_matrix, 'wb') as phandle:
@@ -84,13 +90,18 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
             return self._apply(dataset=batch)
 
         # Sample from each document (batch row) one word (column).
+        logging.debug('  [w2v_dt] Batch shape: {0}'.format(batch.shape))
         batch_projection = self.get_batch_sample(batch)
+        logging.debug('  [w2v_dt] Batch projection shape:'
+                      ' {0}'.format(batch_projection.shape))
 
         # Use embedding of given word as document vector.
         # - batch_projection is X * n_in,
         # - embeddings_matrix is n_in * n_out
         embeddings = numpy.dot(batch_projection, self.embeddings_matrix)
 
+        logging.debug('  [w2v_dt] embeddings shape:'
+                      ' {0}'.format(embeddings.shape))
         return embeddings
 
     def get_batch_sample(self, batch):

@@ -297,3 +297,4 @@ def splice_csr(target, t_from, t_to, source, s_from, s_to):
     :param s_to: The index one-past of the last row of the source data to copy.
     """
     # Will need to change all indptrs past the row column.
+    pass

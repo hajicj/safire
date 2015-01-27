@@ -106,6 +106,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
 
         """
         self.n_docs = 0
+        self.output_prefix = output_prefix
 
         self.offsets = []
         self.n_shards = 0
@@ -199,7 +200,7 @@ class ShardedDataset(IndexedCorpus, UnsupervisedDataset):
         one."""
         new_shard = False
         if n is None:
-            n = self.n_shards # Saving the *next* one by default.
+            n = self.n_shards  # Saving the *next* one by default.
             new_shard = True
 
         if not filename:

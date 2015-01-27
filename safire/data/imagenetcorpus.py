@@ -133,3 +133,8 @@ class ImagenetCorpus(CorpusABC):
     def __del__(self):
         if self.__do_cleanup:
             self.input.close()
+
+    def dry_run(self):
+        """Iterates through the corpus once."""
+        for _ in self:
+            pass

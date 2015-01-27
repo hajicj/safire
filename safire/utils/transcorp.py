@@ -7,6 +7,7 @@ import logging
 from gensim.corpora import TextCorpus
 from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
+import numpy
 
 from safire.data import FrequencyBasedTransformer, VTextCorpus
 from safire.data.sharded_corpus import ShardedCorpus
@@ -14,6 +15,7 @@ from safire.data.sharded_corpus import ShardedCorpus
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
 #from safire.datasets.transformations import DatasetTransformer
+import safire.datasets.dataset
 
 
 __author__ = "Jan Hajic jr."
@@ -63,21 +65,27 @@ def get_id2word_obj(corpus):
 
 
 def bottom_corpus(corpus):
-    """Jumps through a stack of TransformedCorpus objects all the way to the
-    bottom corpus."""
+    """Jumps through a stack of TransformedCorpus or Dataset
+    objects all the way to the bottom corpus."""
     current_corpus = corpus
-    while isinstance(current_corpus, TransformedCorpus):
-        current_corpus = current_corpus.corpus
+    if isinstance(current_corpus, TransformedCorpus):
+        return bottom_corpus(current_corpus.corpus)
+    if isinstance(current_corpus, safire.datasets.dataset.DatasetABC):
+        return bottom_corpus(current_corpus.data)
     return current_corpus
 
 
 def dimension(corpus):
     """Finds the topmost corpus that can provide information about its
     output dimension."""
+    if isinstance(corpus, numpy.ndarray) and len(corpus.shape) == 2:
+        return corpus.shape[1]
     current_corpus = corpus
     if hasattr(current_corpus, 'dim'):
         return current_corpus.dim
-    else:
+    if hasattr(current_corpus, 'n_out'):
+        return current_corpus.n_out  # This is stupid! It's an *output* dimension.
+    if hasattr(current_corpus, 'n_in'):
         return current_corpus.n_in  # This is stupid! It's an *output* dimension.
     if isinstance(current_corpus, TextCorpus):
         return len(current_corpus.dictionary)
@@ -99,6 +107,8 @@ def dimension(corpus):
         elif isinstance(current_corpus.obj, TfidfModel):
             if hasattr(current_corpus.obj, 'dfs'):
                 return len(current_corpus.obj.dfs)
+        elif hasattr(current_corpus.obj, 'dim'): # Covers SafireTransformers
+            return current_corpus.obj.dim
         elif hasattr(current_corpus.obj, 'n_out'): # Covers SafireTransformers
             return current_corpus.obj.n_out
         else:
@@ -155,6 +165,9 @@ class KeymapDict(object):
 
     def __getitem__(self, item):
         return self.dict[self.keymap[item]]
+
+    def __len__(self):
+        return len(self.keymap)
 
 
 def log_corpus_stack(corpus):
