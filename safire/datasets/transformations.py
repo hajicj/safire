@@ -69,6 +69,14 @@ class TransformedDataset(Dataset):
         transformed_batch = self.obj[batch]
         return transformed_batch
 
+    def __getitem__(self, item):
+
+        data = self.data[item]
+        #print '  TransformedDataset.__getitem__: operating on data {0} with ' \
+        #      'item {1}'.format(data, item)
+        result = self.obj[data]
+        return result
+
 
 class DatasetTransformer(TransformationABC):
     """DatasetTransformer is a base class analogous to gensim's
@@ -118,6 +126,14 @@ class FlattenComposite(DatasetTransformer):
     """This class flattens a composite dataset into a simple dataset. This
     allows on-the-fly integration of various data sources into unstructured
     batches.
+
+    .. warn::
+
+        All datasets aggregated in the CompositeDataset being flattened must
+        allow list-based retrieval through ``__getitem__``. This *is* the case
+        with Datasets that draw from ShardedCorpus-serialized data, as the
+        ``__getitem__`` call propagates through the dataset transformation stack
+        all the way to the object that is actually supplying the data.
 
     >>> source1 = DatasetABC([[1], [2], [3]], dim=1)
     >>> source2 = DatasetABC([[-1], [-2], [-3]], dim=1)
@@ -187,6 +203,7 @@ class FlattenComposite(DatasetTransformer):
 
 
 class FlattenedDatasetCorpus(TransformedCorpus):
+
     def __init__(self, flatten, dataset):
 
         self.obj = flatten
@@ -209,12 +226,26 @@ class FlattenedDatasetCorpus(TransformedCorpus):
             retrieved = self.corpus[item]
             output = self.item2flat(retrieved)
         else:
+            # Possibly inefficient
             indexes = self.indexes[item]
             idxs_by_dataset = map(list, zip(*indexes))
+            logging.debug('Indexes: {0}, by dataset: {1}'.format(indexes,
+                                                         idxs_by_dataset))
             retrieved = []
             for dataset, idxs in zip(self.corpus.data, idxs_by_dataset):
-                partial = numpy.array([dataset[i] for i in idxs])
+                logging.debug(' Retrieving: dataset {0}, '
+                              'idxs {1}'.format(dataset, idxs))
+
+                #partial = numpy.array([dataset[i:i+1] for i in idxs])
+                # The dataset[i:i+1] hack is here to make sure the retrieved
+                # item will be a 2-D ndarray.
+
+                # Depends here on ability of SwapoutCorpus serialized by
+                # ShardedCorpus to deliver numpy ndarrays from lists of indices.
+                partial = numpy.array(dataset[idxs])
                 retrieved.append(partial)
+            logging.debug('Retrieved shapes:'
+                          ' {0}'.format([r.shape for r in retrieved]))
             output = self.item2flat(retrieved)
 
         return output
@@ -244,7 +275,7 @@ class FlattenedDatasetCorpus(TransformedCorpus):
     def flattened_dimension(composite_dim):
 
         total = 0
-        print 'Composite dim: {0}'.format(composite_dim)
+        logging.debug('Composite dim: {0}'.format(composite_dim))
         for d in composite_dim:
             if isinstance(d, tuple):
                 total += FlattenedDatasetCorpus.flattened_dimension(d)

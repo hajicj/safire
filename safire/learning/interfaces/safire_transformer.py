@@ -15,6 +15,8 @@ from gensim.interfaces import TransformationABC, TransformedCorpus
 from gensim.similarities import Similarity
 import theano
 import theano.printing
+import safire
+from safire.datasets.dataset import DatasetABC
 
 from safire.learning.interfaces import ModelHandle
 from safire.utils import profile_run
@@ -149,6 +151,8 @@ class SafireTransformer(TransformationABC):
         # parameter of TransformedCorpus.
         if isinstance(bow, gensim.interfaces.CorpusABC):
             return self._apply(bow, self.chunksize)
+        if isinstance(bow, DatasetABC):
+            return self._apply(bow)
 
         # Convert chunk to dense. We can use the fact that the array of
         # sparse vectors obtained from a corpus is itself a corpus.

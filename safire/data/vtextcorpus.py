@@ -502,7 +502,7 @@ class VTextCorpus(TextCorpus):
             mirrors a transformation of vertical text documents.
 
         Does NOT support retrieving sentences."""
-        print 'Item: {0}'.format(item)
+        #print 'Item: {0}'.format(item)
         if self.sentences:
             raise ValueError('__getitem__ calls not supported when retrieving'
                              'sentences as documents.')

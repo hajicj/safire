@@ -107,6 +107,8 @@ def dimension(corpus):
         elif isinstance(current_corpus.obj, TfidfModel):
             if hasattr(current_corpus.obj, 'dfs'):
                 return len(current_corpus.obj.dfs)
+        elif hasattr(current_corpus.obj, 'dim'): # Covers SafireTransformers
+            return current_corpus.obj.dim
         elif hasattr(current_corpus.obj, 'n_out'): # Covers SafireTransformers
             return current_corpus.obj.n_out
         else:
@@ -163,6 +165,9 @@ class KeymapDict(object):
 
     def __getitem__(self, item):
         return self.dict[self.keymap[item]]
+
+    def __len__(self):
+        return len(self.keymap)
 
 
 def log_corpus_stack(corpus):

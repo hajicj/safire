@@ -45,7 +45,7 @@ class TestDatasetTransformers(SafireTestCase):
         self.assertEqual(flat[3:5].all(), self.full_data[3:5].all())
         self.assertEqual(flat[0:3].all(), self.full_data[0:3].all())
 
-    def test_text2im_to_indexes(self):
+    def test_flatted_indexed(self):
 
         # Text corpus
         vtlist_filename = os.path.join(self.data_root,
@@ -78,7 +78,6 @@ class TestDatasetTransformers(SafireTestCase):
                                  serialization_ifile)
         self.icorp = iserializer[self.icorp]
 
-
         # Create multimodal dataset
         tdata = Dataset(self.vtcorp)
         idata = Dataset(self.icorp)
@@ -109,7 +108,7 @@ class TestDatasetTransformers(SafireTestCase):
 
         batch = multimodal_flat[:4]
 
-        print batch.shape
+        self.assertEqual(batch.shape[1], tdata.dim + idata.dim)
 
 
 

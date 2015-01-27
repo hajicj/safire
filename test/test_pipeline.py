@@ -17,7 +17,8 @@ from safire.learning.interfaces import SafireTransformer
 from safire.learning.learners import BaseSGDLearner
 from safire.learning.models import DenoisingAutoencoder
 from safire.data.imagenetcorpus import ImagenetCorpus
-from safire.datasets.transformations import FlattenComposite
+from safire.datasets.transformations import FlattenComposite, docnames2indexes
+from safire.utils import parse_textdoc2imdoc_map
 from safire.utils.transcorp import dimension, get_id2word_obj
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
@@ -124,39 +125,69 @@ class TestPipeline(SafireTestCase):
 
         self.w2v_t = Word2VecTransformer(self.edict_pkl_fname,
                                          id2word=get_id2word_obj(self.pipeline))
-
+        print self.w2v_t
+        self.w2v = Word2VecSamplingDatasetTransformer(w2v_transformer=self.w2v_t)
 
         # Building datasets
         text_dataset = Dataset(self.pipeline, dim=dimension(self.pipeline))
         text_dataset = self.w2v[text_dataset]
 
         print 'Text dataset: {0}'.format(text_dataset)
+        print '    text dim: {0}'.format(text_dataset.dim)
 
         img_dataset = Dataset(ipipeline, dim=dimension(ipipeline))
 
-        print 'Image dataset length: {0}'.format(len(img_dataset))
+        print 'Image dataset: {0}'.format(img_dataset)
+        print '    image dim: {0}'.format(img_dataset.dim)
 
+        print '--Constructing multimodal dataset--'
         multimodal_dataset = CompositeDataset((text_dataset, img_dataset),
                                               names=('txt', 'img'),
                                               test_p=0.1, devel_p=0.1,
                                               aligned=False)
-        flatten = FlattenComposite(multimodal_dataset) # Missing: indexes
+
+        print '--Obtaining text-image mapping--'
+        # Get text-image mapping
+        t2i_file = os.path.join(self.data_root,
+                                self.loader.layout.textdoc2imdoc)
+        with open(t2i_file) as t2i_handle:
+            t2i_linecount = sum([1 for _ in t2i_handle])
+
+        t2i_map = parse_textdoc2imdoc_map(t2i_file)
+        t2i_list = [[text, image]
+                    for text in t2i_map
+                    for image in t2i_map[text]]
+        t2i_indexes = docnames2indexes(multimodal_dataset, t2i_list)
+
+        print '--Creating flattened dataset--'
+        flatten = FlattenComposite(multimodal_dataset,
+                                   indexes=t2i_indexes)
         flat_multimodal_corpus = flatten[multimodal_dataset]
         flat_multimodal_dataset = Dataset(flat_multimodal_corpus)
 
+        print '--Creating model handle--'
         self.model_handle = DenoisingAutoencoder.setup(flat_multimodal_dataset,
             n_out=10,
             reconstruction='cross-entropy',
-            heavy_debug=True)
+            heavy_debug=False)
+
+        print 'Model weights shape: {0}'.format(
+            self.model_handle.model_instance.W.get_value(borrow=True).shape)
+
         batch = flat_multimodal_dataset.train_X_batch(0, 1)
-        print batch.shape
+        print 'Batch shape: {0}'.format(batch.shape)
 
         self.learner = BaseSGDLearner(3, 1, validation_frequency=4)
 
+        print '--running learning--'
         sftrans = SafireTransformer(self.model_handle,
                                     flat_multimodal_dataset,
                                     self.learner)
         output = sftrans[flat_multimodal_dataset]
+
+        print '--output--'
+        print 'Type: {0}'.format(type(output))
+        print 'Output: {0}'.format(output)
 
 ###############################################################################
 

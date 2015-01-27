@@ -233,7 +233,7 @@ class ShardedCorpus(IndexedCorpus):
             for i, doc in enumerate(doc_chunk):
                 doc = dict(doc)
                 #logging.warn('Doc: {0}, chunk {1}'.format(doc, doc_chunk))
-                logging.warn('Current shard shape: {0}'.format(current_shard.shape))
+                #logging.warn('Current shard shape: {0}'.format(current_shard.shape))
                 current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
 
             # Handles the updating as well.
@@ -454,7 +454,7 @@ class ShardedCorpus(IndexedCorpus):
                 return self._guess_n_features(corpus.corpus)
         else:
             if not self.dim:
-                print self.dim
+                #print self.dim
                 raise TypeError('Couldn\'t find number of features, '
                                  'refusing to guess.'
                                  '(Type of corpus: %s' % type(corpus))

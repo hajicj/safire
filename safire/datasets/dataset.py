@@ -121,10 +121,9 @@ class DatasetABC(gensim.utils.SaveLoad):
             Will be taken from before the test set.
         """
         try:
-            x = data[0:1]
+            logging.debug('Dataset init: inspecting sliceability...')
+            x = data[0:2]
         except TypeError:
-            #raise TypeError('Dataset initialized with non-sliceable type'
-            #                ' ({0})'.format(type(data)))
             logging.warn('Dataset initialized with non-sliceable type'
                          ' ({0})'.format(type(data)))
 
