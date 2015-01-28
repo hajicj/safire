@@ -14,6 +14,7 @@ import safire
 from safire.data.layouts import DataDirLayout
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.data import VTextCorpus, FrequencyBasedTransformer
+from safire.utils.transcorp import get_composite_source, reset_vtcorp_input
 from safire.utils.transformers import GeneralFunctionTransform
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.data.serializer import Serializer
@@ -23,7 +24,8 @@ from safire.utils import parse_textdoc2imdoc_map
 from safire.datasets.transformations import docnames2indexes, FlattenComposite
 from safire.learning.models import DenoisingAutoencoder
 from safire.learning.learners import BaseSGDLearner
-from safire.learning.interfaces import SafireTransformer
+from safire.learning.interfaces import SafireTransformer, \
+    MultimodalClampedSamplerModelHandle
 
 __author__ = 'Jan Hajic jr.'
 
@@ -121,10 +123,18 @@ vtcorp_settings = {'colnames': ['form', 'lemma', 'tag'],
                    # elsewhere).
                    }
 vtlist = os.path.join(data_root, layout.vtlist)
+# This file contains a list of vertical text files that together form documents
+# of the VTextCorpus we will be using for reading text data.
+
+test_vtlist = os.path.join(data_root, layout.vtlist)
+# Let's pretend this is a different corpus that we actually want to process
+# using our multimodal pipeline.
+
 serialization_vtname = 'serialized.vt.shcorp'
 serialization_vtfile = os.path.join(data_root,
                                     layout.corpus_dir,
                                     serialization_vtname)
+# We use this file
 
 # Used in image pipeline
 icorp_settings = {'delimiter': ';',
@@ -313,15 +323,21 @@ def build_image_pipeline():
     # a specific csv file.
 
     tanh = GeneralFunctionTransform(numpy.tanh,
-                                    multiplicative_coef=0.3)
+                                    multiplicative_coef=0.3,
+                                    outer_multiplicative_coef=0.99975)
     pipeline = tanh[pipeline]
     # We use a different multiplicative coefficient here, because the image
-    # data falls into a different range.
+    # data falls into a different range. Note the outer_multiplicative_coef
+    # argument: the GeneralFunctionTransform allows not only to multiply the
+    # input elements before applying the function (here: numpy.tanh), but also
+    # afterwards. We use this to prevent inadvertent rounding-error zeros in
+    # logarithmic functions down the line in neural network training.
 
     serializer = Serializer(pipeline, ShardedCorpus,
                             fname=serialization_ifile)
     pipeline = serializer[pipeline]
-    # Mustn't forget to serialize.
+    # Mustn't forget to serialize, so that pipeline __getitem__ supports slices
+    # and lists as retrieval keys.
 
     return pipeline
 
@@ -332,9 +348,10 @@ def build_multimodal_pipeline(text_pipeline, image_pipeline):
     text_dataset = Dataset(text_pipeline)
     image_dataset = Dataset(image_pipeline)
     # The Dataset class is a wrapper around a pipeline that adds some
-    # functionality. Datasets provide two things over pipelines:
+    # functionality. All Datasets must provide two things over corpus-based
+    # pipelines:
     #
-    # * they guarantee a dimension,
+    # * they guarantee a known dimension,
     # * they provide a batch-retrieval interface using batch index and batch
     #   size.
     #
@@ -450,10 +467,60 @@ if __name__ == '__main__':
     # And -- the SafireTransformer is again just one more pipeline block!
     # There are now the 100-dimensional representations of the joint text-image
     # model in output. Woot!
-    #
+
+
     # However, we want to do something a bit different than transform the data
     # into a common representation. We want to derive an image representation
     # based on the input text.
+    #
+    # We now need to construct a new pipeline for runtime operation -- actually
+    # assigning images to texts. For training, we had a text and image pipeline
+    # and joined them together to get a joint generative model of text and
+    # images. Now, we have a setting with texts as inputs and images as outputs
+    # of some complex transformation of the input texts.
+    #
+    # The new pipeline comes in three stages: we first need to replicate the
+    # text processing part, then we apply the joint model to generate image
+    # features and finally we need to *reverse* the image pipeline to get to
+    # image features in our original space. In this space, we will then search
+    # for an available image that is closest to our generated representation of
+    # the input text in the space of images.
+
+    text_runtime_pipeline = get_composite_source(mmdata, 'text')
+    # This is the first stage of the new pipeline. We have to process the text
+    # data exactly the same way, so we just re-use the already established
+    # pipeline.
+    #
+    # However, remember that the original
+    # VTextCorpus is still set to read from our training data. We could do
+    # one of two things:
+    #
+    # * create a new VTextCorpus with exactly the same settings,
+    # * reset the inputs of the original VTextCorpus.
+    #
+    # The first option is the more complicated one, since there is quite a bit
+    # more to making a VTextCorpus that would process some new texts exactly
+    # as the old one than just copying the settings we have described earlier;
+    # one needs to understand how the vocabulary of the corpus is constructed,
+    # because we want the tokens to retain their IDs from training data. Their
+    # (integer) IDs derived during the first iteration through the corpus
+    # are what identifies their corresponding input neuron, so if the mapping
+    # changed, we would find ourselves in an entirely different space!
+
+    reset_vtcorp_input(text_runtime_pipeline, test_vtlist)
+    # The second option, resetting the input of the VTextCorpus, is made easy
+    # through this utility function. The function resets everything that needs
+    # to be reset (like the list of vtext files, the mapping from document names
+    # to document IDs or number of processed documents) but doesn't reset the
+    # vocabulary and forbids the new documents from changing it.
+    # (This is another nifty thing from utils/transcorp.py.)
+
+    text2img_pipeline = text_runtime_pipeline
+    # We just rename the pipeline to something more informative.
+
+    # Now we need to construct the key element in our new pipeline: use our
+    # multimodal model to generate an image representation based on a text
+    # representation.
     #
     # \begin{Digression}[WhySoComplicated?][YouCanSkipThis]
     #
@@ -477,10 +544,13 @@ if __name__ == '__main__':
     # It so turns out (surprise, surprise!) that there is a handle available
     # for sampling image features from the joint model with text features
     # clamped to input values. (This shows the idea of model handles: you want
-    # the model to do fancy stuff? Implement a handle! And the model class stays
-    # unchanged.) Let's initialize it using the 'clone()' mechanism, which
-    # allows deriving handles of different types from each other.
+    # the model to do fancy stuff? Implement a handle! Meanwhile, the model
+    # class stays the same.) Let's initialize it using the 'clone()' mechanism,
+    # which allows deriving handles of different types from each other.
     text2img_handle = MultimodalClampedSamplerModelHandle.clone(
+        # MultimodalClampedSamplerModelHandle is the type of the text-->image
+        # sampling handle. Cloning is implemented as a class method of the
+        # target class.
         sftrans.model_handle,
         # This is the source handle. The model instance to which it is attached
         # is still the one we trained; our new sampling handle will attach
@@ -498,16 +568,72 @@ if __name__ == '__main__':
         # FlattenedCorpus block is put is the CompositeDataset, from which we
         # can retrieve the text dataset under its name - 'text', and this
         # dataset is a simple one, so we can directly use its dimension. Whew.
-        dim_image=mmdata.data.corpus.corpus.corpus['img'].dim,
+        dim_img=get_composite_source(mmdata, 'img').dim,
         # If you think that was horrible, you're right! Here is a convenient
-        # function for deriving the individual dimensions of data sources
-        # from a flattened composite dataset. (Generally, the utils.transcorp
-        # module contains various important functions for working with
-        # pipelines. Specifically, check out the 'dimension()' function
-        # which will tell you what space the pipeline's output lives in. That
-        # one is a matter of life and death in safire.)
+        # function for looking up individual data sources from a flattened
+        # composite dataset.
+        # (Generally, the utils.transcorp module contains various important
+        # functions for working with pipelines. Specifically, the 'dimension()'
+        # function which will tell you what space the pipeline's output lives
+        # in is a matter of life and death in safire.)
         k=10
         # The number of Gibbs sampling steps between the input layer (with
         # activations on the neurons corresponding to text features clamped to
-        # the input values)
+        # the input values).
     )
+
+    text2img_transformer = SafireTransformer(text2img_handle)
+    # Here, we are initializing SafireTransformer without training. The
+    # text2img handle already uses the model instance trained earlier.
+    # However, the handle is of a different type - it performs the
+    # clamped sampling operation instead of transforming the joint inputs.
+
+    text2img_pipeline = text2img_transformer[text2img_pipeline]
+    # Now we construct this key block of our runtime text-->image pipeline.
+    # At this point, all we have left is to reverse the image processing
+    # pipeline.
+    #
+    # Q: Could we have just used the text_pipeline from earlier instead of
+    #    running the get_composite_source() function?
+    # .
+    # .
+    # .
+    # .
+    # .
+    # A: Not quite. The build_text_pipeline() does not return a Dataset.
+    #    SafireTransformer needs a DatasetABC-derived class to operate, because
+    #    it needs __getitem__ slicing/list support. Of course, we could've added
+    #    the dataset: text_runtime_pipeline = Dataset(text_pipeline)
+
+    tan = GeneralFunctionTransform(numpy.tan,
+                                   multiplicative_coef=1.0/0.99975,
+                                   outer_multiplicative_coef=3.0)
+    # We now invert the GeneralFunctionTransform that we used in constructing
+    # the image pipeline. Wher we first had:
+    #
+    # Y = outer * numpy.tanh(inner * X),
+    #
+    # we now need:
+    #
+    # X = (1 / inner) * numpy.tan((1 / outer) * Y)
+    #
+    # to restore the original values.
+    #
+    # Inverting things is generally inconvenient and is here only to illustrate
+    # all the various gotchas of pipeline-building. Unfortunately, there is no
+    # way to construct an inverse transformation automatically (for instance
+    # the sin(x) transform cannot be inverted). You have to make a tradeoff
+    # between preserving the similarity structure of the original image space
+    # and the stage at which you serialize and build the index, vs. the
+    # complexity of inverting the image processing pipeline.
+
+    text2img_pipeline = tan[text2img_pipeline]
+    # Nothing new, just apply the transformer.
+
+    ideal_images = [ideal_image for ideal_image in text2img_pipeline]
+    # We now iterate over the new files and obtain image outputs.
+
+    # Done!
+    #
+    # Now we'd just need to build a similarity index, but that truly is outside
+    # the scope of this tutorial. (Hint: use gensim's Similarity class.)

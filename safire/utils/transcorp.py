@@ -118,20 +118,20 @@ def dimension(corpus):
         raise ValueError('Cannot find output dimension of corpus %s' % str(corpus))
 
 
-def composite_source_dimension(pipeline, name):
-    """Derives the dimension of a named data source from a composite dataset
-    down the line."""
+def get_composite_source(pipeline, name):
+    """Retrieves the pipeline of a named data source from a composite dataset
+    down the (presumably composite) pipeline."""
     if not isinstance(name, str):
         raise TypeError('Composite source dimension can only be derived for'
                         'data source names, you supplied {0} of type {1}.'
                         ''.format(name, type(name)))
     if isinstance(pipeline, safire.datasets.dataset.CompositeDataset):
-        return dimension(pipeline[name])
+        return pipeline[name]
     else:
         if isinstance(pipeline, TransformedCorpus):
-            return composite_source_dimension(pipeline.corpus)
+            return get_composite_source(pipeline.corpus, name)
         elif isinstance(pipeline, safire.datasets.dataset.DatasetABC):
-            return composite_source_dimension(pipeline.data)
+            return get_composite_source(pipeline.data, name)
         else:
             raise TypeError('Cannot derive composite source dimension from'
                             'a non-pipeline object (type: {0}). Are you sure'
