@@ -12,18 +12,18 @@ import numpy
 
 import safire
 from safire.data.layouts import DataDirLayout
+from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.data import VTextCorpus, FrequencyBasedTransformer
+from safire.utils.transformers import GeneralFunctionTransform
+from safire.data.sharded_corpus import ShardedCorpus
 from safire.data.serializer import Serializer
+from safire.data.imagenetcorpus import ImagenetCorpus
+from safire.datasets.dataset import Dataset, CompositeDataset
+from safire.utils import parse_textdoc2imdoc_map
+from safire.datasets.transformations import docnames2indexes, FlattenComposite
 from safire.learning.models import DenoisingAutoencoder
 from safire.learning.learners import BaseSGDLearner
-from safire.data.imagenetcorpus import ImagenetCorpus
-from safire.data.sharded_corpus import ShardedCorpus
-from safire.datasets.dataset import Dataset, CompositeDataset
 from safire.learning.interfaces import SafireTransformer
-from safire.datasets.transformations import docnames2indexes, FlattenComposite
-from safire.utils import parse_textdoc2imdoc_map
-from safire.utils.transformers import GeneralFunctionTransform
-from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 
 __author__ = 'Jan Hajic jr.'
 
@@ -424,16 +424,30 @@ if __name__ == '__main__':
                                               reconstruction='cross-entropy')
     # The setup() method provides a model handle, with a .train(), .validate(),
     # .test() and .run() method.
+    #
+    # Models are just definitions. Model handles, on the other hand, are ways
+    # of making the model do something: train it, run the learned
+    # transformation, sample from the hidden representation, etc. We do not
+    # even need to instantiate the model directly, it all gets done during
+    # the setup. (If necessary, for some logging or inspection, the model is
+    # always available in the handle as 'model_handle.model_instance'.)
 
-    learner = BaseSGDLearner(n_epochs=3, batch_size=1, validation_frequency=4)
-    # The learner will run the training iterations. Not yet, though.
+    learner = BaseSGDLearner(n_epochs=3, b_size=1, validation_frequency=4)
+    # The learner will run the training iterations. Not yet, though - it is only
+    # getting initialized here. The learner controls whether learning should
+    # stop, can log and visualize progress and other stuff. However, it expects
+    # a fully built training function (provided through a model handle, when
+    # training time comes).
 
     sftrans = SafireTransformer(model_handle,
                                 mmdata,
                                 learner)
+    # The training process runs during SafireTransformer initialization. If
+    # we initialized the transformer without a dataset and a learner, it will
+    # accept the model handle as-is, without attempting to train it.
+
     output = sftrans[mmdata]
     # And -- the SafireTransformer is again just one more pipeline block!
     # There are now the 100-dimensional representations of the joint text-image
     # model in output. Woot!
-    # The training process was all run during SafireTransformer initialization.
 
