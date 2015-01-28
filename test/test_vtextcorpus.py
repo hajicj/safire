@@ -126,9 +126,6 @@ class TestVTextCorpus(SafireTestCase):
                 document_handle)
             bow = self.pfiltered_corpus.doc2bow(doc)
 
-        print tbow
-        print bow
-
         tcorp_infix = '.pf0.3.pff.tfidf'
         dloader = MultimodalShardedDatasetLoader(self.data_root, 'test-data')
         dloader.save_text_corpus(tfidf_corpus, tcorp_infix)
@@ -139,7 +136,7 @@ class TestVTextCorpus(SafireTestCase):
                 document_handle)
             ltbow = loaded_tcorp.doc2bow(doc)
 
-        print ltbow
+        #print ltbow
 
         self.assertEqual(tbow, ltbow)
 
@@ -155,20 +152,23 @@ class TestVTextCorpus(SafireTestCase):
             doc_direct = self.corpus.doc2bow(doc_direct, allow_update=True)
 
         self.assertEqual(doc, doc_direct)
-        #
-        # try:
-        #     with gzip.open(os.path.join(self.data_root, self.vtlist[0])) as vt_handle:
-        #
-        #         output = self.corpus[vt_handle]
-        #
-        #     print output
-        # except Exception:
-        #     self.assertEqual(True, False)
-        #     raise
-        # else:
-        #     self.assertTrue(True)
+
+        # Caching?
+        doc = self.corpus[7]
+        self.assertEqual(doc, doc_direct)
 
     # TODO: tests for doc2id, id2doc
+
+    def test_saveload(self):
+
+        savename = os.path.join(self.data_root,
+                                'corpora',
+                                'saved.vtcorp')
+        self.corpus.save(fname=savename)
+        loaded_corpus = VTextCorpus.load(savename)
+        print 'Getitem: {0}'.format(self.corpus.__getitem__)
+        print 'loaded : {0}'.format(loaded_corpus.__getitem__)
+        self.assertIsInstance(loaded_corpus, VTextCorpus)
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()

@@ -480,8 +480,6 @@ class VTextCorpus(TextCorpus):
         if self.__do_cleanup:
             self.input.close()
 
-    #@self._memory.cache  # ??? How to make this work? _memory and _tempdir
-                          # as class attributes?
     def __getitem__(self, item, allow_update=True):
         """If item is an integer, returns representation of the item-th document
         from the current vtlist.
@@ -517,10 +515,8 @@ class VTextCorpus(TextCorpus):
 
             return self.doc2bow(document, allow_update=allow_update)
 
-        raise TypeError('Calling __getitem__ with a handle has been deprecated.')
-        #document, _ = self.parse_document_and_sentences(item)
-        #out = self.doc2bow(document, allow_update=allow_update)
-        #return out
+        raise TypeError('Calling __getitem__ with a handle has been'
+                        ' deprecated.')
 
     def _init_positional_filter(self, positional_filter, positional_full_freqs):
         """Initializes position-based filtering."""
@@ -586,3 +582,14 @@ class VTextCorpus(TextCorpus):
             kwargs['ignore'] = frozenset([v for v in kwargs['ignore']]
                                          + attrs_to_ignore)
         super(VTextCorpus, self).save(*args, **kwargs)
+
+    @classmethod
+    def load(cls, fname, mmap=None):
+        corpus = super(VTextCorpus, cls).load(fname, mmap=mmap)
+
+        # Restore ignored __getitem__
+        corpus.__getitem__ = VTextCorpus.__getitem__
+        corpus.__getitem__ = corpus._memory.cache(corpus.__getitem__)
+        # Restoring works, but caching doesn't..?
+
+        return corpus

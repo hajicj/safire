@@ -9,44 +9,124 @@ import logging
 import os
 from gensim.models import TfidfModel
 import numpy
-from safire.learning.interfaces import SafireTransformer
-from safire.learning.learners import BaseSGDLearner
-from safire.learning.models import DenoisingAutoencoder
-from safire.data.imagenetcorpus import ImagenetCorpus
+
+import safire
+from safire.data.layouts import DataDirLayout
+from safire.data import VTextCorpus, FrequencyBasedTransformer
 from safire.data.serializer import Serializer
+from safire.learning.models import DenoisingAutoencoder
+from safire.learning.learners import BaseSGDLearner
+from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.datasets.dataset import Dataset, CompositeDataset
+from safire.learning.interfaces import SafireTransformer
 from safire.datasets.transformations import docnames2indexes, FlattenComposite
 from safire.utils import parse_textdoc2imdoc_map
 from safire.utils.transformers import GeneralFunctionTransform
-from safire.data import VTextCorpus, FrequencyBasedTransformer
-import safire
-from safire.data.layouts import DataDirLayout
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 
 __author__ = 'Jan Hajic jr.'
 
 # These variables are settings for the pipeline. You can ignore them for now
 # and come back to them when you understand how a pipeline is built up.
-# The individual steps are heavily commented and sometimes
+# The individual steps are heavily commented.
+
+# Where are our data?
 data_root = safire.get_test_data_root()
 layout = DataDirLayout('test-data')
+# The DataDirLayout defines how a directory for safire experiments is structured
+# (but you don't really have to use that layout, it just makes life a bit easier
+# if you do more experiments on the same data).
 
-vtcorp_settings = {'token_filter': PositionalTagTokenFilter(['N', 'A', 'V'], 0),
+# Parameters used in text pipeline:
+
+# This is a dictionary of keyword arguments for the VTextCorpus constructed in
+# build_text_pipeline(). Most of the entries are the defaults for files output
+# by UFAL's MorphoDiTa tagger.
+vtcorp_settings = {'colnames': ['form', 'lemma', 'tag'],
+                   # This specifies that the vertical text will have 3 columns.
+                   # For the purposes of the corpus, their names are 'form',
+                   # 'lemma' and 'tag' (in this order). The vertical text format
+                   # doesn't really define which columns there are and what they
+                   # should be called, it only defines that there's one token
+                   # per line and that sentences are separated by a blank line.
+                   'retcol': 'lemma',
+                   # This specifies that the vocabulary of the corpus will be
+                   # built from entries in the 'lemma' column. (We could also
+                   # have a vocabulary of forms, if necessary, or of tags, for
+                   # some morpho- or syntactic features.) We could also use
+                   # 'first', 'second' and 'third' as the colnames parameter
+                   # and set retcol to 'second', or any other naming scheme, as
+                   # long as retcol is found in colnames.
+                   # Even if your vertical text files only have one column, you
+                   # have to specify the retcol.
+                   'delimiter': '\t',
+                   # This specifies that columns of the vtext file are separated
+                   # by tabspace. Nothing more, nothing less.
+                   'gzipped': True,
+                   # This specifies that the individual vertical text files
+                   # have been compressed using gzip.
+                   'token_transformer': 'strip_UFAL',
+                   # This parameter ordinarily accepts a function that is
+                   # applied to each token before accepting it into the
+                   # vocabulary. The 'strip_UFAL' is a shortcut for stripping
+                   # MorphoDiTa output lemmas to their short form, e.g.
+                   # na-1_:W to na-1. (Disambiguation markers like -1, -2 etc.
+                   # are retained.) We lied a bit in the 'retcol' explanation:
+                   # the vocabulary of the corpus will be built from entries
+                   # in the 'retcol' column, processed by the token_transformer.
+                   # (Token_transformer can also be None and the exact value
+                   # from retcol is retained.)
+                   'token_filter': PositionalTagTokenFilter(['N', 'A', 'V'], 0),
+                   # This sets up filtering by part of speech. Specifically,
+                   # we want to retain all tokens that have the values 'N', 'A'
+                   # or 'V' in the 0-th position of their tag. This filter is
+                   # specifically applied only to the 'tag' column, but it can
+                   # be extended using its 'tag_colname' attribute to filter
+                   # other columns (such as the 'form' column for something
+                   # that starts with a capital letter).
                    'pfilter': 0.2,
+                   # This parameter sets up filtering by position in document,
+                   # retaining tokens from only the first 0.2 of a document.for
+                   # For our newspaper data, we found that this is a reasonable
+                   # way of extracting only the keywords relevant to the scope
+                   # of the article as a whole and not partial topics.
                    'pfilter_full_freqs': True,
+                   # In order to better capture the relative importance of the
+                   # keywords found in the first 'pfilter' proportion of the
+                   # text, we compute these keywords' frequencies from the
+                   # whole document, not just this first 'pfilter' proportion.
                    'filter_capital': True,
-                   'precompute_vtlist': True}
+                   # This setting throws away all tokens that start with a
+                   # capital letter. Note that this applies to the 'retcol'
+                   # column, so in our case, we throw away *lemmas* that are
+                   # capitalized, not forms.
+                   'precompute_vtlist': True,
+                   # This setting loads the list of vertical text files into
+                   # memory at initialization. This way, our VTextCorpus will
+                   # be able to respond to __getitem__ requests: for the i-th
+                   # document, it will process the vertical text file that is
+                   # i-th in the vtlist. Also, we will know the length of
+                   # the corpus -- the number of documents -- right at
+                   # construction time.
+                   # Technically, this option can be switched off, which can be
+                   # useful in some online setting where the input file is
+                   # a socket and iterating over it will gradually yield more
+                   # and more documents. However, in that case, the corpus will
+                   # only support iterating over it one by one, not
+                   # random-access retrieval, and dimensionality data (which are
+                   # derived from the size of the VTextCorpus vocabulary) will
+                   # never be quite reliable (until we forbid updating the
+                   # vocabulary, which can also be done -- but more on that
+                   # elsewhere).
+                   }
 vtlist = os.path.join(data_root, layout.vtlist)
 serialization_vtname = 'serialized.vt.shcorp'
 serialization_vtfile = os.path.join(data_root,
                                     layout.corpus_dir,
                                     serialization_vtname)
 
-freqfilter_settings = {'k': 110,
-                       'discard_top': 10}
-
-
+# Used in image pipeline
 icorp_settings = {'delimiter': ';',
                   'dim': 4096,
                   'label': ''}
