@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-``multimodal_pipeline.py`` is a tutorial that trains a multimodal pipeline
+``tutorial_full.py`` is a tutorial that trains a multimodal pipeline
 from some test data. It shows how to set up a complex training
 scenario with multiple data sources.
 """
@@ -450,4 +450,64 @@ if __name__ == '__main__':
     # And -- the SafireTransformer is again just one more pipeline block!
     # There are now the 100-dimensional representations of the joint text-image
     # model in output. Woot!
-
+    #
+    # However, we want to do something a bit different than transform the data
+    # into a common representation. We want to derive an image representation
+    # based on the input text.
+    #
+    # \begin{Digression}[WhySoComplicated?][YouCanSkipThis]
+    #
+    # This is not as trivial as in a supervised feedforward setting.
+    # Our model is based on jointly
+    # representing the common information from both modalities, not transforming
+    # one to the other using a feedforward pipeline. But our model can be used
+    # as a generative one (it so turns out that a DenoisingAutoencoder with
+    # values within (0, 1), sigmoid activation and cross-entropy reconstruction
+    # can be interpreted as a genreative one, but now is not the time for the
+    # math), so we can sample from it. We fix the text inputs and want to
+    # sample the outputs, using Gibbs sampling steps that sample activations
+    # first for the hidden layer based on the text inputs, then for the visible
+    # layer based on the hidden activation samples, and so on, like a ping-pong
+    # match. However, because we know what our text inputs are, we clamp those
+    # to the input values, changing only the visible activations corresponding
+    # to the image features. This process will give us the image representation.
+    #
+    # \end{Digression}
+    #
+    # It so turns out (surprise, surprise!) that there is a handle available
+    # for sampling image features from the joint model with text features
+    # clamped to input values. (This shows the idea of model handles: you want
+    # the model to do fancy stuff? Implement a handle! And the model class stays
+    # unchanged.) Let's initialize it using the 'clone()' mechanism, which
+    # allows deriving handles of different types from each other.
+    text2img_handle = MultimodalClampedSamplerModelHandle.clone(
+        sftrans.model_handle,
+        # This is the source handle. The model instance to which it is attached
+        # is still the one we trained; our new sampling handle will attach
+        # itself to the same model instance, utilizing the work done through
+        # the previous handle.
+        dim_text=mmdata.data.corpus.corpus.corpus['text'].dim,
+        # Count with us: mmdata is the Dataset wrapper around the pipeline
+        # multimodal_pipeline, mmdata.data is the multimodal pipeline, the last
+        # block of which (mmdata.data.corpus) is a SwapoutCorpus (it's a block
+        # created by the Serializer). The 'corpus' member of the SwapoutCorpus
+        # points to the previous top block of the pipeline, which is another
+        # TransformedCorpus subclass, this time the FlattenedCorpus - the block
+        # created by the FlattenComposite dataset transformer (this would be
+        # mmdata.data.corpus.corpus). Finally, the 'corpus' on which this
+        # FlattenedCorpus block is put is the CompositeDataset, from which we
+        # can retrieve the text dataset under its name - 'text', and this
+        # dataset is a simple one, so we can directly use its dimension. Whew.
+        dim_image=mmdata.data.corpus.corpus.corpus['img'].dim,
+        # If you think that was horrible, you're right! Here is a convenient
+        # function for deriving the individual dimensions of data sources
+        # from a flattened composite dataset. (Generally, the utils.transcorp
+        # module contains various important functions for working with
+        # pipelines. Specifically, check out the 'dimension()' function
+        # which will tell you what space the pipeline's output lives in. That
+        # one is a matter of life and death in safire.)
+        k=10
+        # The number of Gibbs sampling steps between the input layer (with
+        # activations on the neurons corresponding to text features clamped to
+        # the input values)
+    )

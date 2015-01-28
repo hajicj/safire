@@ -42,6 +42,7 @@ from safire.utils.transcorp import dimension, get_transformers, \
 
 __author__ = 'Jan Hajic jr.'
 
+
 def construct_pipeline_labels(labels):
     """Correctly concatenates the labels for one pipeline, to produce their full
     versions.
@@ -83,6 +84,7 @@ def emit_results(results):
     return output
 
 ###############################################################################
+
 
 def baseline_run(input_corpus, text_index, image_index, multimodal_dataset,
                  retrieve_num_best=10):
