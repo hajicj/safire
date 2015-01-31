@@ -209,6 +209,7 @@ def main(args):
     _starttime = time.clock()
     if args.root == 'test':
         args.root = safire.get_test_data_root()
+        args.name = 'test-data'
     logging.info('Initializing dataset loader with root %s, name %s' % (args.root, args.name))
     loader = MultimodalShardedDatasetLoader(args.root, args.name)
 
