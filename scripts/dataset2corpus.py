@@ -27,6 +27,8 @@ from safire.utils.transformers import GlobalUnitScalingTransform, \
 
 
 description="""
+!!!IGNORE THIS DESCRIPTION!!!
+
 Given a vtlist, serializes the dataset using gensim.corpora.MmCorpus.serialize
 and saves the VTextCorpus used for reading the vtlist.
 
