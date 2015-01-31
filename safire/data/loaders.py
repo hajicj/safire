@@ -263,8 +263,9 @@ class MultimodalDatasetLoader(object):
         if 'input_root' in vtext_corpus_args \
                 and vtext_corpus_args['input_root'] != self.root:
             logging.warn(
-                'Building corpora: mismatched vtext args input root (%s) and loader input root (%s).' % (
-                vtext_corpus_args['input_root'], self.root))
+                'Building corpora: mismatched vtext args input root ({0}) '
+                'and loader input root ({1}).'
+                ''.format(vtext_corpus_args['input_root'], self.root))
 
         # When filling in input root, we don't want a side-effect to occur
         # to the input argument.

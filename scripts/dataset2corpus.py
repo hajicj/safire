@@ -1,5 +1,23 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""Builds a preprocessing pipeline from corpora. Serializes at the end and saves
+the pipeline object. See::
+
+ dataset2corpus.py -h
+
+for help on individual options; especially -r and -n for data lookup, -i for
+loading an already-saved pipeline and -l for saving names.
+
+If you run this script with -r test, it will run itself on the default test
+data (useful if you are a developer - for debugging, until I add a unit test
+for the main() function...).
+
+No casts to dataset yet, this operates on corpora only. Also, the order of
+applied operation is fixed; a more general pipeline-building apparatus is
+scheduled for later.
+"""
+
+
 import cPickle
 import os
 import argparse
@@ -28,18 +46,6 @@ from safire.utils.transformers import GlobalUnitScalingTransform, \
     NormalizationTransform, CappedNormalizationTransform
 
 
-description="""
-Given a vtlist, serializes the dataset using gensim.corpora.MmCorpus.serialize
-and saves the VTextCorpus used for reading the vtlist.
-
-Usage:
-
-   dataset2corpus -l dataset.vtlist -r path/to/dataset/root [-s] [-g]
-                  -o dataset.mmcorp -c dataset.vtcorp
-
-The difference between the -o and -c option is that -o serializes the
-data themselves, while -c exports the corpus object around the data.
-"""
 #logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -54,10 +60,10 @@ def _create_transformer(*args, **kwargs):
 
 def build_argument_parser():
 
-    parser = argparse.ArgumentParser(description=description, add_help=True)
+    parser = argparse.ArgumentParser(description=__doc__, add_help=True)
 
     parser.add_argument('-r', '--root', action='store', default=None,
-                        required=True, help='The path to'+
+                        required=True, help='The path to' +
                          ' the directory which is the root of a dataset.'+
                          ' (Will be passed to a Loader as a root.)')
     parser.add_argument('-n', '--name', help='The dataset name passed to the'+
@@ -176,7 +182,9 @@ def build_argument_parser():
                              'process.)')
 
     parser.add_argument('--serializer', action='store', help='Which '+
-                        'gensim serializer to use: Mm, SvmLight, Blei, Low')
+                        'gensim serializer to use: Mm, SvmLight, Blei, '
+                        'Low. [DEPRECATED; all serialization now handled by'
+                        'ShardedCorpus]')
 
     parser.add_argument('-c', '--clear', action='store_true', help='If given,'+
                         'instead of creating a corpus, will attempt to clear '+
@@ -199,6 +207,8 @@ def build_argument_parser():
 def main(args):
 
     _starttime = time.clock()
+    if args.root == 'test':
+        args.root = safire.get_test_data_root()
     logging.info('Initializing dataset loader with root %s, name %s' % (args.root, args.name))
     loader = MultimodalShardedDatasetLoader(args.root, args.name)
 
@@ -222,7 +232,7 @@ def main(args):
 
     if args.images:
 
-        if args.dataset_only:
+        if args.dataset_only: # Doesn't make sense.
             logging.info('Building dataset only (assumes icorp and mmcorp)...')
             idata = loader.load_img(args.label, {'overwrite': True,
                                                  'shardsize': args.shardsize})
