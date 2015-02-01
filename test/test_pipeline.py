@@ -193,7 +193,7 @@ class TestPipeline(SafireTestCase):
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     suite = unittest.TestSuite()
     loader = unittest.TestLoader()
     tests = loader.loadTestsFromTestCase(TestPipeline)

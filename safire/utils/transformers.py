@@ -11,8 +11,9 @@ import operator
 import gensim
 from gensim.interfaces import TransformedCorpus
 import numpy
-from safire.utils.transcorp import dimension
-from safire.utils import transcorp, gensim2ndarray, IndexedTransformedCorpus
+#from safire.utils.transcorp import dimension
+from safire.utils import gensim2ndarray, IndexedTransformedCorpus
+import safire.utils.transcorp
 
 from sklearn.preprocessing import StandardScaler
 
@@ -199,7 +200,7 @@ class LeCunnVarianceScalingTransform(gensim.interfaces.TransformationABC):
         :param chunksize: Accumulate squared sums by this many.
 
         """
-        self.dim = transcorp.dimension(corpus)
+        self.dim = safire.utils.transcorp.dimension(corpus)
 
         squared_sums = [ 0.0 for _ in xrange(self.dim) ]
 
@@ -252,9 +253,9 @@ class StandardScalingTransformer(gensim.interfaces.TransformationABC):
         self.with_mean = with_mean
         self.with_variance = with_variance
 
-        self.sums = numpy.zeros(dimension(corpus))
-        self.means = numpy.zeros(dimension(corpus))
-        self.squared_sums = numpy.zeros(dimension(corpus))
+        self.sums = numpy.zeros(safire.utils.transcorp.dimension(corpus))
+        self.means = numpy.zeros(safire.utils.transcorp.dimension(corpus))
+        self.squared_sums = numpy.zeros(safire.utils.transcorp.dimension(corpus))
 
 
 class Corpus2Dense(gensim.interfaces.TransformationABC):
@@ -267,7 +268,7 @@ class Corpus2Dense(gensim.interfaces.TransformationABC):
         proposed_dim = dim
         if corpus is not None:
             try:
-                proposed_dim = dimension(corpus)
+                proposed_dim = safire.utils.transcorp.dimension(corpus)
                 if dim and proposed_dim != dim:
                     raise ValueError('Derived dimension ({0}) does not '
                                      'correspond to dimension given as argument'
@@ -278,12 +279,16 @@ class Corpus2Dense(gensim.interfaces.TransformationABC):
                              'corpus dimension, using proposed dimension {0}'
                              ''.format(dim))
                 if dim is None:
-                    raise ValueError('No dimension given and dimension could not be'
-                                     ' derived; quitting.')
+                    raise ValueError('No dimension given and dimension could not'
+                                     ' be derived; quitting.')
         self.dim = proposed_dim
 
     def _apply(self, corpus, chunksize=None):
-        return IndexedTransformedCorpus(self, corpus, chunksize)
+        try:
+            return IndexedTransformedCorpus(self, corpus, chunksize)
+        except TypeError:
+            raise
+            return TransformedCorpus(self, corpus, chunksize)
 
     def __getitem__(self, item):
         """This one should batch-transform lists of gensim vectors on

@@ -90,8 +90,8 @@ Train/dev/test split is handled at the dataset level.
 import logging
 import gensim
 import theano
-from safire.data.serializer import SwapoutCorpus
-from safire.data.sharded_corpus import ShardedCorpus
+#from safire.data.serializer import SwapoutCorpus
+#from safire.data.sharded_corpus import ShardedCorpus
 import safire.utils.transcorp
 
 
@@ -411,7 +411,10 @@ class CompositeDataset(DatasetABC):
         self.length = len(data[0])  # TODO: This is very temporary.
         super(CompositeDataset, self).__init__(data, dim=dim,
                                                test_p=test_p,
-                                               devel_p=devel_p)
+                                               devel_p=devel_p,
+                                               ensure_dense=False)
+        # The composite dataset doesn't care if input or output are dense or
+        # not...
 
         if self.aligned:
             for d in data:
