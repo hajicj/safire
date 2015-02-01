@@ -4,7 +4,7 @@ This module contains classes that ...
 import logging
 from gensim.interfaces import TransformationABC, TransformedCorpus
 from gensim.utils import is_corpus
-from safire.utils.transcorp import log_corpus_stack
+import safire.utils.transcorp
 
 __author__ = "Jan Hajic jr."
 
@@ -95,5 +95,6 @@ class SwapoutCorpus(TransformedCorpus):
             yield doc
 
     def save(self, *args, **kwargs):
-        print '\n\nSaving SwapoutCorpus with pipeline:\n{0}'.format(log_corpus_stack(self))
+        print '\n\nSaving SwapoutCorpus with pipeline:\n{0}'.format(
+            safire.utils.transcorp.log_corpus_stack(self))
         super(SwapoutCorpus, self).save(*args, **kwargs)

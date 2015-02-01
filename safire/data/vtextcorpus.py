@@ -575,7 +575,8 @@ class VTextCorpus(TextCorpus):
         return vtlist
 
     def save(self, *args, **kwargs):
-        attrs_to_ignore = ['__getitem__']
+        #attrs_to_ignore = ['__getitem__']
+        attrs_to_ignore = []
         if 'ignore' not in kwargs:
             kwargs['ignore'] = frozenset(attrs_to_ignore)
         else:

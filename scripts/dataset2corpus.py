@@ -27,6 +27,7 @@ import time
 from gensim import corpora
 from gensim.models import TfidfModel
 import numpy
+from safire.data import VTextCorpus
 
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.serializer import Serializer, SwapoutCorpus
@@ -298,10 +299,11 @@ def main(args):
     # Text processing #
 
     # This branch should go away due to corpus - dataset relationship
-    # refactoring
+    # refactoring...
     if args.dataset_only:
 
-        logging.info('Only creating dataset, assuming serialized corpus available for %s' % args.label)
+        logging.info('Only creating dataset, assuming serialized'
+                     ' corpus available for %s' % args.label)
         output_prefix = loader.text_output_prefix(args.label)
 
         vt_corpus_filename = loader.layout.required_text_corpus_names(args.label)[1]
@@ -325,7 +327,7 @@ def main(args):
         pipeline = loader.load_text_corpus(args.input_label)
 
         logging.debug('Loaded corpus report:\n')
-        print log_corpus_stack(pipeline)
+        logging.debug(log_corpus_stack(pipeline))
 
     else:
         vtargs = {}
@@ -420,6 +422,15 @@ def main(args):
     logging.info('Serializing...')
     # Rewrite as applying a Serializer block.
 
+    if isinstance(pipeline, VTextCorpus):
+        logging.info('Checking that VTextCorpus dimension is available.')
+        if not pipeline.precompute_vtlist:
+            pipeline._precompute_vtlist(pipeline.input)
+        if pipeline.n_processed < len(pipeline.vtlist):
+            logging.info('Have to dry_run() the pipeline\'s VTextCorpus,'
+                         'because we cannot derive its dimension.')
+            pipeline.dry_run()
+
     # This is a different level of abstraction..?
     cnames = loader.layout.required_text_corpus_names(args.label)
 
@@ -469,17 +480,6 @@ def main(args):
 
     if not args.no_save_corpus:
         pipeline.save(obj_name)
-
-    # This makes no sense now - everything has been serialized using
-    # ShardedCorpus.
-    # if not args.no_shdat:
-    #
-    #     output_prefix = loader.text_output_prefix(args.label)
-    #
-    #     dataset = ShardedDataset(output_prefix, pipeline,
-    #                              shardsize=args.shardsize,
-    #                              overwrite=(not args.no_overwrite_shdat))
-    #     dataset.save()
 
     _endtime = time.clock()
     _totaltime = _endtime - _starttime

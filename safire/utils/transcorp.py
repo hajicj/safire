@@ -1,21 +1,33 @@
 """
-This module contains utility functions for working with gensim TransformedCorpus
-stacks.
+This module contains utility functions for working with TransformedCorpus
+stacks. The functions in this module can look extremely dirty and whatnot; the
+idea is to provide useful functionality OUTSIDE the core pipeline classes so
+that they don't have to implement a complicated interface.
+
+The most important function here is ``dimension()``. Other ones used in safire
+are ``bottom_corpus()``, ``make_dense_output()``, ``id2word()`` and
+``get_id2word_obj()``.
+
+Of course, the downside is that if you write some special class yourself, you
+will need to modify the functions here to work with that class.
 """
 import logging
 
 from gensim.corpora import TextCorpus
 from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
+import gensim.matutils
 import numpy
 
 from safire.data import FrequencyBasedTransformer, VTextCorpus
+from safire.data.serializer import SwapoutCorpus
 from safire.data.sharded_corpus import ShardedCorpus
 #from safire.datasets.dataset import Dataset
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
 #from safire.datasets.transformations import DatasetTransformer
 import safire.datasets.dataset
+import safire.utils.transformers
 
 
 __author__ = "Jan Hajic jr."
@@ -200,3 +212,27 @@ def log_corpus_stack(corpus):
     else:
         r = 'Type: %s' % (type(corpus))
         return '\n'.join([r, '=== STACK END ===\n'])
+
+
+def make_dense_output(corpus):
+    """Adds a utility block that outputs items in a dense format.
+
+    If the given corpus is of a type that can support dense output by itself
+    (for example a SwapoutCorpus with a ShardedCorpus back-end), will instead
+    set the corpus output type to dense.
+    """
+    if isinstance(corpus, SwapoutCorpus) \
+        and isinstance(corpus.obj, ShardedCorpus):
+            corpus.obj.gensim = False
+            corpus.obj.sparse_retrieval = False
+            return corpus
+    elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
+        logging.info('DatasetABC has dense output by default (this very method'
+                     'gets called during initialization).')
+    else:
+        logging.warn('Corpus class {0}: cannot rely on '
+                     'ShardedCorpus.gensim=False, assuming gensim sparse '
+                     'vector output and applying Corpus2Dense.'
+                     ''.format(type(corpus)))
+        transformer = safire.utils.transformers.Corpus2Dense(corpus)
+        return transformer[corpus]

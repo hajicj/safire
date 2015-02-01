@@ -12,7 +12,7 @@ import gensim
 from gensim.interfaces import TransformedCorpus
 import numpy
 from safire.utils.transcorp import dimension
-from safire.utils import transcorp
+from safire.utils import transcorp, gensim2ndarray, IndexedTransformedCorpus
 
 from sklearn.preprocessing import StandardScaler
 
@@ -228,7 +228,7 @@ class LeCunnVarianceScalingTransform(gensim.interfaces.TransformationABC):
         if is_corpus:
             return self._apply(bow, chunksize=chunksize)
 
-        out = [ (i, self.coefficients[i] * x) for i, x in bow ]
+        out = [(i, self.coefficients[i] * x) for i, x in bow]
         #if numpy.random.random() < 0.001:
         #    print 'UCov. Transformation:\n%s\n%s' % (bow[:10], out[:10])
         return out
@@ -256,3 +256,44 @@ class StandardScalingTransformer(gensim.interfaces.TransformationABC):
         self.means = numpy.zeros(dimension(corpus))
         self.squared_sums = numpy.zeros(dimension(corpus))
 
+
+class Corpus2Dense(gensim.interfaces.TransformationABC):
+
+    def __init__(self, corpus=None, dim=None):
+        # Ah, the joys of reliably deriving dimensions and handling missing
+        # values.
+        if dim is None and corpus is None:
+            raise ValueError('Must supply at least one of corpus or dim.')
+        proposed_dim = dim
+        if corpus is not None:
+            try:
+                proposed_dim = dimension(corpus)
+                if dim and proposed_dim != dim:
+                    raise ValueError('Derived dimension ({0}) does not '
+                                     'correspond to dimension given as argument'
+                                     ' ({1}); unsure what to do & quitting.'
+                                     ''.format(proposed_dim, dim))
+            except ValueError:
+                logging.info('Corpus2DenseTransformer: could not derive input '
+                             'corpus dimension, using proposed dimension {0}'
+                             ''.format(dim))
+                if dim is None:
+                    raise ValueError('No dimension given and dimension could not be'
+                                     ' derived; quitting.')
+        self.dim = proposed_dim
+
+    def _apply(self, corpus, chunksize=None):
+        return IndexedTransformedCorpus(self, corpus, chunksize)
+
+    def __getitem__(self, item):
+        """This one should batch-transform lists of gensim vectors on
+        slice retrieval, so it's wrong to treat them like corpora -- we can
+        apply the transformation on these objects directly. If you want to
+        do that, use _apply directly. That's why we don't use the is_corpus
+        standard method of identifying gensim corpora."""
+        if isinstance(item, gensim.interfaces.CorpusABC):
+            return self._apply(item)
+
+        # need to add logic for one item vs. an array of items?
+        print 'Transforming item: {0}'.format(item)
+        return gensim2ndarray(item, self.dim)

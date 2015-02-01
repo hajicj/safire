@@ -90,6 +90,8 @@ Train/dev/test split is handled at the dataset level.
 import logging
 import gensim
 import theano
+from safire.data.serializer import SwapoutCorpus
+from safire.data.sharded_corpus import ShardedCorpus
 import safire.utils.transcorp
 
 
