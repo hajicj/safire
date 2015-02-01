@@ -295,5 +295,5 @@ class Corpus2Dense(gensim.interfaces.TransformationABC):
             return self._apply(item)
 
         # need to add logic for one item vs. an array of items?
-        print 'Transforming item: {0}'.format(item)
+        logging.debug('Transforming item: {0}'.format(item))
         return gensim2ndarray(item, self.dim)

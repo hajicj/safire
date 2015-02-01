@@ -17,18 +17,19 @@ class TestCorpus2Dense(SafireTestCase):
     def test_corpus2dense(self):
 
         corpus2dense = Corpus2Dense(dim=self.dim)
-        dense_corpus = corpus2dense._apply(self.data)
+        dense_corpus = corpus2dense._apply(self.data) # Explicit _apply.
         self.assertIsInstance(dense_corpus, IndexedTransformedCorpus)
 
         doc = dense_corpus[0]
 
         self.assertIsInstance(doc, numpy.ndarray)
+        self.assertEqual(doc.shape, (100,))
 
         batch = dense_corpus[0:3]
 
         self.assertIsInstance(batch, numpy.ndarray)
+        self.assertEqual(batch.shape, (3, 100))
 
-        print doc.shape
 
 ##############################################################################
 

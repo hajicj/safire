@@ -214,12 +214,15 @@ def log_corpus_stack(corpus):
         return '\n'.join([r, '=== STACK END ===\n'])
 
 
-def make_dense_output(corpus):
+def convert_to_dense(corpus):
     """Adds a utility block that outputs items in a dense format.
 
     If the given corpus is of a type that can support dense output by itself
     (for example a SwapoutCorpus with a ShardedCorpus back-end), will instead
     set the corpus output type to dense.
+
+    This function is called by DatasetABC on initialization if the
+    ``ensure_dense`` option is set.
     """
     if isinstance(corpus, SwapoutCorpus) \
         and isinstance(corpus.obj, ShardedCorpus):
@@ -234,5 +237,11 @@ def make_dense_output(corpus):
                      'ShardedCorpus.gensim=False, assuming gensim sparse '
                      'vector output and applying Corpus2Dense.'
                      ''.format(type(corpus)))
+
         transformer = safire.utils.transformers.Corpus2Dense(corpus)
-        return transformer[corpus]
+        # Have to _apply to make sure the output is a pipeline, because
+        # Corpus2Dense call on __getitem__ might call gensim2dense directly
+        # on something that behaves like a corpus but is not an instance of
+        # CorpusABC (like: Datasets? but why would we want to ensure dense
+        # output on Datasets like this?)
+        return transformer._apply(corpus)
