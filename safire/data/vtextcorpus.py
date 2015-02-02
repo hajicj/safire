@@ -595,12 +595,12 @@ class VTextCorpus(TextCorpus):
 
         return corpus
 
-    def __getstate__(self):
-        logging.debug(u'VTextCorpus dict:\n{0}'.format(
-            '\n'.join([u'    {0}: {1}'.format(key, value)
-                       for key, value in self.__dict__.iteritems()])
-        ))
-        return self.__dict__
+    #def __getstate__(self):
+    #    # logging.debug(u'VTextCorpus dict:\n{0}'.format(
+    #    #     '\n'.join([u'    {0}: {1}'.format(key, value)
+    #    #                for key, value in self.__dict__.iteritems()])
+    #    # ))
+    #    return self.__dict__
 
     def __setstate__(self, d):
         self.__dict__.update(d)
