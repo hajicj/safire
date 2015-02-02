@@ -1,23 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Builds a preprocessing pipeline from corpora. Serializes at the end and saves
-the pipeline object. See::
-
- dataset2corpus.py -h
-
-for help on individual options; especially -r and -n for data lookup, -i for
-loading an already-saved pipeline and -l for saving names.
-
-If you run this script with -r test, it will run itself on the default test
-data (useful if you are a developer - for debugging, until I add a unit test
-for the main() function...).
-
-No casts to dataset yet, this operates on corpora only. Also, the order of
-applied operation is fixed; a more general pipeline-building apparatus is
-scheduled for later.
-"""
-
-
 import cPickle
 import os
 import argparse
