@@ -17,8 +17,12 @@ from gensim.utils import SaveLoad
 import matplotlib.pyplot as plt
 import operator
 import os
+from safire.utils.transcorp import dimension
 import safire
+from safire.data.serializer import Serializer
+from safire.data.sharded_corpus import ShardedCorpus
 from safire.datasets.dataset import Dataset
+import time
 import theano
 import theano.compile.pfunc
 from safire.data.loaders import MultimodalShardedDatasetLoader, ModelLoader, \
@@ -194,6 +198,15 @@ def _build_argument_parser():
                         help='If set, will not save the learner. Saving the '
                              'learner is useful if you will want to resume '
                              'training later.')
+
+    parser.add_argument('--serialize', action='store_true',
+                        help='If set, will serialize the pipeline built by '
+                             'adding the SafireTransformer block to the input '
+                             'pipeline. The serialization will be done by '
+                             'ShardedCorpus and the name will be based on the'
+                             '--transformation_label argument. Note that if '
+                             'this is given, the pipeline will be saved '
+                             'including the Serializer block.')
 
     parser.add_argument('--profile_training', action='store_true',
                         help='If set, will profile the training procedure.')
@@ -396,39 +409,34 @@ def main(args):
         logging.info('Saving transformer with label %s' % args.transformation_label)
         mloader.save_transformer(transformer, args.transformation_label)
 
-    logging.info('Creating transformed corpus with label %s' % args.transformation_label)
+    logging.info('Creating transformed corpus with label {0}'
+                 ''.format(args.transformation_label))
+    # This applies the transformation to the input corpus.
+    pipeline = transformer[pipeline]
 
-    if args.img_label:
-        corpus = mdloader.load_image_corpus(args.img_label)
-    elif args.text_label:
-        corpus = mdloader.load_text_corpus(args.text_label)
+    # Serialization (this should be wrapped in some utility function?)
+    if args.serialize:
+        serializer_class = ShardedCorpus
+        data_name = mdloader.pipeline_serialization_target(args.transformation_label)
+        serialization_start_time = time.clock()
+        logging.info('Starting serialization: {0}'
+                     ''.format(serialization_start_time))
+        serializer_block = Serializer(pipeline, serializer_class,
+                                      data_name,
+                                      dim=dimension(pipeline))
+        serialization_end_time = time.clock()
+        logging.info('Serialization finished: {0}'
+                     ''.format(serialization_end_time))
 
-    # This merely applies the transformation to the input corpus.
-    transformed_corpus = transformer[corpus]
+        pipeline = serializer_block[pipeline]
 
-    if not args.no_corpus_transform:
+    # Now we save the pipeline. This is analogous to the Dataset2Corpus step.
+    # In this way, also, the learned transformation is stored and can be
+    # recycled.
+    pipeline_savename = mdloader.pipeline_name(args.transformation_label)
+    logging.info('    Pipeline name: {0}'.format(pipeline_savename))
 
-        logging.info('Saving transformed corpus with label %s.' % args.transformation_label)
-
-        if args.img_label:
-            mdloader.serialize_image_corpus(transformed_corpus,
-                                          args.transformation_label)
-            mdloader.save_image_corpus(transformed_corpus,
-                                       args.transformation_label)
-        elif args.text_label:
-            mdloader.serialize_text_corpus(transformed_corpus,
-                                           args.transformation_label)
-            mdloader.save_text_corpus(transformed_corpus,
-                                       args.transformation_label)
-
-    if not args.no_dataset_transform:
-
-        logging.info('Saving transformed dataset with label %s.' % args.transformation_label)
-
-        if args.img_label:
-            mdloader.build_img(transformed_corpus, args.transformation_label)
-        elif args.text_label:
-            mdloader.build_text(transformed_corpus, args.transformation_label)
+    pipeline.save(pipeline_savename)
 
 ###############################################################################
 

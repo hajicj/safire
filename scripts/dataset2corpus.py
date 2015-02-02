@@ -423,7 +423,7 @@ def main(args):
     logging.info('  Data name: {0}'.format(data_name))
 
     obj_name = loader.pipeline_name(args.label)
-    logging.info('  Obj name:  {0}'.format(obj_name))
+    logging.info('  Pipeline name:  {0}'.format(obj_name))
 
     serializer_class = ShardedCorpus
 
