@@ -10,6 +10,11 @@ are ``bottom_corpus()``, ``make_dense_output()``, ``id2word()`` and
 
 Of course, the downside is that if you write some special class yourself, you
 will need to modify the functions here to work with that class.
+
+When importing, try to stick to ``import safire.X`` and qualify types
+(``y = safire.X.Y``) rather than ``from X import Y`` to avoid circular imports.
+A lot of Safire classes depend on transcorp.py functions while at the same
+time they need to be used inside transcorp.py to get access to their internals.
 """
 import logging
 
