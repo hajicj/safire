@@ -20,7 +20,7 @@ import gensim.matutils
 import numpy
 
 from safire.data import FrequencyBasedTransformer, VTextCorpus
-from safire.data.serializer import SwapoutCorpus
+import safire.data.serializer
 from safire.data.sharded_corpus import ShardedCorpus
 #from safire.datasets.dataset import Dataset
 from safire.data.imagenetcorpus import ImagenetCorpus
@@ -224,7 +224,7 @@ def convert_to_dense(corpus):
     This function is called by DatasetABC on initialization if the
     ``ensure_dense`` option is set.
     """
-    if isinstance(corpus, SwapoutCorpus) \
+    if isinstance(corpus, safire.data.serializer.SwapoutCorpus) \
         and isinstance(corpus.obj, ShardedCorpus):
             corpus.obj.gensim = False
             corpus.obj.sparse_retrieval = False

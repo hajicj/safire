@@ -597,7 +597,7 @@ class VTextCorpus(TextCorpus):
 
     def __getstate__(self):
         logging.debug(u'VTextCorpus dict:\n{0}'.format(
-            '\n'.join([u'{0}: {1}'.format(key, value)
+            '\n'.join([u'    {0}: {1}'.format(key, value)
                        for key, value in self.__dict__.iteritems()])
         ))
         return self.__dict__
