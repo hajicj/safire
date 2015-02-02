@@ -268,9 +268,11 @@ def main(args):
             pipeline = scaling_transform[pipeline]
 
         if args.tanh:
-            logging.info('Squishing through the tanh function with coef. %f' % args.tanh)
-            tanh_transform = GeneralFunctionTransform(numpy.tanh,
-                                                      multiplicative_coef=args.tanh)
+            logging.info('Squishing through the tanh function with coef. {0}'
+                         ''.format(args.tanh))
+            tanh_transform = GeneralFunctionTransform(
+                numpy.tanh,
+                multiplicative_coef=args.tanh)
             pipeline = tanh_transform[pipeline]
 
         if args.normalize is not None:
@@ -335,7 +337,8 @@ def main(args):
             logging.info('VTextCorpus will have label %s' % args.label)
             vtargs['label'] = args.label
         if args.pos:
-            logging.info('Constructing POS filter with values %s' % str(list(args.pos)))
+            logging.info('Constructing POS filter with values {0}'
+                         ''.format(list(args.pos)))
             vtargs['token_filter'] = PositionalTagTokenFilter(list(args.pos), 0)
         if args.pfilter:
             logging.info('Constructing positional filter: %d.' % args.pfilter)
