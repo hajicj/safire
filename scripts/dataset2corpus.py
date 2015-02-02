@@ -8,6 +8,7 @@ import time
 
 from gensim import corpora
 from gensim.models import TfidfModel
+from gensim.utils import SaveLoad
 import numpy
 from safire.data import VTextCorpus
 
@@ -303,10 +304,12 @@ def main(args):
 
     if args.input_label is not None:
         logging.info('Loading corpus with label %s' % args.input_label)
-        pipeline = loader.load_text_corpus(args.input_label)
+        pipeline_fname = loader.pipeline_name(args.input_label)
+        pipeline = SaveLoad.load(pipeline_fname)
+        #pipeline = loader.load_text_corpus(args.input_label)
 
-        logging.debug('Loaded corpus report:\n')
-        logging.debug(log_corpus_stack(pipeline))
+        logging.info('Loaded corpus report:\n')
+        logging.info(log_corpus_stack(pipeline))
 
     else:
         vtargs = {}

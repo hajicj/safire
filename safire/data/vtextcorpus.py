@@ -402,12 +402,19 @@ class VTextCorpus(TextCorpus):
         """Loops through the entire corpus without outputting the documents
         themselves, to generate the corpus infrastructure: document ID mapping,
         dictionary, etc."""
+        start_time = time.clock()
         if self.precompute_vtlist:
-            for i in xrange(len(self)):     # Caches results!
+            for i in xrange(len(self)):     # Should cache results (?)
                 _ = self[i]
+                if i % 1000 == 0:
+                    logging.info(' Dry run at {0}, in {1} s'
+                                 ''.format(i, time.clock() - start_time))
         else:
-            for _ in self:
+            for i, _ in enumerate(self):
                 pass
+                if i % 1000 == 0:
+                    logging.info(' Dry run at {0}, in {1} s'
+                                 ''.format(i, time.clock() - start_time))
 
     def lock(self):
         """In order to use the corpus as a transformer, it has to be locked: it
