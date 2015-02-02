@@ -13,13 +13,16 @@ import numpy
 from safire.data.word2vec_transformer import Word2VecTransformer
 from safire.datasets.word2vec_transformer import \
     Word2VecSamplingDatasetTransformer
-from safire.learning.interfaces import SafireTransformer
+from safire.learning.interfaces import SafireTransformer, \
+    MultimodalClampedSamplerModelHandle
 from safire.learning.learners import BaseSGDLearner
 from safire.learning.models import DenoisingAutoencoder
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.datasets.transformations import FlattenComposite, docnames2indexes
 from safire.utils import parse_textdoc2imdoc_map
-from safire.utils.transcorp import dimension, get_id2word_obj
+from safire.utils.transcorp import dimension, get_id2word_obj, \
+    get_composite_source, reset_vtcorp_input, get_transformers, \
+    run_transformations, log_corpus_stack
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.datasets.dataset import Dataset, CompositeDataset
@@ -188,6 +191,36 @@ class TestPipeline(SafireTestCase):
         print '--output--'
         print 'Type: {0}'.format(type(output))
         print 'Output: {0}'.format(output)
+
+        print '--extracting text runtime pipeline--'
+        text_runtime_pipeline = get_composite_source(flat_multimodal_dataset,
+                                                     'txt')
+        reset_vtcorp_input(text_runtime_pipeline, self.vtlist)
+
+        print 'Coming out of text_runtime_pipeline: {0}'.format(iter(text_runtime_pipeline).next())
+        print 'Type: {0}'.format(type(iter(text_runtime_pipeline).next()))
+        print 'Shape: {0}'.format(iter(text_runtime_pipeline).next().shape)
+
+        print '--creating clamped sampling handle--'
+        text2img_handle = MultimodalClampedSamplerModelHandle.clone(
+            sftrans.model_handle,
+            dim_text=get_composite_source(flat_multimodal_dataset, 'txt').dim,
+            dim_img=get_composite_source(flat_multimodal_dataset, 'img').dim,
+            k=10
+        )
+        print '--applying handle to text runtime pipeline--'
+        t2i_transformer = SafireTransformer(text2img_handle)
+        text2img_pipeline = t2i_transformer[text_runtime_pipeline]
+
+        print '--debugging pipeline run--'
+        print log_corpus_stack(text2img_pipeline)
+        transformers = get_transformers(text2img_pipeline)
+        _ = run_transformations(0, *transformers)
+
+        print '--running text to image transformation--'
+        ideal_images = [ideal_image for ideal_image in text2img_pipeline]
+
+        print 'Ideal images: {0}'.format(type(ideal_images))
 
 ###############################################################################
 

@@ -89,9 +89,10 @@ Train/dev/test split is handled at the dataset level.
 
 import logging
 import gensim
+from gensim.interfaces import TransformationABC
 import theano
-#from safire.data.serializer import SwapoutCorpus
-#from safire.data.sharded_corpus import ShardedCorpus
+import safire.datasets
+import safire.utils
 import safire.utils.transcorp
 
 
@@ -455,7 +456,7 @@ class CompositeDataset(DatasetABC):
                 return tuple([d[item[i]] for i, d in enumerate(self.data)])
             else:
                 return tuple([d[item] for d in self.data])
-        except TypeError:
+        except (TypeError, IndexError):
             if isinstance(item, str):
                 return self.data[self.names_dict[item]]
             else:
@@ -495,3 +496,114 @@ class UnsupervisedDataset(CompositeDataset):
                                                   names=['features'],
                                                   test_p=test_p,
                                                   devel_p=devel_p)
+
+
+class TransformedDataset(Dataset):
+    """A class that enables stacking dataset transformations in the training
+    stage, similar to how corpus transformations are done during preprocessing.
+
+    Instead of overriding ``__iter__`` like TransformedCorpus, will need to
+    override ``_get_batch``.
+    """
+    def __init__(self, obj, dataset):
+        """Initializes the transformer.
+
+        :type obj: DatasetTransformer
+        :param obj: The transformer through which a batch from the ``dataset``
+            is run.
+
+        :type dataset: Dataset
+        :param dataset: The underlying dataset whose _get_batch calls are
+            overridden.
+
+        """
+        self.data = dataset
+        self.obj = obj
+
+        self.n_out = self.obj.n_out
+        self.dim = safire.utils.transcorp.dimension(obj)
+        # This is the preferred interface.
+
+        # This is a naming hack, because the model setup() method expects
+        # model.n_in == data.n_in. Note that this doesn't matter much: this
+        # is a dataset, so it only has ONE dimension. (The transformer, on the
+        # other hand, does have a separate input and output dimension.)
+        self.n_in = self.n_out
+
+    def _get_batch(self, subset, kind, b_index, b_size):
+        """The underlying mechanism for retrieving batches from
+        the dataset. Note that this method is "hidden" -- the learner and other
+        classes that utilize a Dataset call methods ``train_X_batch()`` etc.,
+        but all these methods internally "redirect" to ``_get_batch()``.
+
+        In this class, the batch is retrieved from the underlying Dataset
+        and then transformed through the transformer's ``__getitem__`` method.
+
+        :param subset:
+
+        :param kind:
+
+        :param b_index:
+
+        :param b_size:
+
+        :return:
+        """
+        batch = self.data._get_batch(subset=subset,
+                                     kind=kind,
+                                     b_index=b_index,
+                                     b_size=b_size)
+        transformed_batch = self.obj[batch]
+        return transformed_batch
+
+    def __getitem__(self, item):
+
+        data = self.data[item]
+        #print '  TransformedDataset.__getitem__: operating on data {0} with ' \
+        #      'item {1}'.format(data, item)
+        result = self.obj[data]
+        return result
+
+
+class DatasetTransformer(TransformationABC):
+    """DatasetTransformer is a base class analogous to gensim's
+    :class:`TransformationABC`, but it operates efficiently on theano batches
+    instead of gensim sparse vectors.
+
+    Constraints on dataset transformations:
+
+    * Batch size cannot change (one item for one item).
+    * Dimension may change; must provide ``n_out`` attribute.
+       * This means output dimension must be a fixed number known at
+         transformer initialization time (but can be derived from initializaton
+         parameters, or can be a parameter directly).
+    * The ``__getitem__`` method must take batches (matrices, incl. theano
+      shared vars!)
+
+    """
+    def __init__(self):
+        self.n_out = None
+        self.n_in = None
+
+    def __getitem__(self, batch):
+        """Transforms a given batch.
+
+        :type batch: numpy.array, theano.shared
+        :param batch: A batch.
+
+        :return: The transformed batch. If a dataset is given instead of
+            a batch, applies the transformer and returns a TransformedDataset.
+        """
+        if isinstance(batch, safire.datasets.dataset.Dataset):
+            return self._apply(batch)
+
+        raise NotImplementedError
+
+    def _apply(self, dataset, chunksize=None):
+
+        if not isinstance(dataset, safire.datasets.dataset.Dataset):
+            raise TypeError('Dataset argument given to _apply method not a'
+                            'dataset (type %s)' % type(dataset))
+
+        transformed_dataset = TransformedDataset(dataset=dataset, obj=self)
+        return transformed_dataset

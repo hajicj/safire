@@ -19,7 +19,7 @@ import safire
 from safire.datasets.dataset import DatasetABC
 
 from safire.learning.interfaces import ModelHandle
-from safire.utils import profile_run
+from safire.utils import profile_run, gensim2ndarray
 
 
 class SafireTransformer(TransformationABC):
@@ -166,9 +166,11 @@ class SafireTransformer(TransformationABC):
                           # from it, to simplify code path.
             bow = [bow]
 
-        dense_bow = gensim.matutils.corpus2dense(bow,
-                                                 self.n_in,
-                                                 len(bow)).T
+        # dense_bow = gensim.matutils.corpus2dense(bow,
+        #                                          self.n_in,
+        #                                          len(bow)).T
+        print 'SFtrans bag of words: {0}'.format(bow)
+        dense_bow = gensim2ndarray(bow, self.n_in, len(bow))
         # Transposition!!! (Due to gensim's corpus2dense returning documents
         # as columns)
 

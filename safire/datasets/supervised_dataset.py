@@ -3,10 +3,10 @@
 import theano
 
 from safire.data.utils import as_shared
-from safire.datasets.dataset import Dataset
+import safire.datasets.dataset
 
 
-class SupervisedDataset(Dataset):
+class SupervisedDataset(safire.datasets.dataset.Dataset):
     """Storage class for supervised datasets.
 
     Expects the data to be split into a train/devel/test set, with

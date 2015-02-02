@@ -7,10 +7,10 @@ import numpy
 import os
 import theano
 import sys
-from safire.data.loaders import MultimodalShardedDatasetLoader
+#from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.word2vec_transformer import Word2VecTransformer
-from safire.datasets.dataset import Dataset
-from safire.datasets.transformations import DatasetTransformer
+import safire.datasets.dataset
+from safire.datasets.dataset import DatasetTransformer
 
 __author__ = "Jan Hajic jr."
 
@@ -86,7 +86,7 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
 
         :return: The transformed batch. Will have ``self.n_out`` columns.
         """
-        if isinstance(batch, Dataset):
+        if isinstance(batch, safire.datasets.dataset.Dataset):
             return self._apply(dataset=batch)
 
         # Sample from each document (batch row) one word (column).
@@ -118,6 +118,7 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
         :return: The projection matrix, also as a theano variable.
         """
         # Normalize by row
+        batch = numpy.atleast_2d(batch)
         row_sums = numpy.sum(batch, axis=1)
         normalized_batch = batch.T / row_sums
 

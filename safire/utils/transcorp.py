@@ -32,6 +32,7 @@ from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
 #from safire.datasets.transformations import DatasetTransformer
 import safire.datasets.dataset
+#import safire.datasets.transformations
 import safire.utils.transformers
 
 
@@ -160,24 +161,35 @@ def run_transformations(item, *transformations):
     """Runs the TransformedCorpus transformation stack."""
     out = item
     for tr in transformations:
-        #print 'Transformation applied: %s' % str(tr)
+        print 'Transformation applied: %s' % str(tr)
         out = tr[out]
-        #print 'Result: %s' % str(out)
+        print 'Result: %s' % str(out)
     return out
 
 
-def get_transformers(corpus):
-    """Recovers the Transformation objects from a stack of TransformedCorpora.
-    """
-    tr = []
-    current_corpus = corpus
-    while isinstance(current_corpus, TransformedCorpus):
-        tr.append(current_corpus.obj)
-        current_corpus = current_corpus.corpus
-    if isinstance(current_corpus, VTextCorpus): # Also has __getitem__...
-        tr.append(current_corpus)
-    tr.reverse()
-    return tr
+# def get_transformers(corpus):
+#     """Recovers the Transformation objects from a stack of TransformedCorpora.
+#     """
+#     tr = []
+#     current_corpus = corpus
+#     while isinstance(current_corpus, TransformedCorpus):
+#         tr.append(current_corpus.obj)
+#         current_corpus = current_corpus.corpus
+#     if isinstance(current_corpus, VTextCorpus): # Also has __getitem__...
+#         tr.append(current_corpus)
+#     tr.reverse()
+#     return tr
+
+def get_transformers(pipeline):
+    """Recovers the Transformation objects from a pipeline."""
+    if isinstance(pipeline, TransformedCorpus):
+        return get_transformers(pipeline.corpus) + [pipeline.obj]
+    if isinstance(pipeline, safire.datasets.dataset.TransformedDataset):
+        return get_transformers(pipeline.data) + [pipeline.obj]
+    # Ignoring cast to dataset???
+    if isinstance(pipeline, safire.datasets.dataset.DatasetABC):
+        return get_transformers(pipeline.data)
+    return [] # If the bottom has been reached.
 
 
 def reset_vtcorp_input(corpus, filename, input_root=None, lock=True,
@@ -214,6 +226,13 @@ def log_corpus_stack(corpus):
     if isinstance(corpus, TransformedCorpus):
         r = 'Type: %s with obj %s' % (type(corpus), type(corpus.obj))
         return '\n'.join([r, log_corpus_stack(corpus.corpus)])
+    elif isinstance(corpus, safire.datasets.dataset.TransformedDataset):
+        r = 'Type: %s with obj %s' % (type(corpus), type(corpus.obj))
+        return '\n'.join([r, log_corpus_stack(corpus.data)])
+    elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
+        r = 'Type: {0}, passing through DatasetABC to underlying corpus {1}' \
+            ''.format(type(corpus), type(corpus.data))
+        return '\n'.join([r, log_corpus_stack(corpus.data)])
     else:
         r = 'Type: %s' % (type(corpus))
         return '\n'.join([r, '=== STACK END ===\n'])

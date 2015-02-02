@@ -149,7 +149,6 @@ class Autoencoder(BaseUnsupervisedModel):
 
         self.theano_rng = theano_rng
 
-
     def _init_args_snapshot(self):
         """Saves the model in the form of an init kwarg dict, since not all
         attributes of the instance can be pickled. Upon loading, the saved
@@ -210,7 +209,17 @@ class Autoencoder(BaseUnsupervisedModel):
                                             n=1, p=mean_h,
                                             dtype=theano.config.floatX)
         return sample_h
-    
+
+    def sample_vhv(self, visible):
+        """Performs one Gibbs sampling step from visible to visible layer."""
+        return self.sample_v_given_h(self.sample_h_given_v(visible))
+
+    def sample_hvh(self, hidden):
+        """Performs one Gibbs sampling step from hidden to hidden layer."""
+        return self.sample_h_given_v(self.sample_v_given_h(hidden))
+
+
+
     def _reconstruction_cross_entropy(self, X):
         """Computes the reconstruction cross-entropy on X.
         
@@ -224,7 +233,7 @@ class Autoencoder(BaseUnsupervisedModel):
         activation_hidden = self.mean_h_given_v(X)
         activation_visible = self.mean_v_given_h(activation_hidden)
         return -TT.sum(X * TT.log(activation_visible) + (1 - X)
-                      * TT.log(1 - activation_visible), axis=1)
+                       * TT.log(1 - activation_visible), axis=1)
             # A -TT.sum(...) here; should the negative really be
             # there or not?
 
@@ -275,7 +284,6 @@ class Autoencoder(BaseUnsupervisedModel):
         else:
             raise ValueError('Invalid reconstruction set! %s' % self.reconstruction)
 
-   
     def _cost(self, X):
         """Returns the mean reconstruction cross-entropy on X.
         This is the same number which is used for model error.
