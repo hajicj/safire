@@ -1859,7 +1859,6 @@ class MultimodalShardedDatasetLoader(MultimodalDatasetLoader):
                                                      self.layout.corpus_dir)))
                              )))
 
-
         corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
 
         img_corpora_fnames = self.layout.required_img_corpus_names(img_infix)

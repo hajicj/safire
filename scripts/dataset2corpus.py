@@ -280,11 +280,6 @@ def main(args):
             norm_transform = NormalizationTransform(args.normalize)
             pipeline = norm_transform[pipeline]
 
-        # i1 = icorp.__iter__().next()
-        # s1 = corpus_to_serialize.__iter__().next()
-        # print i1[:20]
-        # print s1[:20]
-
         loader.serialize_image_corpus(pipeline, args.label)
         loader.save_image_corpus(pipeline, args.label)
 
