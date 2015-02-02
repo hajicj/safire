@@ -786,7 +786,7 @@ def ndarray2gensim(array):
 
 def gensim2ndarray(corpus, dim, num_docs=None, dtype=numpy.float32):
     """Convert a gensim-style list of list of tuples into a numpy ndarray
-    with documents as rows. Can also deal with a single sparse vector.
+    with documents as rows. Can now also deal with a single sparse vector.
 
     Mirror function to ``ndarray2gensim``."""
     # Checking for single-vector.
