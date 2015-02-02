@@ -234,11 +234,20 @@ def main(args):
     if not args.img_label and not args.text_label:
         raise ValueError('Must specify either text or image label.')
 
+    # Need to refactor dataset loading.
     if args.img_label:
-        logging.info('Loading sharded dataset with img. label %s' % args.img_label)
+        logging.info('Loading dataset with img. label {0}'
+                     ''.format(args.img_label))
+        # Replace this:
         dataset = mdloader.load_img(args.img_label)
+        # by this:
+        #  - get saved pipeline filename based on the label
+        #  - load the pipeline
+        #  - cast to dataset
+
     elif args.text_label:
-        logging.info('Loading sharded dataset with text label %s' % args.text_label)
+        logging.info('Loading dataset with text label {0}'
+                     ''.format(args.text_label))
         dataset = mdloader.load_text(args.text_label)
     else:
         raise argparse.ArgumentError('Must supply either --img_label'
@@ -262,9 +271,9 @@ def main(args):
     backward_activation = init_activation(args.backward_activation)
 
     model_init_args = {
-        'heavy_debug' : args.heavy_debug,
-        'activation' : activation,
-        'backward_activation' : backward_activation
+        'heavy_debug': args.heavy_debug,
+        'activation': activation,
+        'backward_activation': backward_activation
     }
     if args.model == 'DenoisingAutoencoder':
         model_init_args['corruption_level'] = args.corruption
