@@ -34,7 +34,7 @@ import numpy
 import numpy.random
 import theano
 import theano.ifelse
-
+import gensim.interfaces
 
 def check_kwargs(kwargs, names):
     """Checks that all \'names\' are in the \'dictionary\'.
@@ -779,15 +779,20 @@ def mock_data(n_items=1000, dim=1000, prob_nnz=0.5, lam=1.0):
 
 # Conversions: ndarray2gensim, gensim2ndarray
 def ndarray2gensim(array):
-    """Convert a numpy ndarray into a gensim-style generator of lists of tuples."""
+    """Convert a numpy ndarray into a gensim-style generator of lists of
+    tuples."""
     return (full2sparse(row) for row in array)
 
 
-def gensim2ndarray(corpus, dim, num_docs=None):
+def gensim2ndarray(corpus, dim, num_docs=None, dtype=numpy.float32):
     """Convert a gensim-style list of list of tuples into a numpy ndarray
-    with documents as rows.
+    with documents as rows. Can now also deal with a single sparse vector.
+
     Mirror function to ``ndarray2gensim``."""
-    return corpus2dense(corpus, dim, num_docs=num_docs).T
+    # Checking for single-vector.
+    if isinstance(corpus[0], tuple):
+        return sparse2full(corpus, dim)
+    return corpus2dense(corpus, dim, num_docs=num_docs, dtype=dtype).T
 
 
 # Parsing some elementary data files
@@ -810,3 +815,29 @@ def parse_textdoc2imdoc_map(textdoc2imdoc):
                 t2i_map[text].append(img)
 
     return t2i_map
+
+
+class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):
+    """Adds __getitem__ functionality to a TransformedCorpus interface.
+    Expects an indexable ``corpus`` object."""
+    def __init__(self, obj, corpus, chunksize=None):
+        try:
+            _ = corpus[0]
+        except TypeError:
+            raise TypeError('Corpus {0} of type {1} is not indexable (does not'
+                            'respond to __getitem__ call, raises TypeError)'
+                            .format(corpus, type(corpus)))
+
+        super(IndexedTransformedCorpus, self).__init__(obj, corpus, chunksize)
+
+    def __getitem__(self, item):
+
+        logging.debug('Accessing item: {0}'.format(item))
+
+        retrieved = self.corpus[item]
+        logging.debug('Retrieved: {0}'.format(retrieved))
+
+        output = self.obj[retrieved]
+        logging.debug('Output: {0}'.format(output))
+
+        return output
