@@ -84,7 +84,7 @@ class ShardedCorpus(IndexedCorpus):
     #@profile
     def __init__(self, output_prefix, corpus, dim=None,
                  shardsize=4096, overwrite=False, sparse_serialization=False,
-                 sparse_retrieval=False, gensim=False):
+                 sparse_retrieval=False, gensim=True):
         """Initializes the dataset. If ``output_prefix`` is not found,
         builds the shards.
 
@@ -142,7 +142,7 @@ class ShardedCorpus(IndexedCorpus):
         :type gensim: bool
         :param gensim: If set, will additionally convert the output to gensim
             sparse vectors (list of tuples (id, value)) to make it behave like
-            any other gensim corpus. This **will** slow the dataset down.
+            any other gensim corpus. This **will** slow the corpus down.
 
         """
         self.output_prefix = output_prefix

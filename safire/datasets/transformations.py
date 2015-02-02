@@ -228,9 +228,14 @@ class FlattenedDatasetCorpus(TransformedCorpus):
         else:
             # Possibly inefficient
             indexes = self.indexes[item]
-            idxs_by_dataset = map(list, zip(*indexes))
-            logging.debug('Indexes: {0}, by dataset: {1}'.format(indexes,
-                                                         idxs_by_dataset))
+            try:
+                idxs_by_dataset = map(list, zip(*indexes))
+            except TypeError:
+                # Single item retrieved
+                indexes = [indexes]
+                idxs_by_dataset = map(list, zip(*indexes))
+            logging.debug('Indexes: {0}, by dataset: {1}'
+                          ''.format(indexes, idxs_by_dataset))
             retrieved = []
             for dataset, idxs in zip(self.corpus.data, idxs_by_dataset):
                 logging.debug(' Retrieving: dataset {0}, '

@@ -90,6 +90,8 @@ Train/dev/test split is handled at the dataset level.
 import logging
 import gensim
 import theano
+#from safire.data.serializer import SwapoutCorpus
+#from safire.data.sharded_corpus import ShardedCorpus
 import safire.utils.transcorp
 
 
@@ -100,7 +102,8 @@ class DatasetABC(gensim.utils.SaveLoad):
     (like, for instance, the ShardedCorpus). It can also serve as a wrapper
     for a Dataset, in order to be subclassable to something that performs
     an on-the-fly transformation of the data."""
-    def __init__(self, data, dim=None, test_p=None, devel_p=None):
+    def __init__(self, data, dim=None, test_p=None, devel_p=None,
+                 ensure_dense=True):
         """Constructs a Dataset wrapper for the given data.
 
         The default train-dev-test split is by proportion of data.
@@ -119,6 +122,12 @@ class DatasetABC(gensim.utils.SaveLoad):
 
         :param devel_p: Proportion of data to be used as development set.
             Will be taken from before the test set.
+
+        :param ensure_dense: If set, makes sure that the ``data`` member really
+            outputs dense numpy ndarrays. This is the expected behavior for
+            Datasets, although in principle there is nothign wrong with
+            outputting gensim sparse vectors (and guaranteeing a dimension at
+            the same time).
         """
         try:
             logging.debug('Dataset init: inspecting sliceability...')
@@ -130,6 +139,9 @@ class DatasetABC(gensim.utils.SaveLoad):
         if not dim:
             dim = self.derive_dimension(data)
 
+        _data = data
+        if ensure_dense:
+            _data = safire.utils.transcorp.convert_to_dense(_data)
         self.data = data
 
         self.dim = dim
@@ -399,7 +411,10 @@ class CompositeDataset(DatasetABC):
         self.length = len(data[0])  # TODO: This is very temporary.
         super(CompositeDataset, self).__init__(data, dim=dim,
                                                test_p=test_p,
-                                               devel_p=devel_p)
+                                               devel_p=devel_p,
+                                               ensure_dense=False)
+        # The composite dataset doesn't care if input or output are dense or
+        # not...
 
         if self.aligned:
             for d in data:

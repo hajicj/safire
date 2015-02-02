@@ -215,7 +215,7 @@ class VTextCorpus(TextCorpus):
         self._cachedir = mkdtemp()
         self._memory = memory.Memory(cachedir=self._cachedir, verbose=0)
 
-        self.__getitem__ = self._memory.cache(self.__getitem__)
+        #self.__getitem__ = self._memory.cache(self.__getitem__)
 
     def __iter__(self):
         """
@@ -575,7 +575,8 @@ class VTextCorpus(TextCorpus):
         return vtlist
 
     def save(self, *args, **kwargs):
-        attrs_to_ignore = ['__getitem__']
+        #attrs_to_ignore = ['__getitem__']
+        attrs_to_ignore = []
         if 'ignore' not in kwargs:
             kwargs['ignore'] = frozenset(attrs_to_ignore)
         else:
@@ -588,8 +589,18 @@ class VTextCorpus(TextCorpus):
         corpus = super(VTextCorpus, cls).load(fname, mmap=mmap)
 
         # Restore ignored __getitem__
-        corpus.__getitem__ = VTextCorpus.__getitem__
-        corpus.__getitem__ = corpus._memory.cache(corpus.__getitem__)
+        #corpus.__getitem__ = VTextCorpus.__getitem__
+        #corpus.__getitem__ = corpus._memory.cache(corpus.__getitem__)
         # Restoring works, but caching doesn't..?
 
         return corpus
+
+    def __getstate__(self):
+        logging.debug(u'VTextCorpus dict:\n{0}'.format(
+            '\n'.join([u'    {0}: {1}'.format(key, value)
+                       for key, value in self.__dict__.iteritems()])
+        ))
+        return self.__dict__
+
+    def __setstate__(self, d):
+        self.__dict__.update(d)
