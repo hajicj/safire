@@ -103,7 +103,6 @@ class MultimodalDatasetLoader(object):
     called separately for text and image data.
 
     """
-
     def __init__(self, root, name, sentences=False, text_loader=VTextCorpus,
                  img_loader=ImagenetCorpus, text_serializer=MmCorpus,
                  img_serializer=MmCorpus):
@@ -877,6 +876,24 @@ class MultimodalDatasetLoader(object):
         corpus = ImagenetCorpus.load(corpus_full_path)
 
         return corpus
+
+    def pipeline_name(self, infix=None):
+        """Returns the filename to which a safire pipeline should be stored
+        with the given infix."""
+        return os.path.join(self.root,
+                            self.layout.corpus_dir,
+                            self.layout.name
+                            + infix
+                            + self.layout.pipeline_suffix)
+
+    def pipeline_serialization_target(self, infix=None):
+        """Returns the filename which should serve as the ``fname`` argument for
+        safire pipeline serialization."""
+        return os.path.join(self.root,
+                            self.layout.corpus_dir,
+                            self.layout.name
+                            + infix
+                            + self.layout.pipeline_serialization_suffix)
 
     @classmethod
     def __default_infix(cls, infix):

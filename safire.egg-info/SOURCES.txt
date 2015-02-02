@@ -88,6 +88,7 @@ test/__init__.py
 test/safire_test_case.py
 test/test_base_sgd_learner.py
 test/test_clamped_sampler.py
+test/test_corpus2dense.py
 test/test_da_unsupervised_training.py
 test/test_dataset_transformers.py
 test/test_frequency_based_transform.py
@@ -121,6 +122,12 @@ test/test-data/test-data.emtr.pkl
 test/test-data/test-data.im.ftrs.csv
 test/test-data/test-data.vtext-image-map.csv
 test/test-data/test-data.vtlist
+test/test-data/corpora/test-data.NAV.p0.2.pff.fc.tfidf.vt.mmcorp
+test/test-data/corpora/test-data.NAV.p0.2.pff.fc.tfidf.vt.mmcorp.0
+test/test-data/corpora/test-data.NAV.p0.2.pff.fc.tfidf.vt.vtcorp
+test/test-data/corpora/test-data.NAV.p0.2.pff.fc.vt.mmcorp
+test/test-data/corpora/test-data.NAV.p0.2.pff.fc.vt.mmcorp.0
+test/test-data/corpora/test-data.NAV.p0.2.pff.fc.vt.vtcorp
 test/test-data/img/0000000323.jpg
 test/test-data/img/0000000326.jpg
 test/test-data/img/0000000714.jpg

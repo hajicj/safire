@@ -13,8 +13,11 @@ will be at the end run through the trained model and saved with the
 """
 import argparse
 import logging
+from gensim.utils import SaveLoad
 import matplotlib.pyplot as plt
 import operator
+import os
+from safire.datasets.dataset import Dataset
 import theano
 import theano.compile.pfunc
 from safire.data.loaders import MultimodalShardedDatasetLoader, ModelLoader, \
@@ -235,23 +238,38 @@ def main(args):
         raise ValueError('Must specify either text or image label.')
 
     # Need to refactor dataset loading.
+    # ...no more difference in principle between image labels and text labels.
     if args.img_label:
         logging.info('Loading dataset with img. label {0}'
                      ''.format(args.img_label))
         # Replace this:
-        dataset = mdloader.load_img(args.img_label)
+        # dataset = mdloader.load_img(args.img_label)
+
         # by this:
         #  - get saved pipeline filename based on the label
-        #  - load the pipeline
-        #  - cast to dataset
+        #pipeline_fname = os.path.join(
+        #    mdloader.root,
+        #    mdloader.layout.get_image_corpus_file(args.img_label))
+        pipeline_fname = mdloader.pipeline_name(args.img_label)
 
     elif args.text_label:
         logging.info('Loading dataset with text label {0}'
                      ''.format(args.text_label))
-        dataset = mdloader.load_text(args.text_label)
+        #dataset = mdloader.load_text(args.text_label)
+        # pipeline_fname = os.path.join(
+        #     mdloader.root,
+        #     mdloader.layout.get_text_corpus_file(args.text_label))
+        pipeline_fname = mdloader.pipeline_name(args.text_label)
+
     else:
         raise argparse.ArgumentError('Must supply either --img_label'
                                      'or --text_label.')
+
+    #  - load the pipeline
+    pipeline = SaveLoad.load(fname=pipeline_fname)
+
+    #  - cast to dataset
+    dataset = Dataset(pipeline)
 
     logging.info('Setting up %s handle with output dimension %d' % (args.model,
                                                                     args.n_out))

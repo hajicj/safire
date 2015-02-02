@@ -366,12 +366,10 @@ def main(args):
         pipeline = post_tfidf[pipeline]
 
     if args.uniform_covariance:
-
         ucov = LeCunnVarianceScalingTransform(pipeline)
         pipeline = ucov[pipeline]
 
     if args.tanh:
-
         tanh_transform = GeneralFunctionTransform(numpy.tanh,
                                                   multiplicative_coef=args.tanh)
         pipeline = tanh_transform[pipeline]
@@ -411,14 +409,18 @@ def main(args):
                          'because we cannot derive its dimension.')
             pipeline.dry_run()
 
-    # This is a different level of abstraction..?
+    # Getting the names: this is a different level of abstraction..?
+    # Needs to refactor the Loaders so that this operation is easier.
     cnames = loader.layout.required_text_corpus_names(args.label)
 
     data_name = os.path.join(loader.root, loader.layout.corpus_dir, cnames[0])
     obj_name = os.path.join(loader.root, loader.layout.corpus_dir, cnames[2])
 
-    logging.info('  Data name: %s' % cnames[0])
-    logging.info('  Obj name:  %s' % cnames[2])
+    data_name = loader.pipeline_serialization_target(args.label)
+    logging.info('  Data name: {0}'.format(data_name))
+
+    obj_name = loader.pipeline_name(args.label)
+    logging.info('  Obj name:  {0}'.format(obj_name))
 
     serializer_class = ShardedCorpus
 
@@ -438,6 +440,14 @@ def main(args):
     assert isinstance(pipeline, SwapoutCorpus), 'Serialization not applied' \
                                                 ' correctly.'
 
+    logging.info('Corpus stats: {0} documents, {1} features.'.format(
+        len(pipeline),
+        safire.utils.transcorp.dimension(pipeline)))
+
+    if not args.no_save_corpus:
+        logging.info('Saving pipeline to {0}'.format(obj_name))
+        pipeline.save(obj_name)
+
     # HACK: logging word2vec OOV
     if args.word2vec:
         # Report out-of-vocabulary statistics
@@ -450,16 +460,6 @@ def main(args):
         embeddings_dict = word2vec_to_export.embeddings
         with open(args.word2vec_export, 'wb') as w2v_export_handle:
             cPickle.dump(embeddings_dict, w2v_export_handle, protocol=-1)
-
-    # We are saving the VTextCorpus rather than the transformed corpus,
-    # in order to be able to load it.
-
-    logging.info('Corpus stats: %d documents, %d features.' % (
-        len(pipeline),
-        safire.utils.transcorp.dimension(pipeline)))
-
-    if not args.no_save_corpus:
-        pipeline.save(obj_name)
 
     _endtime = time.clock()
     _totaltime = _endtime - _starttime
