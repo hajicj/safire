@@ -361,6 +361,12 @@ class ShardedCorpus(IndexedCorpus):
         :type shardsize: int
         :param shardsize: The new shard size.
         """
+        # TODO: set output mode so that it corresponds to serialization mode
+        gensim = self.gensim
+        sparse_retrieval = self.sparse_retrieval
+
+        self.sparse_retrieval = self.sparse_serialization
+        self.gensim = False
 
         # Determine how many new shards there will be
         n_new_shards = int(math.floor(self.n_docs / float(shardsize)))
@@ -419,6 +425,8 @@ class ShardedCorpus(IndexedCorpus):
                 self.offsets = new_offsets
                 self.shardsize = shardsize
                 self.reset()
+                self.gensim = gensim
+                self.sparse_retrieval = sparse_retrieval
 
     def _shard_name(self, n):
         """Generates the name for the n-th shard."""
@@ -490,6 +498,8 @@ class ShardedCorpus(IndexedCorpus):
 
     def get_by_offset(self, offset):
         """As opposed to getitem, this one only accepts ints as offsets."""
+        if offset < 0:
+            offset += len(self)
         self._ensure_shard(offset)
         result = self.current_shard[offset - self.current_offset]
         return result
@@ -520,7 +530,18 @@ class ShardedCorpus(IndexedCorpus):
 
         elif isinstance(offset, slice):
             start = offset.start
+
+            if start is None:
+                start = 0
+            elif start < 0:
+                start += len(self)
+
             stop = offset.stop
+            if stop is None:
+                stop = len(self)
+            elif stop < 0:
+                stop += len(self)
+
             if stop > self.n_docs:
                 raise IndexError('Requested slice offset'
                                  ' %d out of range (%d docs)' % (stop,

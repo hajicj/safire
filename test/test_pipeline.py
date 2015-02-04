@@ -369,6 +369,8 @@ class TestPipeline(SafireTestCase):
         print '--running text to image transformation as slice--'
         ideal_slice = text2img_pipeline[0:len(text2img_pipeline)]
 
+        self.assertEqual(len(ideal_images), len(ideal_slice))
+
 
 ###############################################################################
 

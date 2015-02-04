@@ -110,6 +110,8 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
         self.n_in = self.dim
         self.n_out = self.dim
 
+        self.chunksize = None
+
     def __getitem__(self, item):
         """This is where on-the-fly construction of the flattened dataset
         happens. (Note: will be cached.)

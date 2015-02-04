@@ -637,3 +637,4 @@ if __name__ == '__main__':
     #
     # Now we'd just need to build a similarity index, but that truly is outside
     # the scope of this tutorial. (Hint: use gensim's Similarity class.)
+    print 'Tutorial finished!'
