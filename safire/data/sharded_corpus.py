@@ -361,7 +361,6 @@ class ShardedCorpus(IndexedCorpus):
         :type shardsize: int
         :param shardsize: The new shard size.
         """
-        # TODO: set output mode so that it corresponds to serialization mode
         gensim = self.gensim
         sparse_retrieval = self.sparse_retrieval
 
