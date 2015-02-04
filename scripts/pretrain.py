@@ -17,7 +17,7 @@ from gensim.utils import SaveLoad
 import matplotlib.pyplot as plt
 import operator
 import os
-from safire.utils.transcorp import dimension
+from safire.utils.transcorp import dimension, smart_cast_dataset
 import safire
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
@@ -287,7 +287,8 @@ def main(args):
     pipeline = SaveLoad.load(fname=pipeline_fname)
 
     #  - cast to dataset
-    dataset = Dataset(pipeline, test_p=0.1, devel_p=0.1)
+    #dataset = Dataset(pipeline, test_p=0.1, devel_p=0.1)
+    dataset = smart_cast_dataset(pipeline, test_p=0.1, devel_p=0.1)
 
     logging.info('Setting up %s handle with output dimension %d' % (args.model,
                                                                     args.n_out))

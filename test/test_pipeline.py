@@ -349,9 +349,6 @@ class TestPipeline(SafireTestCase):
         t2i_transformer = SafireTransformer(text2img_handle)
         text2img_pipeline = t2i_transformer[text_runtime_pipeline]
 
-        print '--applying dense throughput--'
-
-
         print '--debugging pipeline run--'
         print log_corpus_stack(text2img_pipeline)
         transformers = get_transformers(text2img_pipeline)
@@ -368,6 +365,9 @@ class TestPipeline(SafireTestCase):
         ideal_images = [ideal_image for ideal_image in text2img_pipeline]
 
         print 'Ideal images: {0}'.format(type(ideal_images))
+
+        print '--running text to image transformation as slice--'
+        ideal_slice = text2img_pipeline[0:len(text2img_pipeline)]
 
 
 ###############################################################################

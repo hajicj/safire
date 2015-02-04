@@ -297,33 +297,41 @@ def convert_to_dense(corpus):
     This function is called by DatasetABC on initialization if the
     ``ensure_dense`` option is set.
     """
+    # Straightforward: if we have a dense output-capable corpus, set it to
+    # dense output.
     if isinstance(corpus, safire.data.serializer.SwapoutCorpus) \
-        and isinstance(corpus.obj, ShardedCorpus):
+            and isinstance(corpus.obj, ShardedCorpus):
             corpus.obj.gensim = False
             corpus.obj.sparse_retrieval = False
             return corpus
+
+    # If we have a dataset that already is outputting dense data, leave it be.
     elif isinstance(corpus, safire.datasets.dataset.DatasetABC) \
             and isinstance(corpus[0], numpy.ndarray):
-        logging.info('DatasetABC has dense output by default (this very method'
-                     'gets called during initialization).')
+        logging.info('Dataset class {0}: conversion to dense already done'
+                     ' downstream somewhere, no change.'.format(type(corpus)))
         return corpus
+
+    # If we have an IndexedTransformedCorpus that is already outputting dense
+    # data, leave it be.
     elif isinstance(corpus, IndexedTransformedCorpus) \
             and isinstance(corpus[0], numpy.ndarray):
         logging.warn('Corpus class {0}: conversion to dense already done'
                      ' downstream somewhere, no change.'.format(type(corpus)))
         return corpus
+
+    # In case we cannot guarantee dense output:
     else:
-        logging.warn('Corpus class {0}: cannot rely on '
-                     'ShardedCorpus.gensim=False, assuming gensim sparse '
-                     'vector output and applying Corpus2Dense.'
+        logging.warn('Corpus class {0}: cannot rely on pre-existing dense '
+                     'output or ShardedCorpus.gensim=False, assuming gensim '
+                     'sparse vector output and applying Corpus2Dense.'
                      ''.format(type(corpus)))
 
         transformer = safire.utils.transformers.Corpus2Dense(corpus)
         # Have to _apply to make sure the output is a pipeline, because
         # Corpus2Dense call on __getitem__ might call gensim2dense directly
         # on something that behaves like a corpus but is not an instance of
-        # CorpusABC (like: Datasets? but why would we want to ensure dense
-        # output on Datasets like this?)
+        # CorpusABC.
         return transformer._apply(corpus)
 
 
@@ -387,3 +395,12 @@ def smart_apply_transcorp(obj, corpus, *args, **kwargs):
         return IndexedTransformedCorpus(obj, corpus, *args, **kwargs)
     except TypeError:
         return TransformedCorpus(obj, corpus, *args, **kwargs)
+
+
+def smart_cast_dataset(pipeline, *args, **kwargs):
+    """Casts the given pipeline to a Dataset with the given args and kwargs
+    unless it already is a Dataset."""
+    if isinstance(pipeline, safire.datasets.dataset.DatasetABC):
+        return pipeline
+    else:
+        return safire.datasets.dataset.Dataset(pipeline, *args, **kwargs)

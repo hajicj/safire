@@ -322,6 +322,7 @@ class ShardedCorpus(IndexedCorpus):
         if offset >= self.n_docs:
             raise ValueError('Too high offset specified (%d), available docs: %d' % (offset, self.n_docs))
         if offset < 0:
+            #offset = len(self) + offset
             raise ValueError('Negative offset {0} currently not'
                              ' supported.'.format(offset))
         return k

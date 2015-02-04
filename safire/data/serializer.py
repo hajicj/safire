@@ -83,6 +83,10 @@ class SwapoutCorpus(IndexedTransformedCorpus):
     The key idea is that this design will allow us to retain and backtrack
     through the applied transformations while making retrieval faster."""
     def __init__(self, swap, corpus):
+        assert len(swap) == len(corpus), 'Swapout corpus: original and swap ' \
+                                         'lengths do not match! ({0} vs {1})' \
+                                         ''.format(len(corpus), len(swap))
+
         self.obj = swap  # The corpus which gets used instead of the input
                          # corpus.
         self.corpus = corpus
@@ -109,3 +113,6 @@ class SwapoutCorpus(IndexedTransformedCorpus):
         print '\n\nSaving SwapoutCorpus with pipeline:\n{0}'.format(
             safire.utils.transcorp.log_corpus_stack(self))
         super(SwapoutCorpus, self).save(*args, **kwargs)
+
+    def __len__(self):
+        return len(self.obj)

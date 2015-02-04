@@ -155,6 +155,12 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
     def derive_dimension(self, composite):
         return FlattenedDatasetCorpus.flattened_dimension(composite.dim)
 
+    def __len__(self):
+        if self.indexes is not None:
+            return len(self.indexes)
+        else:
+            return len(self.corpus)
+
     @staticmethod
     def item2flat(item):
         """Flattens a (recursive) tuple of numpy ndarrays/scipy sparse matrices
