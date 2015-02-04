@@ -277,7 +277,6 @@ def main(args):
 
     #  - load the pipeline
     pipeline = SaveLoad.load(fname=pipeline_fname)
-
     logging.info('Loaded pipeline:\n{0}'.format(log_corpus_stack(pipeline)))
 
     #  - cast to dataset
@@ -285,7 +284,6 @@ def main(args):
 
     logging.info('Setting up %s handle with output dimension %d' % (args.model,
                                                                     args.n_out))
-
     # Loading model class
     try:
         model_class = getattr(models, args.model)
