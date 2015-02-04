@@ -96,13 +96,13 @@ class SwapoutCorpus(IndexedTransformedCorpus):
     def __getitem__(self, key):
         # if isinstance(key, slice):
         #     logging.warn('Are you sure the swapped corpus is sliceable?')
-        print 'Calling __getitem__ on SwapoutCorpus with obj of type {0}' \
-              'and item {1}'.format(type(self.obj), key)
+        # print 'Calling __getitem__ on SwapoutCorpus with obj of type {0}' \
+        #       'and item {1}'.format(type(self.obj), key)
         out = self.obj[key]
-        print '  SwapoutCorpus.__getitem__: operating on type {0} with ' \
-              'item {1}'.format(type(out), key)
-        if isinstance(out, numpy.ndarray):
-            print '              output: shape {0}'.format(out.shape)
+        # print '  SwapoutCorpus.__getitem__: operating on type {0} with ' \
+        #       'item {1}'.format(type(out), key)
+        # if isinstance(out, numpy.ndarray):
+        #     print '              output: shape {0}'.format(out.shape)
         return out
 
     def __iter__(self):

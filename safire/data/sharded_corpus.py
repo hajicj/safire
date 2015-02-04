@@ -350,7 +350,7 @@ class ShardedCorpus(IndexedCorpus):
         if self.current_shard_n == self.n_shards:
             return False # There's no next shard.
         return (self.offsets[self.current_shard_n+1] <= offset) \
-               and (offset < self.offsets[self.current_shard_n+2])
+                and (offset < self.offsets[self.current_shard_n+2])
 
     def resize_shards(self, shardsize):
         """Re-process the dataset to new shard size. This may take pretty long.

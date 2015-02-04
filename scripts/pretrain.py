@@ -17,7 +17,8 @@ from gensim.utils import SaveLoad
 import matplotlib.pyplot as plt
 import operator
 import os
-from safire.utils.transcorp import dimension, smart_cast_dataset
+from safire.utils.transcorp import dimension, smart_cast_dataset, \
+    log_corpus_stack
 import safire
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
@@ -31,7 +32,8 @@ from safire.learning.interfaces import SafireTransformer
 from safire.learning.learners import BaseSGDLearner
 import safire.learning.models as models
 from safire.learning.models import check_model_dataset_compatibility
-from safire.utils import ReLU, cappedReLU, build_cappedReLU, abstanh
+from safire.utils import ReLU, cappedReLU, build_cappedReLU, abstanh, \
+    profile_run
 
 print theano.config.compute_test_value
 
@@ -208,6 +210,8 @@ def _build_argument_parser():
                              'this is given, the pipeline will be saved '
                              'including the Serializer block.')
 
+    parser.add_argument('--profile_main', action='store_true',
+                        help='If set, will profile the main() function.')
     parser.add_argument('--profile_training', action='store_true',
                         help='If set, will profile the training procedure.')
     parser.add_argument('--plot_monitors', action='store',
@@ -260,23 +264,11 @@ def main(args):
     if args.img_label:
         logging.info('Loading dataset with img. label {0}'
                      ''.format(args.img_label))
-        # Replace this:
-        # dataset = mdloader.load_img(args.img_label)
-
-        # by this:
-        #  - get saved pipeline filename based on the label
-        #pipeline_fname = os.path.join(
-        #    mdloader.root,
-        #    mdloader.layout.get_image_corpus_file(args.img_label))
         pipeline_fname = mdloader.pipeline_name(args.img_label)
 
     elif args.text_label:
         logging.info('Loading dataset with text label {0}'
                      ''.format(args.text_label))
-        #dataset = mdloader.load_text(args.text_label)
-        # pipeline_fname = os.path.join(
-        #     mdloader.root,
-        #     mdloader.layout.get_text_corpus_file(args.text_label))
         pipeline_fname = mdloader.pipeline_name(args.text_label)
 
     else:
@@ -286,8 +278,9 @@ def main(args):
     #  - load the pipeline
     pipeline = SaveLoad.load(fname=pipeline_fname)
 
+    logging.info('Loaded pipeline:\n{0}'.format(log_corpus_stack(pipeline)))
+
     #  - cast to dataset
-    #dataset = Dataset(pipeline, test_p=0.1, devel_p=0.1)
     dataset = smart_cast_dataset(pipeline, test_p=0.1, devel_p=0.1)
 
     logging.info('Setting up %s handle with output dimension %d' % (args.model,
@@ -416,6 +409,7 @@ def main(args):
     pipeline = transformer[pipeline]
 
     # Serialization (this should be wrapped in some utility function?)
+    # Doesn't always have to happen. (Difference from dataset2corpus.)
     if args.serialize:
         serializer_class = ShardedCorpus
         data_name = mdloader.pipeline_serialization_target(args.transformation_label)
@@ -433,7 +427,7 @@ def main(args):
 
     # Now we save the pipeline. This is analogous to the Dataset2Corpus step.
     # In this way, also, the learned transformation is stored and can be
-    # recycled.
+    # recycled, and other handles can be derived from the sftrans.model_handle.
     pipeline_savename = mdloader.pipeline_name(args.transformation_label)
     logging.info('    Pipeline name: {0}'.format(pipeline_savename))
 
@@ -453,4 +447,8 @@ if __name__ == '__main__':
         logging.basicConfig(format='%(levelname)s : %(message)s',
                             level=logging.INFO)
 
-    main(args)
+    if args.profile_main:
+        report, _ = profile_run(main, args)
+        print report.getvalue()
+    else:
+        main(args)

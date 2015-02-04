@@ -563,14 +563,14 @@ class TransformedDataset(Dataset):
 
     def __getitem__(self, item):
 
-        print 'Calling __getitem__ on TransformedDataset with obj of type {0}' \
-              'and item {1}'.format(type(self.obj), item)
+        # print 'Calling __getitem__ on TransformedDataset with obj of type {0}' \
+        #       'and item {1}'.format(type(self.obj), item)
         data = self.data[item]
-        print '  TransformedDataset.__getitem__: operating on type {0} with ' \
-              'shape {1}; item {2}'.format(type(data), data.shape, item)
+        # print '  TransformedDataset.__getitem__: operating on type {0} with ' \
+        #       'shape {1}; item {2}'.format(type(data), data.shape, item)
         result = self.obj[data]
-        print '      Result: type {0} with shape {1}'.format(type(result),
-                                                             result.shape)
+        # print '      Result: type {0} with shape {1}'.format(type(result),
+        #                                                      result.shape)
         return result
 
 

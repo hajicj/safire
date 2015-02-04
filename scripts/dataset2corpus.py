@@ -20,6 +20,7 @@ from safire.datasets.sharded_multimodal_dataset import \
     UnsupervisedShardedVTextCorpusDataset
 from safire.data.word2vec_transformer import Word2VecTransformer
 import safire.utils
+from safire.utils import profile_run
 from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.data.frequency_based_transform import FrequencyBasedTransformer
@@ -174,6 +175,9 @@ def build_argument_parser():
                         'instead of creating a corpus, will attempt to clear '+
                         'all corpora in the dataset with the infix given by '+
                         'the --label argument.')
+
+    parser.add_argument('--profile_main', action='store_true',
+                        help='If set, will profile the main() function.')
     parser.add_argument('--profile_serialization', action='store_true',
                         help='If given, will profile the serialization.')
     parser.add_argument('--profile_transformation', action='store_true',
@@ -484,4 +488,8 @@ if __name__ == '__main__':
         logging.basicConfig(format='%(levelname)s : %(message)s',
                             level=logging.INFO)
 
-    main(args)
+    if args.profile_main:
+        report, _ = profile_run(main, args)
+        print report.getvalue()
+    else:
+        main(args)

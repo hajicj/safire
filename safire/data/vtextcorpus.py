@@ -364,9 +364,6 @@ class VTextCorpus(TextCorpus):
         sentences = []
         current_buffer = []
         for line_no, line in enumerate(doc_handle):
-            # Quick fix?
-            #if self.gzipped:
-            #    line = line.decode('utf-8')
 
             #logging.debug('Line: %s' % line.strip())
             #safire.utils.check_malformed_unicode(line.strip())
