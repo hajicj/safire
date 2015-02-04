@@ -605,7 +605,7 @@ if __name__ == '__main__':
     #    it needs __getitem__ slicing/list support. Of course, we could've added
     #    the dataset: text_runtime_pipeline = Dataset(text_pipeline)
 
-    tan = GeneralFunctionTransform(numpy.tan,
+    tan = GeneralFunctionTransform(numpy.arctanh,
                                    multiplicative_coef=1.0/0.99975,
                                    outer_multiplicative_coef=3.0)
     # We now invert the GeneralFunctionTransform that we used in constructing
@@ -615,7 +615,7 @@ if __name__ == '__main__':
     #
     # we now need:
     #
-    # X = (1 / inner) * numpy.tan((1 / outer) * Y)
+    # X = (1 / inner) * numpy.arctanh((1 / outer) * Y)
     #
     # to restore the original values.
     #
