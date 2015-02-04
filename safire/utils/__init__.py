@@ -446,6 +446,7 @@ def flatten_composite_item(item):
         else:
             yield i
 
+
 def uniform_steps(iterable, k):
     """Chooses K items from the iterable so that they are a constant step size
     from each other. The last member is chosen"""
@@ -832,12 +833,12 @@ class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):
 
     def __getitem__(self, item):
 
-        logging.debug('Accessing item: {0}'.format(item))
+        #logging.debug('Accessing item: {0}'.format(item))
 
         retrieved = self.corpus[item]
-        logging.debug('Retrieved: {0}'.format(retrieved))
+        #logging.debug('Retrieved: {0}'.format(retrieved))
 
         output = self.obj[retrieved]
-        logging.debug('Output: {0}'.format(output))
+        #logging.debug('Output: {0}'.format(output))
 
         return output

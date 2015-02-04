@@ -5,6 +5,7 @@ from gensim.interfaces import TransformedCorpus
 from gensim.utils import is_corpus
 import numpy
 
+from safire.utils import IndexedTransformedCorpus
 from safire.datasets.dataset import DatasetTransformer
 import safire.utils.transcorp
 import safire.datasets.dataset
@@ -16,7 +17,6 @@ import safire.datasets.dataset
 from safire.utils import flatten_composite_item
 
 
-# This may be deprecated/rewritten as a wrapper around TransformedCorpus...
 class FlattenComposite(DatasetTransformer):
     """This class flattens a composite dataset into a simple dataset. This
     allows on-the-fly integration of various data sources into unstructured
@@ -94,10 +94,11 @@ class FlattenComposite(DatasetTransformer):
         if iscorpus or isinstance(item, safire.datasets.dataset.DatasetABC):
             return self._apply(item)
         else:
-            raise ValueError('Cannot apply serializer to individual documents.')
+            raise ValueError('Cannot apply flatten_composite to individual '
+                             'documents.')
 
 
-class FlattenedDatasetCorpus(TransformedCorpus):
+class FlattenedDatasetCorpus(IndexedTransformedCorpus):
 
     def __init__(self, flatten, dataset):
 
@@ -142,10 +143,11 @@ class FlattenedDatasetCorpus(TransformedCorpus):
 
                 # Depends here on ability of SwapoutCorpus serialized by
                 # ShardedCorpus to deliver numpy ndarrays from lists of indices.
-                partial = numpy.array(dataset[idxs])
+                partial_list = dataset[idxs]
+                partial = numpy.array(partial_list)
                 retrieved.append(partial)
-            logging.debug('Retrieved shapes:'
-                          ' {0}'.format([r.shape for r in retrieved]))
+            logging.debug('Retrieved shapes: {0}'
+                          ''.format([r.shape for r in retrieved]))
             output = self.item2flat(retrieved)
 
         return output

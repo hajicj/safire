@@ -100,8 +100,8 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
         # - embeddings_matrix is n_in * n_out
         embeddings = numpy.dot(batch_projection, self.embeddings_matrix)
 
-        logging.debug('  [w2v_dt] embeddings shape:'
-                      ' {0}'.format(embeddings.shape))
+        print '  [w2v_dt] embeddings shape:' \
+              ' {0}'.format(embeddings.shape)
         return embeddings
 
     def get_batch_sample(self, batch):

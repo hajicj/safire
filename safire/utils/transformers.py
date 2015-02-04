@@ -260,7 +260,8 @@ class StandardScalingTransformer(gensim.interfaces.TransformationABC):
 
 class Corpus2Dense(gensim.interfaces.TransformationABC):
 
-    def __init__(self, corpus=None, dim=None):
+    def __init__(self, corpus=None, dim=None,
+                 dense_throughput=False):
         # Ah, the joys of reliably deriving dimensions and handling missing
         # values.
         if dim is None and corpus is None:
@@ -282,13 +283,12 @@ class Corpus2Dense(gensim.interfaces.TransformationABC):
                     raise ValueError('No dimension given and dimension could not'
                                      ' be derived; quitting.')
         self.dim = proposed_dim
+        self.dense_throughput = dense_throughput
 
     def _apply(self, corpus, chunksize=None):
-        try:
-            return IndexedTransformedCorpus(self, corpus, chunksize)
-        except TypeError:
-            raise
-            return TransformedCorpus(self, corpus, chunksize)
+        return safire.utils.transcorp.smart_apply_transcorp(self,
+                                                            corpus,
+                                                            chunksize=chunksize)
 
     def __getitem__(self, item):
         """This one should batch-transform lists of gensim vectors on
@@ -300,5 +300,5 @@ class Corpus2Dense(gensim.interfaces.TransformationABC):
             return self._apply(item)
 
         # need to add logic for one item vs. an array of items?
-        logging.debug('Transforming item: {0}'.format(item))
+        print 'Transforming item: {0}'.format(item)
         return gensim2ndarray(item, self.dim)

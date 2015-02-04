@@ -33,6 +33,7 @@ from safire.data.word2vec_transformer import Word2VecTransformer
 #from safire.datasets.transformations import DatasetTransformer
 import safire.datasets.dataset
 #import safire.datasets.transformations
+from safire.utils import IndexedTransformedCorpus
 import safire.utils.transformers
 
 
@@ -161,8 +162,8 @@ def run_transformations(item, *transformations):
     """Runs the TransformedCorpus transformation stack."""
     out = item
     for tr in transformations:
-        print 'Transformation applied: %s' % str(tr)
         out = tr[out]
+        print 'Transformation applied: %s' % str(tr)
         print 'Result: %s' % str(out)
     return out
 
@@ -181,14 +182,53 @@ def run_transformations(item, *transformations):
 #     return tr
 
 def get_transformers(pipeline):
-    """Recovers the Transformation objects from a pipeline."""
+    """Recovers the Transformation objects from a pipeline.
+
+    Problems handling Swapout: the recovered list of transformers
+    should be enough to re-run the pipeline, but there's a problem with gensim
+    to dense conversion within a SwapoutCorpus that delegates retrieval to a
+    ShardedCorpus, thus performing gensim->dense conversion silently, without
+    an intervening block.
+
+    This problem should NOT be handled inside
+    ShardedCorpus, because it's not something ShardedCorpus is for.
+
+    Can it be handled by Serializer transformer? Instead of hooking the
+    ShardedCorpus directly to SwapoutCorpus, it could hook *itself* and call
+    its self.corpus.__getitem__ on a SwapoutCorpus.__getitem__ call -- and if
+    a transformation is silently happening there, on a transformer call, should
+    just cast the gensim vector(s) to ndarray using gensim2ndarray().
+
+    Problem handling Datasets: since the Dataset just passes the __getitem__
+    call to its underlying corpus, it acts as a transformer and corpus in one.
+    """
+    if isinstance(pipeline, safire.data.serializer.SwapoutCorpus):
+        logging.warn('get_transformers(): Corpus of type {0}, skipping '
+                     'transformer.'.format(type(pipeline)))
+        # ...and here, ladies and gents, we show how terrible this module is.
+
+        # If a silent conversion is happening...
+        if isinstance(pipeline.obj, ShardedCorpus) and \
+                        pipeline.obj.gensim is False and \
+                        pipeline.obj.sparse_retrieval is False:
+            # ..add a convertor, so that the resulting stack of transformers
+            # can be run.
+            return get_transformers(pipeline.corpus) + \
+                   [safire.utils.transformers.Corpus2Dense(
+                       dim=pipeline.obj.dim)]
+
+        # This will break on the ShardedCorpus being set to sparse_retrieval,
+        # but who cares.
+        return get_transformers(pipeline.corpus)
     if isinstance(pipeline, TransformedCorpus):
         return get_transformers(pipeline.corpus) + [pipeline.obj]
     if isinstance(pipeline, safire.datasets.dataset.TransformedDataset):
         return get_transformers(pipeline.data) + [pipeline.obj]
     # Ignoring cast to dataset???
     if isinstance(pipeline, safire.datasets.dataset.DatasetABC):
-        return get_transformers(pipeline.data)
+        logging.warn('get_transformers(): Corpus of type {0}, using as '
+                     'transformer.'.format(type(pipeline)))
+        return get_transformers(pipeline.data) #+ [pipeline]
     return [] # If the bottom has been reached.
 
 
@@ -222,13 +262,22 @@ class KeymapDict(object):
 
 def log_corpus_stack(corpus):
     """Reports the types of corpora and transformations of a given
-    corpus stack."""
+    corpus stack. Currently cannot deal with CompositeDataset pipelines."""
     if isinstance(corpus, TransformedCorpus):
-        r = 'Type: %s with obj %s' % (type(corpus), type(corpus.obj))
+        r = 'Type: {0} with obj {1}'.format(type(corpus), type(corpus.obj))
         return '\n'.join([r, log_corpus_stack(corpus.corpus)])
     elif isinstance(corpus, safire.datasets.dataset.TransformedDataset):
         r = 'Type: %s with obj %s' % (type(corpus), type(corpus.obj))
         return '\n'.join([r, log_corpus_stack(corpus.data)])
+    elif isinstance(corpus, safire.datasets.dataset.CompositeDataset):
+        r = 'Type: {0} with the following datasets: {1}'.format(
+            type(corpus),
+            ''.join(['\n    {0}'.format(type(d)) for d in corpus.data])
+        )
+        individual_logs = [log_corpus_stack(d) for d in corpus.data]
+        combined_logs = '------component-------\n' + \
+                        '------component-------\n'.join(individual_logs)
+        return '\n'.join([r, combined_logs])
     elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
         r = 'Type: {0}, passing through DatasetABC to underlying corpus {1}' \
             ''.format(type(corpus), type(corpus.data))
@@ -253,9 +302,16 @@ def convert_to_dense(corpus):
             corpus.obj.gensim = False
             corpus.obj.sparse_retrieval = False
             return corpus
-    elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
+    elif isinstance(corpus, safire.datasets.dataset.DatasetABC) \
+            and isinstance(corpus[0], numpy.ndarray):
         logging.info('DatasetABC has dense output by default (this very method'
                      'gets called during initialization).')
+        return corpus
+    elif isinstance(corpus, IndexedTransformedCorpus) \
+            and isinstance(corpus[0], numpy.ndarray):
+        logging.warn('Corpus class {0}: conversion to dense already done'
+                     ' downstream somewhere, no change.'.format(type(corpus)))
+        return corpus
     else:
         logging.warn('Corpus class {0}: cannot rely on '
                      'ShardedCorpus.gensim=False, assuming gensim sparse '
@@ -269,3 +325,65 @@ def convert_to_dense(corpus):
         # CorpusABC (like: Datasets? but why would we want to ensure dense
         # output on Datasets like this?)
         return transformer._apply(corpus)
+
+
+def find_type_in_pipeline(pipeline, type_to_find):
+    """Finds the topmost instance of the given block type in the given pipeline.
+    Returns the given block."""
+    if isinstance(pipeline, type_to_find):
+        return pipeline
+    else:
+        return find_type_in_pipeline(pipeline.corpus)
+
+
+def convert_to_dense_recursive(pipeline):
+    """Whenever possible, sets transformation inputs/outputs to be numpy
+    ndarrays, to do away with gensim2ndarray/ndarray2gensim conversions at
+    block boundaries.
+
+    This should be possible if:
+
+    * there is a corpus in the pipeline that can supply dense data
+      (numpy ndarrays, normally a SwapoutCorpus with a ShardedCorpus obj),
+    * all transformers from that point on can work directly on numpy ndarrays,
+    * all TransformedCorpus objects on the pipeline do not interfere with the
+      type of the data they pass on during __getitem__ or __iter__ calls
+      (this may be a problem for __iter__ when chunksize is set).
+    """
+    #
+    # WIP, do not use.
+    raise NotImplementedError()
+
+    # Find the last SwapoutCorpus that can give us dense data.
+    # Set this corpus to dense output.
+    # Set all remaining transformers to dense throughput.
+    def _todense_recursive(corpus):
+        # This is so far the only supported case of converting to dense.
+        if isinstance(corpus, safire.data.serializer.SwapoutCorpus):
+            if isinstance(corpus.obj, safire.data.sharded_corpus.ShardedCorpus):
+                corpus.obj.gensim = False
+                corpus.obj.sparse_retrieval = False
+                return
+            else:
+                # Let's try whether we can make the obj from which SwapoutCorpus
+                # is retrieving also dense.
+                _todense_recursive(corpus.obj)
+
+        # End of pipeline: ensure dense, insert Corpus2Dense?
+        if not isinstance(corpus, TransformedCorpus):
+            pass
+
+
+        # if has_dense_throughput(corpus):
+        #     _todense_recursive(corpus)
+        #     set_dense_throughput(corpus)
+
+
+def smart_apply_transcorp(obj, corpus, *args, **kwargs):
+    """Used inside a transformer's _apply() method.
+    Decides whether to initialize a TransformedCorpus, or an
+    IndexedTransformedCorpus."""
+    try:
+        return IndexedTransformedCorpus(obj, corpus, *args, **kwargs)
+    except TypeError:
+        return TransformedCorpus(obj, corpus, *args, **kwargs)

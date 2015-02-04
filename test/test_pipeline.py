@@ -22,7 +22,7 @@ from safire.datasets.transformations import FlattenComposite, docnames2indexes
 from safire.utils import parse_textdoc2imdoc_map
 from safire.utils.transcorp import dimension, get_id2word_obj, \
     get_composite_source, reset_vtcorp_input, get_transformers, \
-    run_transformations, log_corpus_stack
+    run_transformations, log_corpus_stack, bottom_corpus
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.datasets.dataset import Dataset, CompositeDataset
@@ -153,8 +153,8 @@ class TestPipeline(SafireTestCase):
         # Get text-image mapping
         t2i_file = os.path.join(self.data_root,
                                 self.loader.layout.textdoc2imdoc)
-        with open(t2i_file) as t2i_handle:
-            t2i_linecount = sum([1 for _ in t2i_handle])
+        #with open(t2i_file) as t2i_handle:
+        #    t2i_linecount = sum([1 for _ in t2i_handle])
 
         t2i_map = parse_textdoc2imdoc_map(t2i_file)
         t2i_list = [[text, image]
@@ -165,8 +165,12 @@ class TestPipeline(SafireTestCase):
         print '--Creating flattened dataset--'
         flatten = FlattenComposite(multimodal_dataset,
                                    indexes=t2i_indexes)
+        print '--applying flattened dataset--'
         flat_multimodal_corpus = flatten[multimodal_dataset]
-        flat_multimodal_dataset = Dataset(flat_multimodal_corpus)
+
+        print '--casting flattened corpus to dataset--'
+        flat_multimodal_dataset = Dataset(flat_multimodal_corpus,
+                                          ensure_dense=False)
 
         print '--Creating model handle--'
         self.model_handle = DenoisingAutoencoder.setup(flat_multimodal_dataset,
@@ -185,7 +189,8 @@ class TestPipeline(SafireTestCase):
         print '--running learning--'
         sftrans = SafireTransformer(self.model_handle,
                                     flat_multimodal_dataset,
-                                    self.learner)
+                                    self.learner,
+                                    dense_throughput=False)
         output = sftrans[flat_multimodal_dataset]
 
         print '--output--'
@@ -212,15 +217,158 @@ class TestPipeline(SafireTestCase):
         t2i_transformer = SafireTransformer(text2img_handle)
         text2img_pipeline = t2i_transformer[text_runtime_pipeline]
 
+        print '--applying dense throughput--'
+
+
         print '--debugging pipeline run--'
         print log_corpus_stack(text2img_pipeline)
         transformers = get_transformers(text2img_pipeline)
-        _ = run_transformations(0, *transformers)
+        bottom_corp = bottom_corpus(text2img_pipeline)
+        print 'Transformers: {0}'.format('\n'.join([str(tr)
+                                                    for tr in transformers]))
+        # This runs the transformation bottom-up, *without* first building
+        # the recursive call stack.
+        _ = run_transformations(iter(bottom_corp).next(), *transformers)
+        print '\n...the definitive pipeline:'
+        print log_corpus_stack(text2img_pipeline)
 
         print '--running text to image transformation--'
         ideal_images = [ideal_image for ideal_image in text2img_pipeline]
 
         print 'Ideal images: {0}'.format(type(ideal_images))
+
+    def test_multimodal_dense_throughput(self):
+        """Tests the same setup, but this time forcing dense throughput
+        through the Dataset transformers."""
+        image_file = os.path.join(self.data_root,
+                                  self.loader.layout.image_vectors)
+        icorp = ImagenetCorpus(image_file, delimiter=';', dim=4096, label='')
+
+        print 'Initializing image serialization...'
+        serialization_ifile = os.path.join(self.data_root,
+                                           self.loader.layout.corpus_dir,
+                                           serialization_iname)
+        iserializer = Serializer(icorp, ShardedCorpus,
+                                 fname=serialization_ifile,
+                                 overwrite=True)
+        ipipeline = iserializer[icorp]
+
+        print 'Image pipeline type: {0}'.format(type(ipipeline))
+
+        self.w2v_t = Word2VecTransformer(self.edict_pkl_fname,
+                                         id2word=get_id2word_obj(self.pipeline))
+        print self.w2v_t
+        self.w2v = Word2VecSamplingDatasetTransformer(w2v_transformer=self.w2v_t)
+
+        # Building datasets
+        text_dataset = Dataset(self.pipeline, dim=dimension(self.pipeline))
+        text_dataset = self.w2v[text_dataset]
+
+        print 'Text dataset: {0}'.format(text_dataset)
+        print '    text dim: {0}'.format(text_dataset.dim)
+
+        img_dataset = Dataset(ipipeline, dim=dimension(ipipeline))
+
+        print 'Image dataset: {0}'.format(img_dataset)
+        print '    image dim: {0}'.format(img_dataset.dim)
+
+        print '--Constructing multimodal dataset--'
+        multimodal_dataset = CompositeDataset((text_dataset, img_dataset),
+                                              names=('txt', 'img'),
+                                              test_p=0.1, devel_p=0.1,
+                                              aligned=False)
+
+        print '--Obtaining text-image mapping--'
+        # Get text-image mapping
+        t2i_file = os.path.join(self.data_root,
+                                self.loader.layout.textdoc2imdoc)
+        #with open(t2i_file) as t2i_handle:
+        #    t2i_linecount = sum([1 for _ in t2i_handle])
+
+        t2i_map = parse_textdoc2imdoc_map(t2i_file)
+        t2i_list = [[text, image]
+                    for text in t2i_map
+                    for image in t2i_map[text]]
+        t2i_indexes = docnames2indexes(multimodal_dataset, t2i_list)
+
+        print '--Creating flattened dataset--'
+        flatten = FlattenComposite(multimodal_dataset,
+                                   indexes=t2i_indexes)
+        print '--applying flattened dataset--'
+        flat_multimodal_corpus = flatten[multimodal_dataset]
+
+        print '--casting flattened corpus to dataset--'
+        flat_multimodal_dataset = Dataset(flat_multimodal_corpus,
+                                          ensure_dense=True)
+
+        print '\nCorpus stack before model setup:\n'
+        print log_corpus_stack(flat_multimodal_dataset)
+
+        print '--Creating model handle--'
+        self.model_handle = DenoisingAutoencoder.setup(flat_multimodal_dataset,
+            n_out=10,
+            reconstruction='cross-entropy',
+            heavy_debug=False)
+
+        print 'Model weights shape: {0}'.format(
+            self.model_handle.model_instance.W.get_value(borrow=True).shape)
+
+        batch = flat_multimodal_dataset.train_X_batch(0, 1)
+        print 'Batch shape: {0}'.format(batch.shape)
+
+        self.learner = BaseSGDLearner(3, 1, validation_frequency=4)
+
+        print '--running learning--'
+        sftrans = SafireTransformer(self.model_handle,
+                                    flat_multimodal_dataset,
+                                    self.learner,
+                                    dense_throughput=True)
+        output = sftrans[flat_multimodal_dataset]
+
+        print '--output--'
+        print 'Type: {0}'.format(type(output))
+        print 'Output: {0}'.format(output)
+
+        print '--extracting text runtime pipeline--'
+        text_runtime_pipeline = get_composite_source(flat_multimodal_dataset,
+                                                     'txt')
+        reset_vtcorp_input(text_runtime_pipeline, self.vtlist)
+
+        print 'Coming out of text_runtime_pipeline: {0}'.format(iter(text_runtime_pipeline).next())
+        print 'Type: {0}'.format(type(iter(text_runtime_pipeline).next()))
+        print 'Shape: {0}'.format(iter(text_runtime_pipeline).next().shape)
+
+        print '--creating clamped sampling handle--'
+        text2img_handle = MultimodalClampedSamplerModelHandle.clone(
+            sftrans.model_handle,
+            dim_text=get_composite_source(flat_multimodal_dataset, 'txt').dim,
+            dim_img=get_composite_source(flat_multimodal_dataset, 'img').dim,
+            k=10
+        )
+        print '--applying handle to text runtime pipeline--'
+        t2i_transformer = SafireTransformer(text2img_handle)
+        text2img_pipeline = t2i_transformer[text_runtime_pipeline]
+
+        print '--applying dense throughput--'
+
+
+        print '--debugging pipeline run--'
+        print log_corpus_stack(text2img_pipeline)
+        transformers = get_transformers(text2img_pipeline)
+        bottom_corp = bottom_corpus(text2img_pipeline)
+        print 'Transformers: {0}'.format('\n'.join([str(tr)
+                                                    for tr in transformers]))
+        # This runs the transformation bottom-up, *without* first building
+        # the recursive call stack.
+        _ = run_transformations(iter(bottom_corp).next(), *transformers)
+        print '\n...the definitive pipeline:'
+        print log_corpus_stack(text2img_pipeline)
+
+        print '--running text to image transformation--'
+        ideal_images = [ideal_image for ideal_image in text2img_pipeline]
+
+        print 'Ideal images: {0}'.format(type(ideal_images))
+
 
 ###############################################################################
 

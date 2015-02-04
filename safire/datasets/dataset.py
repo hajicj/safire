@@ -142,8 +142,9 @@ class DatasetABC(gensim.utils.SaveLoad):
 
         _data = data
         if ensure_dense:
+            logging.info('Ensuring dense output...')
             _data = safire.utils.transcorp.convert_to_dense(_data)
-        self.data = data
+        self.data = _data
 
         self.dim = dim
         self.n_in = dim # Input row dimension/shape
@@ -504,6 +505,10 @@ class TransformedDataset(Dataset):
 
     Instead of overriding ``__iter__`` like TransformedCorpus, will need to
     override ``_get_batch``.
+
+    (Note: shouldn't this also implement __iter__, to be a TransformedCorpus as
+    well? Goes together with the question whether Datasets shouldn't also be
+    IndexedTransformedCorpora...)
     """
     def __init__(self, obj, dataset):
         """Initializes the transformer.
@@ -558,10 +563,14 @@ class TransformedDataset(Dataset):
 
     def __getitem__(self, item):
 
+        print 'Calling __getitem__ on TransformedDataset with obj of type {0}' \
+              'and item {1}'.format(type(self.obj), item)
         data = self.data[item]
-        #print '  TransformedDataset.__getitem__: operating on data {0} with ' \
-        #      'item {1}'.format(data, item)
+        print '  TransformedDataset.__getitem__: operating on type {0} with ' \
+              'shape {1}; item {2}'.format(type(data), data.shape, item)
         result = self.obj[data]
+        print '      Result: type {0} with shape {1}'.format(type(result),
+                                                             result.shape)
         return result
 
 
