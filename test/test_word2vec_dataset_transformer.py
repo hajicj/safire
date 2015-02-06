@@ -82,16 +82,16 @@ class TestWord2VecDatasetTransformer(SafireTestCase):
         batch_sample = self.w2v.get_batch_sample(batch)
 
         # Which words were sampled?
-        # for i, row in enumerate(batch_sample):
-        #     wid = numpy.argmax(row)
-        #     word = self.id2word[wid]
-        #     print 'Doc %d : chose word %d --> %s' % (i, wid, word)
+        for i, row in enumerate(batch_sample):
+            wid = numpy.argmax(row)
+            word = self.id2word[wid]
+            logging.info(u'Doc {0}: chose word {1}'.format(i, word))
 
         batch_sample_2 = self.w2v.get_batch_sample(batch)
-        # for i, row in enumerate(batch_sample_2):
-        #     wid = numpy.argmax(row)
-        #     word = self.id2word[wid]
-        #     print 'Doc %d : chose word %d --> %s' % (i, wid, word)
+        for i, row in enumerate(batch_sample_2):
+            wid = numpy.argmax(row)
+            word = self.id2word[wid]
+            logging.info(u'Doc {0}: chose word {1}'.format(i, word))
 
         self.assertEqual(numpy.sum(batch_sample), batch.shape[0])
 
