@@ -163,6 +163,10 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
         else:
             return len(self.corpus)
 
+    def __iter__(self):
+        for i in xrange(len(self)):
+            yield self[i]
+
     @staticmethod
     def item2flat(item):
         """Flattens a (recursive) tuple of numpy ndarrays/scipy sparse matrices

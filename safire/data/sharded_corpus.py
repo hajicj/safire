@@ -15,6 +15,8 @@ import math
 import numpy
 import scipy.sparse as sparse
 
+import safire.utils.transcorp
+
 #: Specifies which dtype should be used for serializing the shards.
 _default_dtype = float
 try:
@@ -190,9 +192,8 @@ class ShardedCorpus(IndexedCorpus):
 
         # Derive dimension from input corpus/init argument
         proposed_dim = self._guess_n_features(corpus)
-        logging.warn('Dataset dimension derived from input corpus'
-                     ' is {0}, are you sure everything is all '
-                     'right?'.format(proposed_dim))
+        logging.info('Dataset dimension derived from input corpus'
+                     ' is {0}.'.format(proposed_dim))
 
         if proposed_dim != self.dim:
             if self.dim is None:
@@ -223,18 +224,22 @@ class ShardedCorpus(IndexedCorpus):
 
         for n, doc_chunk in enumerate(gensim.utils.grouper(corpus,
                                                            chunksize=shardsize)):
-            logging.info('Chunk no. %d at %d s' % (n, time.clock() - start_time))
+            logging.info('Chunk no. %d gathered at %d s' % (n, time.clock() - start_time))
+            logging.info('Chunk type: {0}, length {1}'.format(type(doc_chunk),
+                                                              len(doc_chunk)))
+            logging.info('Chunk element type: {0}'.format(type(doc_chunk[0])))
 
             current_shard = numpy.zeros((len(doc_chunk), self.dim),
                                         dtype=dtype)
             logging.debug('Current chunk dimension: '
                           '{0} x {1}'.format(len(doc_chunk), self.dim))
-
-            for i, doc in enumerate(doc_chunk):
-                doc = dict(doc)
-                #logging.warn('Doc: {0}, chunk {1}'.format(doc, doc_chunk))
-                #logging.warn('Current shard shape: {0}'.format(current_shard.shape))
-                current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
+            if isinstance(doc_chunk[0], numpy.ndarray):
+                for i, doc in enumerate(doc_chunk):
+                    current_shard[i][:] = doc[:]
+            else:
+                for i, doc in enumerate(doc_chunk):
+                    doc = dict(doc)
+                    current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
 
             # Handles the updating as well.
             if self.sparse_serialization:
@@ -439,6 +444,9 @@ class ShardedCorpus(IndexedCorpus):
 
     def _guess_n_features(self, corpus):
         """Attempts to guess number of features in corpus."""
+        #n_features = safire.utils.transcorp.dimension(corpus)
+        #return n_features
+
         n_features = None
         if hasattr(corpus, 'dim'):
             # print 'Guessing from \'dim\' attribute.'
