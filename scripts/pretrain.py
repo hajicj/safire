@@ -17,12 +17,13 @@ from gensim.utils import SaveLoad
 import matplotlib.pyplot as plt
 import operator
 import os
+from safire.datasets.transformations import docnames2indexes, FlattenComposite
 from safire.utils.transcorp import dimension, smart_cast_dataset, \
     log_corpus_stack
 import safire
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
-from safire.datasets.dataset import Dataset
+from safire.datasets.dataset import Dataset, CompositeDataset
 import time
 import theano
 import theano.compile.pfunc
@@ -33,7 +34,7 @@ from safire.learning.learners import BaseSGDLearner
 import safire.learning.models as models
 from safire.learning.models import check_model_dataset_compatibility
 from safire.utils import ReLU, cappedReLU, build_cappedReLU, abstanh, \
-    profile_run
+    profile_run, parse_textdoc2imdoc_map
 
 print theano.config.compute_test_value
 
@@ -254,29 +255,79 @@ def main(args):
     mloader = ModelLoader(args.root, args.name)
 
     # Loading datasets
-    if args.img_label and args.text_label:
-        raise ValueError('Can only specify one of text and image label.')
+
     if not args.img_label and not args.text_label:
-        raise ValueError('Must specify either text or image label.')
+        raise ValueError('Must specify text or image label or both.')
+
+    if args.img_label and args.text_label:
+        logging.info('Will train a multimodal model: text label {0}, image '
+                     'label {1}.'.format(args.img_label, args.text_label))
+
+        logging.info('Assuming')
+        #raise ValueError('Can only specify one of text and image label.')
 
     # Need to refactor dataset loading.
     # ...no more difference in principle between image labels and text labels.
     if args.img_label:
-        logging.info('Loading dataset with img. label {0}'
+        logging.info('Loading image dataset with img. label {0}'
                      ''.format(args.img_label))
         pipeline_fname = mdloader.pipeline_name(args.img_label)
 
-    elif args.text_label:
-        logging.info('Loading dataset with text label {0}'
+        #  - load the pipeline
+        img_pipeline = SaveLoad.load(fname=pipeline_fname)
+
+    if args.text_label:
+        logging.info('Loading text dataset with text label {0}'
                      ''.format(args.text_label))
         pipeline_fname = mdloader.pipeline_name(args.text_label)
 
-    else:
-        raise argparse.ArgumentError('Must supply either --img_label'
-                                     'or --text_label.')
+        #  - load the pipeline
+        text_pipeline = SaveLoad.load(fname=pipeline_fname)
 
-    #  - load the pipeline
-    pipeline = SaveLoad.load(fname=pipeline_fname)
+    if (not args.text_label) and args.img_label:
+        pipeline = img_pipeline
+    elif args.text_label and (not args.img_label):
+        pipeline = text_pipeline
+    elif args.text_label and args.img_label:
+        logging.info('Combining text and image sources into a multimodal '
+                     'pipeline.')
+        # - Cast to datasets
+        text_dataset = Dataset(text_pipeline)
+        img_dataset = Dataset(img_pipeline)
+
+        # - Combine into CompositeDatasest
+        mm_composite_dataset = CompositeDataset((text_dataset, img_dataset),
+                                                names=('txt', 'img'),
+                                                aligned=False)
+        # - Flatten the dataset
+
+        #    - Load flatten indices
+        t2i_file = os.path.join(mdloader.root,
+                                mdloader.layout.textdoc2imdoc)
+        t2i_map = parse_textdoc2imdoc_map(t2i_file)
+        t2i_list = [[text, image]
+                    for text in t2i_map
+                    for image in t2i_map[text]]
+        t2i_indexes = docnames2indexes(mm_composite_dataset, t2i_list)
+
+        #    - Initialize flattening transformer
+        flatten = FlattenComposite(mm_composite_dataset, indexes=t2i_indexes)
+
+        #    - Apply
+        pipeline = flatten[mm_composite_dataset]
+
+        #    - Serialize, because multimodal indexed retrieval is *slow*
+        serialization_name = mdloader.pipeline_serialization_target(
+            args.text_label + '__' + args.img_label)
+        logging.info('Serializing flattened multimodal data to {0}.'
+                     ''.format(serialization_name))
+
+        logging.debug('Pre-serialization pipeline: {0}'
+                      ''.format(log_corpus_stack(pipeline)))
+        serializer = Serializer(pipeline, ShardedCorpus, serialization_name,
+                                dim=dimension(pipeline))
+        pipeline = serializer[pipeline]
+
     logging.info('Loaded pipeline:\n{0}'.format(log_corpus_stack(pipeline)))
 
     #  - cast to dataset

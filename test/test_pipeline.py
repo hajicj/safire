@@ -168,6 +168,12 @@ class TestPipeline(SafireTestCase):
         print '--applying flattened dataset--'
         flat_multimodal_corpus = flatten[multimodal_dataset]
 
+        print '--serializing flattened data--'
+        serialization_name = self.loader.pipeline_serialization_target('__test_mmdata__')
+        serializer = Serializer(flat_multimodal_corpus, ShardedCorpus,
+                                serialization_name, dim=dimension(flat_multimodal_corpus))
+        flat_multimodal_corpus = serializer[flat_multimodal_corpus]
+
         print '--casting flattened corpus to dataset--'
         flat_multimodal_dataset = Dataset(flat_multimodal_corpus,
                                           ensure_dense=False)
@@ -202,7 +208,8 @@ class TestPipeline(SafireTestCase):
                                                      'txt')
         reset_vtcorp_input(text_runtime_pipeline, self.vtlist)
 
-        print 'Coming out of text_runtime_pipeline: {0}'.format(iter(text_runtime_pipeline).next())
+        print 'Coming out of text_runtime_pipeline: {0}' \
+              ''.format(iter(text_runtime_pipeline).next())
         print 'Type: {0}'.format(type(iter(text_runtime_pipeline).next()))
         print 'Shape: {0}'.format(iter(text_runtime_pipeline).next().shape)
 

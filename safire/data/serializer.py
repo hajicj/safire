@@ -84,8 +84,12 @@ class SwapoutCorpus(IndexedTransformedCorpus):
     through the applied transformations while making retrieval faster."""
     def __init__(self, swap, corpus):
         assert len(swap) == len(corpus), 'Swapout corpus: original and swap ' \
-                                         'lengths do not match! ({0} vs {1})' \
-                                         ''.format(len(corpus), len(swap))
+                                         'lengths do not match! (original ' \
+                                         'corpus {0}: {1}, swap corpus {2} :' \
+                                         '{3})'.format(type(corpus),
+                                                       len(corpus),
+                                                       type(swap),
+                                                       len(swap))
 
         self.obj = swap  # The corpus which gets used instead of the input
                          # corpus.

@@ -26,9 +26,10 @@ import numpy
 
 from safire.data import FrequencyBasedTransformer, VTextCorpus
 import safire.data.serializer
-from safire.data.sharded_corpus import ShardedCorpus
+import safire.data.sharded_corpus
 #from safire.datasets.dataset import Dataset
 from safire.data.imagenetcorpus import ImagenetCorpus
+from safire.data.sharded_corpus import ShardedCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
 #from safire.datasets.transformations import DatasetTransformer
 import safire.datasets.dataset
@@ -97,10 +98,12 @@ def bottom_corpus(corpus):
 def dimension(corpus):
     """Finds the topmost corpus that can provide information about its
     output dimension."""
+    print 'Deriving dimension of corpus {0}'.format(type(corpus))
     if isinstance(corpus, numpy.ndarray) and len(corpus.shape) == 2:
         return corpus.shape[1]
     current_corpus = corpus
     if hasattr(current_corpus, 'dim'):
+        # Covers almost everything non-recursive in safire.
         return current_corpus.dim
     if hasattr(current_corpus, 'n_out'):
         return current_corpus.n_out  # This is stupid! It's an *output* dimension.
@@ -109,8 +112,6 @@ def dimension(corpus):
     if isinstance(current_corpus, TextCorpus):
         return len(current_corpus.dictionary)
     if isinstance(current_corpus, ImagenetCorpus):
-        return current_corpus.dim
-    if isinstance(current_corpus, ShardedCorpus):
         return current_corpus.dim
 
     # This is the "magic". There's no unified mechanism for providing output
@@ -368,7 +369,7 @@ def convert_to_dense_recursive(pipeline):
     def _todense_recursive(corpus):
         # This is so far the only supported case of converting to dense.
         if isinstance(corpus, safire.data.serializer.SwapoutCorpus):
-            if isinstance(corpus.obj, safire.data.sharded_corpus.ShardedCorpus):
+            if isinstance(corpus.obj, ShardedCorpus):
                 corpus.obj.gensim = False
                 corpus.obj.sparse_retrieval = False
                 return
