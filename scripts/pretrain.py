@@ -325,13 +325,14 @@ def main(args):
         logging.debug('Pre-serialization pipeline: {0}'
                       ''.format(log_corpus_stack(pipeline)))
         serializer = Serializer(pipeline, ShardedCorpus, serialization_name,
-                                dim=dimension(pipeline))
+                                dim=dimension(pipeline), gensim=False)
         pipeline = serializer[pipeline]
 
     logging.info('Loaded pipeline:\n{0}'.format(log_corpus_stack(pipeline)))
 
     #  - cast to dataset
-    dataset = smart_cast_dataset(pipeline, test_p=0.1, devel_p=0.1)
+    dataset = smart_cast_dataset(pipeline, test_p=0.1, devel_p=0.1,
+                                 ensure_dense=True)
 
     logging.info('Setting up %s handle with output dimension %d' % (args.model,
                                                                     args.n_out))
