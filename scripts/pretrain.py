@@ -98,6 +98,10 @@ def _build_argument_parser():
                         help='The output label. This is to help distinguish ' +
                         'models made with different options. Controls saving names,'
                         'both for the model and for the transformed corpus.')
+
+    parser.add_argument('--w2v', action='store',
+                        help='Path to the word2vec ')
+
     parser.add_argument('--n_out', type=int, default=1000,
                         help='The number of model output neurons.')
     parser.add_argument('-m', '--model', default='DenoisingAutoencoder',
