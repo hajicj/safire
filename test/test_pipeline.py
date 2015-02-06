@@ -176,7 +176,12 @@ class TestPipeline(SafireTestCase):
 
         print '--casting flattened corpus to dataset--'
         flat_multimodal_dataset = Dataset(flat_multimodal_corpus,
-                                          ensure_dense=False)
+                                          ensure_dense=True)
+        # Have to ensure dense output, otherwise model setup will be getting
+        # gensim vectors!
+
+        print 'Corpus stack:'
+        print log_corpus_stack(flat_multimodal_dataset)
 
         print '--Creating model handle--'
         self.model_handle = DenoisingAutoencoder.setup(flat_multimodal_dataset,
