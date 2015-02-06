@@ -80,6 +80,8 @@ def get_id2word_obj(corpus):
             return corpus.obj.id2word
         else:
             return get_id2word_obj(corpus.corpus)
+    elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
+        return get_id2word_obj(corpus.data)
 
     raise NotImplementedError()
 

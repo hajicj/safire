@@ -54,14 +54,14 @@ class TestWord2VecDatasetTransformer(SafireTestCase):
                 _init_word2vec_dtransformer,
                 self.w2v_transformer,
                 embeddings_matrix=self.e_matrix_file)
-            #print 'Profiling report - W2VDT init from matrix:'
+            print 'W2VDT init from matrix:'
             #print report.getvalue()
         else:
             report, self.w2v = profile_run(
                 _init_word2vec_dtransformer,
                 self.w2v_transformer,
                 pickle_embeddings_matrix=self.e_matrix_file)
-            #print 'Profiling report - W2VDT init from transformer:'
+            print 'W2VDT init from transformer:'
             #print report.getvalue()
             #
             # self.w2v = Word2VecSamplingDatasetTransformer(

@@ -17,9 +17,12 @@ from gensim.utils import SaveLoad
 import matplotlib.pyplot as plt
 import operator
 import os
+from safire.data.word2vec_transformer import Word2VecTransformer
 from safire.datasets.transformations import docnames2indexes, FlattenComposite
+from safire.datasets.word2vec_transformer import \
+    Word2VecSamplingDatasetTransformer
 from safire.utils.transcorp import dimension, smart_cast_dataset, \
-    log_corpus_stack
+    log_corpus_stack, get_id2word_obj
 import safire
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
@@ -100,7 +103,7 @@ def _build_argument_parser():
                         'both for the model and for the transformed corpus.')
 
     parser.add_argument('--w2v', action='store',
-                        help='Path to the word2vec ')
+                        help='Path to the word2vec dict.')
 
     parser.add_argument('--n_out', type=int, default=1000,
                         help='The number of model output neurons.')
@@ -279,6 +282,8 @@ def main(args):
 
         #  - load the pipeline
         img_pipeline = SaveLoad.load(fname=pipeline_fname)
+        # cast to Dataset
+        img_pipeline = Dataset(img_pipeline)
 
     if args.text_label:
         logging.info('Loading text dataset with text label {0}'
@@ -287,6 +292,20 @@ def main(args):
 
         #  - load the pipeline
         text_pipeline = SaveLoad.load(fname=pipeline_fname)
+        # - Cast to dataset
+        text_pipeline = Dataset(text_pipeline, ensure_dense=True)
+
+        # This is specifically a text transformation.
+        if args.w2v:
+            logging.info('Building and applying word2vec sampler. Note that '
+                         'this will mean no serialization is performed after'
+                         ' flattening, in case this is applied in a multimodal'
+                         ' setting.')
+            w2v_trans = Word2VecTransformer(args.w2v,
+                                            get_id2word_obj(text_pipeline))
+            w2v_sampler = Word2VecSamplingDatasetTransformer(w2v_trans)
+
+            text_pipeline = w2v_sampler[text_pipeline]
 
     if (not args.text_label) and args.img_label:
         pipeline = img_pipeline
@@ -295,12 +314,9 @@ def main(args):
     elif args.text_label and args.img_label:
         logging.info('Combining text and image sources into a multimodal '
                      'pipeline.')
-        # - Cast to datasets
-        text_dataset = Dataset(text_pipeline)
-        img_dataset = Dataset(img_pipeline)
 
         # - Combine into CompositeDatasest
-        mm_composite_dataset = CompositeDataset((text_dataset, img_dataset),
+        mm_composite_dataset = CompositeDataset((text_pipeline, img_pipeline),
                                                 names=('txt', 'img'),
                                                 aligned=False)
         # - Flatten the dataset
@@ -312,7 +328,9 @@ def main(args):
         t2i_list = [[text, image]
                     for text in t2i_map
                     for image in t2i_map[text]]
-        t2i_indexes = docnames2indexes(mm_composite_dataset, t2i_list)
+        # Sorting the indices is an optimization for underlying ShardedCorpus
+        # serializers.
+        t2i_indexes = sorted(docnames2indexes(mm_composite_dataset, t2i_list))
 
         #    - Initialize flattening transformer
         flatten = FlattenComposite(mm_composite_dataset, indexes=t2i_indexes)
@@ -320,17 +338,21 @@ def main(args):
         #    - Apply
         pipeline = flatten[mm_composite_dataset]
 
-        #    - Serialize, because multimodal indexed retrieval is *slow*
-        serialization_name = mdloader.pipeline_serialization_target(
-            args.text_label + '__' + args.img_label)
-        logging.info('Serializing flattened multimodal data to {0}.'
-                     ''.format(serialization_name))
+        if not args.w2v:
+            #    - Serialize, because multimodal indexed retrieval is *slow*
+            serialization_name = mdloader.pipeline_serialization_target(
+                args.text_label + '__' + args.img_label)
+            logging.info('Serializing flattened multimodal data to {0}.'
+                         ''.format(serialization_name))
 
-        logging.debug('Pre-serialization pipeline: {0}'
-                      ''.format(log_corpus_stack(pipeline)))
-        serializer = Serializer(pipeline, ShardedCorpus, serialization_name,
-                                dim=dimension(pipeline), gensim=False)
-        pipeline = serializer[pipeline]
+            logging.debug('Pre-serialization pipeline: {0}'
+                          ''.format(log_corpus_stack(pipeline)))
+            serializer = Serializer(pipeline, ShardedCorpus, serialization_name,
+                                    dim=dimension(pipeline), gensim=False)
+            pipeline = serializer[pipeline]
+        else:
+            logging.warn('Word2vec sampling active, cannot serialize flattened'
+                         'corpus.')
 
     logging.info('Loaded pipeline:\n{0}'.format(log_corpus_stack(pipeline)))
 
