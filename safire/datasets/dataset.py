@@ -147,14 +147,25 @@ class DatasetABC(gensim.utils.SaveLoad):
         self.data = _data
 
         self.dim = dim
-        self.n_in = dim # Input row dimension/shape
-        self.n_out = dim # Input row dimension/shape
+        self.n_in = dim   # Input row dimension/shape
+        self.n_out = dim  # Input row dimension/shape
 
+        self.set_test_p(test_p)
+        self.set_devel_p(devel_p)
+
+    def set_test_p(self, test_p=None):
+        """Helper function for setting a proportion of data as test data. For
+        simple use cases only; use a CompositeDataset with a train/dev and
+        test split for more principled experiments."""
         self.test_p = 0.0
         if test_p:
             self.test_p = test_p
         self._test_doc_offset = len(self) - int(len(self) * self.test_p)
 
+    def set_devel_p(self, devel_p):
+        """Helper function for setting a proportion of data as heldout data. For
+        simple use cases only; use a CompositeDataset with a train/dev and
+        test split for more principled experiments."""
         self.devel_p = 0.0
         if devel_p:
             self.devel_p = devel_p

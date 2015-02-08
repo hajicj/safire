@@ -300,5 +300,24 @@ class Corpus2Dense(gensim.interfaces.TransformationABC):
             return self._apply(item)
 
         # need to add logic for one item vs. an array of items?
-        print 'Transforming item: {0}'.format(item)
+        #print 'Transforming item: {0}'.format(item)
         return gensim2ndarray(item, self.dim)
+
+
+class SimilarityTransformer(gensim.interfaces.TransformationABC):
+    """Adds a pipeline block that will transform the input vector into
+    similarities to vectors in a given database.
+
+    This transformer serves as a pipeline-block wrapper for gensim's Similarity
+    class (and other similarity index objects someone else may potentially
+    code). It views the retrieval process as a transformation: from the space
+    of the input vectors and database vectors to the space of similarities to
+    the database vectors.
+
+    Usually, we initialize transformers with the same pipeline which we then
+    want to run through them. This may be a different case: the similarity index
+    will typically be built from some database, but for queries, new vectors
+    (albeit from the same vector space as the database vectors) will come as
+    queries.
+    """
+    pass

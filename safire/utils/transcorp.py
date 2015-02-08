@@ -17,6 +17,7 @@ A lot of Safire classes depend on transcorp.py functions while at the same
 time they need to be used inside transcorp.py to get access to their internals.
 """
 import logging
+import copy
 
 from gensim.corpora import TextCorpus
 from gensim.interfaces import TransformedCorpus
@@ -323,6 +324,12 @@ def convert_to_dense(corpus):
                      ' downstream somewhere, no change.'.format(type(corpus)))
         return corpus
 
+    elif isinstance(corpus, TransformedCorpus) and \
+        isinstance(corpus.obj, safire.utils.transformers.Corpus2Dense):
+        logging.info('Corpus class {0}: last transformer already is '
+                     'Corpus2Dense.')
+        return corpus
+
     # In case we cannot guarantee dense output:
     else:
         logging.warn('Corpus class {0}: cannot rely on pre-existing dense '
@@ -400,10 +407,30 @@ def smart_apply_transcorp(obj, corpus, *args, **kwargs):
         return TransformedCorpus(obj, corpus, *args, **kwargs)
 
 
-def smart_cast_dataset(pipeline, *args, **kwargs):
-    """Casts the given pipeline to a Dataset with the given args and kwargs
-    unless it already is a Dataset."""
+def smart_cast_dataset(pipeline, **kwargs):
+    """Casts the given pipeline to a Dataset with the given kwargs
+    unless it already is a Dataset.
+
+    Handles ``test_p`` and ``devel_p`` kwargs by calling pipeline.set_test_p()
+    and pipeline.set_devel_p()."""
     if isinstance(pipeline, safire.datasets.dataset.DatasetABC):
+        logging.info('Casting pipeline {0} to dataset: already a dataset, '
+                     'setting kwargs:'
+                     '{1}'.format(pipeline, kwargs))
+
+        if 'test_p' in kwargs:
+            pipeline.set_test_p(kwargs['test_p'])
+            logging.info('  Set test proportion to {0}, test_doc_offset {1}'
+                         ''.format(pipeline.test_p, pipeline._test_doc_offset))
+
+        if 'devel_p' in kwargs:
+            pipeline.set_devel_p(kwargs['devel_p'])
+            logging.info('  Set devel proportion to {0}, test_doc_offset {1}'
+                         ''.format(pipeline.devel_p,
+                                   pipeline._devel_doc_offset))
+
         return pipeline
+
     else:
-        return safire.datasets.dataset.Dataset(pipeline, *args, **kwargs)
+        logging.info('Casting pipeline {0} to dataset.'.format(pipeline))
+        return safire.datasets.dataset.Dataset(pipeline, **kwargs)

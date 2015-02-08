@@ -320,7 +320,6 @@ def main(args):
                                                 names=('txt', 'img'),
                                                 aligned=False)
         # - Flatten the dataset
-
         #    - Load flatten indices
         t2i_file = os.path.join(mdloader.root,
                                 mdloader.layout.textdoc2imdoc)

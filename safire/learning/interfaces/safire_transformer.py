@@ -150,10 +150,10 @@ class SafireTransformer(TransformationABC):
         describe the transformer.
         """
         init_args = {
-            'handle' : self.model_handle._export_pickleable_obj(),
-            'handle_class' : self.model_handle.__class__, # Generality...
-            'chunksize' : self.chunksize,
-            'eps' : self.eps
+            'handle': self.model_handle._export_pickleable_obj(),
+            'handle_class': self.model_handle.__class__, # Generality...
+            'chunksize': self.chunksize,
+            'eps': self.eps
         }
 
         return init_args
@@ -183,7 +183,7 @@ class SafireTransformer(TransformationABC):
                 raise TypeError('dense_throughput set, expecting numpy.ndarray'
                                 'input (got: {0})'.format(type(bow)))
 
-            print 'SFtrans bag of words type: {0}'.format(type(bow))
+            logging.debug('SFtrans bag of words type: {0}'.format(type(bow)))
             is_corpus, bow = gensim.utils.is_corpus(bow)
             # if not is_corpus:  # If we got a single item: make a one-item
             #                    # corpus from it, to simplify code path.
