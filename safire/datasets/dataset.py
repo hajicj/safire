@@ -98,6 +98,8 @@ import safire.utils.transcorp
 
 # Doesn't DatasetABC implement the IndexedCorpus interface?
 # Should it be made explicit?
+# TODO: Try to implement DatasetABC as a CorpusABC subclass.
+#       This would greatly simplify a lot of transcorp.py functions.
 class DatasetABC(gensim.utils.SaveLoad):
     """This is the old Dataset, reworked into a wrapper for an IndexedCorpus
     (like, for instance, the ShardedCorpus). It can also serve as a wrapper

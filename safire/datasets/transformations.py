@@ -12,10 +12,9 @@ import safire.datasets.dataset
 
 #from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
-
-# TODO: refactor to work with new DatasetABC
 from safire.utils import flatten_composite_item
 
+# TODO: refactor/enhance to work with corpora as well as datasets
 
 class FlattenComposite(DatasetTransformer):
     """This class flattens a composite dataset into a simple dataset. This
