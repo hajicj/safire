@@ -21,14 +21,14 @@ from safire.datasets.sharded_multimodal_dataset import \
 from safire.data.word2vec_transformer import Word2VecTransformer
 import safire.utils
 from safire.utils import profile_run
-from safire.data.loaders import MultimodalShardedDatasetLoader
+from safire.data.loaders import MultimodalShardedDatasetLoader, IndexLoader
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.data.frequency_based_transform import FrequencyBasedTransformer
 from safire.utils.transcorp import get_id2word_obj, \
     log_corpus_stack, dimension
 from safire.utils.transformers import GlobalUnitScalingTransform, \
     LeCunnVarianceScalingTransform, GeneralFunctionTransform, \
-    NormalizationTransform, CappedNormalizationTransform
+    NormalizationTransform, CappedNormalizationTransform, SimilarityTransformer
 
 
 #logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
@@ -448,6 +448,19 @@ def main(args):
 
     assert isinstance(pipeline, SwapoutCorpus), 'Serialization not applied' \
                                                 ' correctly.'
+
+    if args.index:
+        iloader = IndexLoader(args.root, args.name)
+        index_name = iloader.output_prefix(args.label)
+        logging.info('Building index with name {0}'.format(index_name))
+        similarity_transformer = SimilarityTransformer(pipeline, index_name)
+        # Should the pipeline get transformed? Or do we only want
+        # the transformer?
+        # What is the use case here? We need the *transformer*, not the
+        # transformed data (that would be just the self-similarity of our
+        # dataset), so we need to get some new input. We can retrieve
+        # the pipeline.obj and lock the transformer onto another pipeline.
+        pipeline = similarity_transformer[pipeline]
 
     logging.info('Corpus stats: {0} documents, {1} features.'.format(
         len(pipeline),
