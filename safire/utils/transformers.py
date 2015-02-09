@@ -322,11 +322,19 @@ class SimilarityTransformer(gensim.interfaces.TransformationABC):
     (albeit from the same vector space as the database vectors) will come as
     queries.
     """
-    def __init__(self, corpus, prefix):
+    def __init__(self, corpus, prefix, **index_init_args):
+        """Initializes the similarity index with the given prefix from the given
+        corpus. The ``num_features`` argument is derived from the corpus using
+        the usual ``safire.utils.transcorp.dimension()`` function.
+
+        Other gensim.similarities.Similarity class init kwargs can be
+        provided.
+        T"""
         # Initialize the similarity index
         dim = safire.utils.transcorp.dimension(corpus)
         self.index = Similarity(prefix, corpus,
-                                num_features=dim)
+                                num_features=dim,
+                                **index_init_args)
 
     def __getitem__(self, item):
 
