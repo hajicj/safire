@@ -10,8 +10,10 @@ import logging
 import operator
 import gensim
 from gensim.interfaces import TransformedCorpus
+from gensim.similarities import Similarity
 import numpy
 #from safire.utils.transcorp import dimension
+import safire.datasets.dataset
 from safire.utils import gensim2ndarray, IndexedTransformedCorpus
 import safire.utils.transcorp
 
@@ -320,4 +322,20 @@ class SimilarityTransformer(gensim.interfaces.TransformationABC):
     (albeit from the same vector space as the database vectors) will come as
     queries.
     """
-    pass
+    def __init__(self, corpus, prefix):
+        # Initialize the similarity index
+        dim = safire.utils.transcorp.dimension(corpus)
+        self.index = Similarity(prefix, corpus,
+                                num_features=dim)
+
+    def __getitem__(self, item):
+
+        if isinstance(item, gensim.interfaces.CorpusABC) or \
+                isinstance(item, safire.datasets.dataset.DatasetABC):
+            return self._apply(item)
+
+        return self.index[item]
+
+    def _apply(self, corpus, chunksize=None):
+
+        return safire.utils.transcorp.smart_apply_transcorp(self, corpus)
