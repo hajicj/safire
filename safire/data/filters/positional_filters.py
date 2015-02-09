@@ -16,6 +16,7 @@ def first_k(sentences, k=None):
     """Retain only the first K sentences."""
     return sentences[:k]
 
+
 def words_from_first_k(sentences, k):
     """Retain only words that occur in the first K sentences."""
     retain_words = frozenset(list(itertools.chain(*sentences[:k])))
@@ -24,11 +25,13 @@ def words_from_first_k(sentences, k):
     #print "out_sentences: %s" % '\n'.join([' '.join(s) for s in out_sentences])
     return out_sentences
 
+
 def first_p(sentences, p):
     """Retain only the given fraction of sentences from the beginning.
     (Rounds up, for single-sentence documents.)"""
     k = int(math.ceil(len(sentences) * p))
     return sentences[:k]
+
 
 def words_from_first_p(sentences, p):
     """Retain only words that occur in the given fraction of sentences from

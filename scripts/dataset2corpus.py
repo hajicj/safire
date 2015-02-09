@@ -169,6 +169,12 @@ def build_argument_parser():
                              'without saving the processed corpora in the '
                              'process.)')
 
+    parser.add_argument('--index', action='store_true',
+                        help='If set, will build a similarity index on top of '
+                             'the pipeline and save it. The similarity index '
+                             'can then be retrieved when running the text to '
+                             'image transformation.')
+
     parser.add_argument('-c', '--clear', action='store_true', help='If given,'+
                         'instead of creating a corpus, will attempt to clear '+
                         'all corpora in the dataset with the infix given by '+
