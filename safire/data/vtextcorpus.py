@@ -8,6 +8,7 @@ import re
 import gzip
 import os
 from tempfile import mkdtemp
+import collections
 from joblib import memory
 #import cPickle
 
@@ -170,7 +171,7 @@ class VTextCorpus(TextCorpus):
 
         # Initialize document ID tracking
         if doc2id is None:
-            doc2id = {}
+            doc2id = collections.defaultdict(list)
         if id2doc is None:
             id2doc = []
 
@@ -259,6 +260,9 @@ class VTextCorpus(TextCorpus):
         One iteration of get_texts() should yield one document, which means
         one file. Note that get_texts() can work even with vtlists that do not
         fit into memory, which would be a very rare occasion indeed.
+
+        Also, it is at this point that document/sentence/token retrieval is
+        resolved and the document <==> id mapping is constructed.
         """
         batch_no = 1
         timed_batch_size = 1000
@@ -299,15 +303,19 @@ class VTextCorpus(TextCorpus):
                 # Update document mappings
                 if not self.precompute_vtlist:
                     docid = doc_short_name
-                    self.doc2id[docid] = total_yielded
+                    self.doc2id[docid].append(total_yielded)
                     self.id2doc.append(docid)
                 total_yielded += 1
                 yield document
 
             else:
                 for sentno, sentence in enumerate(sentences):
-                    docid = doc_short_name + '.' + str(sentno)
-                    self.doc2id[docid] = total_yielded
+                    #docid = doc_short_name + '.' + str(sentno)
+                    # Instead of creating a special document name for each
+                    # sentence, simply make a list of output items associated
+                    # with the original document. The id2doc mapping then serves
+                    # as the reverse pointer.
+                    self.doc2id[docid].append(total_yielded)
                     self.id2doc.append(docid)
                     total_yielded += 1
                     yield sentence
@@ -462,7 +470,7 @@ class VTextCorpus(TextCorpus):
             self.input_root = input_root
         self.input = vtlist_filename
         self.vtlist = []
-        self.doc2id = {}
+        self.doc2id = collections.defaultdict(list)
         self.id2doc = []
         if self.precompute_vtlist:
             self.vtlist = self._precompute_vtlist(self.input)
@@ -573,7 +581,7 @@ class VTextCorpus(TextCorpus):
             for i, vtname in enumerate(vtl_handle):
                 doc_short_name = vtname.strip()
                 self.id2doc.append(doc_short_name)
-                self.doc2id[doc_short_name] = i
+                self.doc2id[doc_short_name].append(i)
 
                 doc_full_name = self.doc_full_path(doc_short_name)
                 vtlist.append(doc_full_name)

@@ -1,6 +1,5 @@
 import logging
-
-from gensim.interfaces import TransformedCorpus
+import itertools
 
 from gensim.utils import is_corpus
 import numpy
@@ -9,9 +8,6 @@ from safire.utils import IndexedTransformedCorpus
 from safire.datasets.dataset import DatasetTransformer
 import safire.utils.transcorp
 import safire.datasets.dataset
-
-#from safire.datasets.unsupervised_dataset import UnsupervisedDataset
-
 from safire.utils import flatten_composite_item
 
 # TODO: refactor/enhance to work with corpora as well as datasets
@@ -223,5 +219,6 @@ def docnames2indexes(data, docnames):
     output = []
     for name_item in docnames:
         idxs = tuple(doc2ids[i][name] for i, name in enumerate(name_item))
-        output.append(idxs)
+        print 'Name item: {0}, idxs: {1}'.format(name_item, idxs)
+        output.extend(list(itertools.product(*idxs)))
     return output
