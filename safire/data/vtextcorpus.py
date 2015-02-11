@@ -76,16 +76,6 @@ class VTextCorpus(TextCorpus):
         :param sentences: Set to True if docs should not be entire files
             but rather sentences.
 
-            .. warning::
-
-                This option is scheduled for deprecation.
-
-            .. warning::
-
-                If you set ``sentences``, you MUST unset ``precompute_vtlist``,
-                as the ``doc2id`` and ``id2doc`` mappings do NOT get precomputed
-                on a per-sentence basis.
-
         :param dictionary: If specified, the corpus will share a dictionary.
             Useful for multiple VTextCorpus instances running on a single
             dataset.
@@ -310,7 +300,7 @@ class VTextCorpus(TextCorpus):
 
             else:
                 for sentno, sentence in enumerate(sentences):
-                    #docid = doc_short_name + '.' + str(sentno)
+                    docid = doc_short_name # + '.' + str(sentno)
                     # Instead of creating a special document name for each
                     # sentence, simply make a list of output items associated
                     # with the original document. The id2doc mapping then serves

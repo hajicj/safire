@@ -75,6 +75,18 @@ class TestVTextCorpus(SafireTestCase):
 
         self.assertEqual(10, len(docs))
 
+    def test_iter_sentences(self):
+
+        self.corpus.sentences = True
+        docs = []
+        for document in self.corpus:
+
+            #print document
+            docs.append(document)
+
+        self.assertEqual(756, len(docs))
+
+
     def test_pfilter(self):
 
         docs = []
