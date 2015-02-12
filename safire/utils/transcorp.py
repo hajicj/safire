@@ -264,6 +264,53 @@ class KeymapDict(gensim.corpora.Dictionary):
         return len(self.keymap)
 
 
+def keymap2dict(keymap_dict):
+    """Builds a new id2word dictionary so that only the items that are in
+    keymap are retained and they get the keymapped IDs.
+
+    If the original ID of token ``X`` is ``1`` and the keymapped ID is ``4``,
+
+    It relies on gensim's Dictionary internals, so this is not a very safe
+    function. However, probability of changes to this part of gensim are pretty
+    low.
+
+    :type keymap_dict: KeymapDict
+    :param keymap_dict: A KeymapDict which to use to generate a new fully fledged
+        gensim Dictionary.
+
+    :return: The new dictionary.
+    """
+    old_dict = keymap_dict.dict
+    id_old2new = {v: k for k, v in keymap_dict.keymap.iteritems()}
+
+    logging.debug('Old dict type: {0}'.format(type(old_dict)))
+    logging.debug('id_old2new: {0}'.format(id_old2new))
+
+    # The dictionary needs to be built manually.
+    new_dict = gensim.corpora.Dictionary()
+
+    for token, old_id in old_dict.token2id.items():
+        logging.debug(u'Token: {0}, old ID: {1}'.format(token, old_id))
+        if old_id not in id_old2new:
+            logging.debug(u'    Filtering out token "{0}"'.format(token))
+            continue
+        new_token_id = id_old2new[old_dict.token2id[token]]
+        new_dict.token2id[token] = new_token_id
+        new_dict.id2token[new_token_id] = token
+
+        # Also copy document frequency information
+        new_dict.dfs[new_token_id] = old_dict.dfs[old_id]
+
+    new_dict.num_docs = old_dict.num_docs
+    new_dict.num_pos = old_dict.num_pos
+    # This number should reflect only corpus positions with the filtered
+    # vocabulary, but that's impossible to do without the original frequency
+    # filtering object, as gensim's Dictionary does not keep frequency data.
+    new_dict.num_nnz = old_dict.num_nnz
+
+    return new_dict
+
+
 def log_corpus_stack(corpus):
     """Reports the types of corpora and transformations of a given
     corpus stack. Currently cannot deal with CompositeDataset pipelines."""

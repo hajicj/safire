@@ -22,7 +22,7 @@ from safire.datasets.transformations import FlattenComposite, docnames2indexes
 from safire.utils import parse_textdoc2imdoc_map
 from safire.utils.transcorp import dimension, get_id2word_obj, \
     get_composite_source, reset_vtcorp_input, get_transformers, \
-    run_transformations, log_corpus_stack, bottom_corpus
+    run_transformations, log_corpus_stack, bottom_corpus, keymap2dict
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.datasets.dataset import Dataset, CompositeDataset
@@ -382,6 +382,46 @@ class TestPipeline(SafireTestCase):
         ideal_slice = text2img_pipeline[0:len(text2img_pipeline)]
 
         self.assertEqual(len(ideal_images), len(ideal_slice))
+
+    def test_tokenbased_word2vec(self):
+
+        # Set up the standard pipeline with tf-idf and frequency filtering
+        # Set up a new VTextCorpus that iterates over tokens.
+        # We could just lock the vocabulary and use the same tf-idf and
+        # frequency filters, but this would give us empty documents for tokens
+        # that get filtered out at the frequency filtering level. Instead, we
+        # need to limit the vocabulary of the new VTextCorpus directly and pass
+        # the corpus to the tf-idf transformer (which only cares about columns).
+        # On top of the token pipeline, we put a simple word2vec transformer.
+        doc_vtcorp = VTextCorpus(self.vtlist, input_root=self.data_root,
+                                 **vtcorp_settings)
+        doc_vtcorp.dry_run()
+
+        tfidf = TfidfModel(doc_vtcorp)
+        doc_pipeline = tfidf[doc_vtcorp]
+
+        freqfilter = FrequencyBasedTransformer(doc_pipeline,
+                                               110, discard_top=10)
+        doc_pipeline = freqfilter[doc_pipeline]
+
+        # Pass the dictionary
+        freqfiltered_dict = keymap2dict(get_id2word_obj(doc_pipeline))
+        token_vtcorp = VTextCorpus(self.vtlist, input_root=self.data_root,
+                                   tokens=True,
+                                   dictionary=freqfiltered_dict,
+                                   **vtcorp_settings)
+        token_vtcorp.lock()
+
+        # Initialize word2vec
+        word2vec = Word2VecTransformer(self.edict_pkl_fname,
+                                       get_id2word_obj(token_vtcorp))
+        token_word2vec_pipeline = word2vec[token_vtcorp]
+
+        doc = iter(token_word2vec_pipeline).next()
+        print doc
+        self.assertEqual(len(doc), 200)
+        docs = [d for d in token_word2vec_pipeline]
+        print 'Total tokens: {0}'.format(len(docs))
 
 
 ###############################################################################

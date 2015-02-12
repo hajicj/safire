@@ -164,33 +164,24 @@ class Word2VecTransformer(TransformationABC):
                 embeddings[i, :] = embedding
                 has_hit = True
                 self.hit_ids.add(wid)
-                #print '...hit.'
+                print '...hit.'
             except KeyError:
                 self.oov += 1.0
                 self.oov_collector.add((wid, word))
-                #print '...no hit.'
+                print '...no hit.'
         if not has_hit:
             self.emptydocs += 1
 
         self.total_processed += len(bow)
         self.oov_rate = self.oov / self.total_processed
 
-        #if self.total_processed % self.log_oov_at == 0:
-        #    self.log_oov()
-
-        # Combining the embeddings. (Could be a method.)
-        #print 'Embeddings:', embeddings
+        # Combining the embeddings.
         output_embeddings = self.combine_words(embeddings)
-
-        #print 'Output embeddings:', output_embeddings
 
         if self.dense:
             return output_embeddings
 
         sparse_embeddings = gensim.matutils.dense2vec(output_embeddings)
-
-        #logging.debug('Output doc: length %d' % len(sparse_embeddings))
-
         return sparse_embeddings
 
     def _apply(self, corpus, chunksize=None):

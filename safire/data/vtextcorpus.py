@@ -302,6 +302,10 @@ class VTextCorpus(TextCorpus):
                     self.doc2id[docid].append(total_yielded)
                     self.id2doc.append(docid)
                     total_yielded += 1
+                    #print 'Yielding token: {0}'.format(token)
+                    if token not in self.dictionary.token2id:
+                        #print 'Token not in dictionary, skipping.'
+                        continue
                     yield [token]
 
             elif self.sentences:
