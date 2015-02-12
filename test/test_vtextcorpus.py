@@ -86,6 +86,17 @@ class TestVTextCorpus(SafireTestCase):
 
         self.assertEqual(756, len(docs))
 
+        print iter(self.corpus.get_texts()).next()
+
+    def test_iter_tokens(self):
+
+        self.corpus.tokens = True
+        docs = []
+        for document in self.corpus:
+
+            docs.append(document)
+
+        self.assertEqual(11035, len(docs))
 
     def test_pfilter(self):
 

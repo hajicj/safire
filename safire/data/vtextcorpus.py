@@ -46,7 +46,7 @@ class VTextCorpus(TextCorpus):
     def __init__(self, input=None, colnames=['form', 'lemma', 'tag'],
                  retcol='lemma', input_root=None,
                  delimiter='\t', gzipped=True,
-                 sentences=False,
+                 sentences=False, tokens=False,
                  dictionary=None, allow_dict_updates=True,
                  doc2id=None, id2doc=None, token_filter=None,
                  token_transformer='strip_UFAL',
@@ -75,6 +75,13 @@ class VTextCorpus(TextCorpus):
 
         :param sentences: Set to True if docs should not be entire files
             but rather sentences.
+
+        :param tokens: Set to True if docs should be individual tokens rather
+            than entire files. Note that this will output the special '<s>'
+            token on sentence seam; also note that the dataset will be *very*
+            long. Also, all filtering methods that depend on co-occurrence of
+            tokens in documents will not work (tf-idf), although frequency-based
+            filtering and all filtering done within VTextCorpus will work.
 
         :param dictionary: If specified, the corpus will share a dictionary.
             Useful for multiple VTextCorpus instances running on a single
@@ -187,6 +194,7 @@ class VTextCorpus(TextCorpus):
 
         # Output behavior properties
         self.sentences = sentences
+        self.tokens = tokens
 
         # Initializes the positional filter
         self.positional_filter = None
@@ -217,7 +225,7 @@ class VTextCorpus(TextCorpus):
         document. In our case, behavior will depend on whether
         ``precompute_vtlist`` was set during initialization.
         """
-        if self.precompute_vtlist and not self.sentences:
+        if self.precompute_vtlist and not self.sentences and not self.tokens:
             for i in xrange(len(self)):
                 out = self[i]
                 self.n_processed += 1
@@ -288,19 +296,17 @@ class VTextCorpus(TextCorpus):
                 document, sentences = self.parse_document_and_sentences(
                     doc_handle)
 
-            # This may get deprecated (no sentences)
-            if not self.sentences:
-                # Update document mappings
-                if not self.precompute_vtlist:
+            if self.tokens:
+                for token in document:
                     docid = doc_short_name
                     self.doc2id[docid].append(total_yielded)
                     self.id2doc.append(docid)
-                total_yielded += 1
-                yield document
+                    total_yielded += 1
+                    yield [token]
 
-            else:
+            elif self.sentences:
                 for sentno, sentence in enumerate(sentences):
-                    docid = doc_short_name # + '.' + str(sentno)
+                    docid = doc_short_name     # + '.' + str(sentno)
                     # Instead of creating a special document name for each
                     # sentence, simply make a list of output items associated
                     # with the original document. The id2doc mapping then serves
@@ -309,6 +315,16 @@ class VTextCorpus(TextCorpus):
                     self.id2doc.append(docid)
                     total_yielded += 1
                     yield sentence
+
+            else:
+                # Update document mappings
+                if not self.precompute_vtlist:
+                    docid = doc_short_name
+                    self.doc2id[docid].append(total_yielded)
+                    self.id2doc.append(docid)
+                total_yielded += 1
+                yield document
+
 
             # Logging
             self.n_processed += 1
@@ -502,11 +518,13 @@ class VTextCorpus(TextCorpus):
             VTextCorpusTransformer class, as the usage pattern more closely
             mirrors a transformation of vertical text documents.
 
-        Does NOT support retrieving sentences."""
-        #print 'Item: {0}'.format(item)
+        Does NOT support retrieving sentences or tokens."""
         if self.sentences:
             raise ValueError('__getitem__ calls not supported when retrieving'
                              'sentences as documents.')
+        if self.tokens:
+            raise ValueError('__getitem__ calls not supported when retrieving'
+                             'tokens as documents.')
         if isinstance(item, slice):
             return [self[i] for i in xrange(item.start, item.stop, 1)]
         if isinstance(item, int):

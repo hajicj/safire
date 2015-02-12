@@ -251,7 +251,7 @@ def reset_vtcorp_input(corpus, filename, input_root=None, lock=True,
     vtcorp.reset_input(filename, input_root=input_root, lock=lock)
 
 
-class KeymapDict(object):
+class KeymapDict(gensim.corpora.Dictionary):
     """Implements a dict wrapped in a key mapping."""
     def __init__(self, dict, keymap):
         self.dict = dict
