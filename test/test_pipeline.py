@@ -7,6 +7,7 @@ compatibility with the pipeline-building framework. Note that a lot of
 functions from safire.utils.transcorp should be tested here.
 """
 import os
+from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
 import logging
 import numpy
@@ -414,18 +415,77 @@ class TestPipeline(SafireTestCase):
                                    dictionary=freqfiltered_dict,
                                    **vtcorp_settings)
         token_vtcorp.lock()
+        token_vtcorp.dry_run()
 
         # Initialize word2vec
         word2vec = Word2VecTransformer(self.edict_pkl_fname,
                                        get_id2word_obj(token_vtcorp))
         token_word2vec_pipeline = word2vec[token_vtcorp]
 
-        doc = iter(token_word2vec_pipeline).next()
-        print doc
-        self.assertEqual(len(doc), 200)
-        docs = [d for d in token_word2vec_pipeline]
-        print 'Total tokens: {0}'.format(len(docs))
+        # At this point, token_word2vec_pipeline does *NOT* support __getitem__.
+        # This would start being a problem when flattening the dataset based on
+        # indices. So, we serialize.
+        serializer = Serializer(token_word2vec_pipeline, ShardedCorpus,
+                                self.loader.pipeline_serialization_target(
+                                    '.tokenw2v'))
+        token_word2vec_pipeline = serializer[token_word2vec_pipeline]
 
+        doc = iter(token_word2vec_pipeline).next()
+        self.assertEqual(len(doc), 200)
+        #print doc
+        #docs = [d for d in token_word2vec_pipeline]
+        #print 'Total tokens: {0}'.format(len(docs))
+
+        # Combine the pipeline with the image data.
+        tdata = Dataset(token_word2vec_pipeline)
+
+        image_file = os.path.join(self.data_root,
+                                  self.loader.layout.image_vectors)
+        icorp = ImagenetCorpus(image_file, delimiter=';', dim=4096, label='')
+        #icorp.dry_run()
+
+        serializer = Serializer(icorp, ShardedCorpus,
+                                self.loader.pipeline_serialization_target(
+                                    '.icorp'))
+        icorp = serializer[icorp]
+        idata = Dataset(icorp)
+
+        mmdata = CompositeDataset((tdata, idata), names=('text', 'img'),
+                                  aligned=False)
+
+        t2i_file = os.path.join(self.loader.root,
+                                self.loader.layout.textdoc2imdoc)
+        t2i_indexes = compute_docname_flatten_mapping(mmdata, t2i_file)
+        flatten = FlattenComposite(mmdata, indexes=t2i_indexes)
+
+        flat_mmdata = flatten[mmdata]
+
+        # Serialize.
+        serializer = Serializer(flat_mmdata, ShardedCorpus,
+                                self.loader.pipeline_serialization_target(
+                                    '.tokenw2v_mmdata'))
+        serialized_mmdata = serializer[flat_mmdata]
+
+        dataset = Dataset(serialized_mmdata)
+
+        print 'Total token dataset length: {0}'.format(len(dataset))
+
+        # Train a model over the combination.
+        self.model_handle = DenoisingAutoencoder.setup(dataset,
+            n_out=10,
+            reconstruction='cross-entropy',
+            heavy_debug=False)
+
+        self.learner = BaseSGDLearner(3, 100, validation_frequency=10)
+
+        print '--running training--'
+        sftrans = SafireTransformer(self.model_handle,
+                                    dataset,
+                                    self.learner,
+                                    dense_throughput=False)
+        output = sftrans[dataset]
+
+        self.assertIsInstance(output, TransformedCorpus)
 
 ###############################################################################
 

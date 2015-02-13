@@ -214,7 +214,13 @@ class VTextCorpus(TextCorpus):
         self.precompute_vtlist = precompute_vtlist
         self.vtlist = []
         if self.precompute_vtlist:
-            self.vtlist = self._precompute_vtlist(self.input)
+            if self.tokens or self.sentences:
+                logging.warn('Precomputing vtlist leads to wrong behavior with'
+                             ' tokens or sentences retrieval; skipping and'
+                             ' setting self.precompute_vtlist to false.')
+                self.precompute_vtlist = False
+            else:
+                self.vtlist = self._precompute_vtlist(self.input)
 
         # Caching
         self._cachedir = mkdtemp()
@@ -514,7 +520,10 @@ class VTextCorpus(TextCorpus):
 
         This DOES NOT WORK when yielding ``sentences`` or ``tokens``!!!
         """
-        return len(self.vtlist)
+        if self.precompute_vtlist:
+            return len(self.vtlist)
+        else:
+            return self.n_processed
 
     def __del__(self):
         if self.__do_cleanup:
