@@ -22,7 +22,7 @@ from safire.datasets.transformations import docnames2indexes, FlattenComposite
 from safire.datasets.word2vec_transformer import \
     Word2VecSamplingDatasetTransformer
 from safire.utils.transcorp import dimension, smart_cast_dataset, \
-    log_corpus_stack, get_id2word_obj
+    log_corpus_stack, get_id2word_obj, docnames2indexes
 import safire
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus

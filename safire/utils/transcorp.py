@@ -16,6 +16,8 @@ When importing, try to stick to ``import safire.X`` and qualify types
 A lot of Safire classes depend on transcorp.py functions while at the same
 time they need to be used inside transcorp.py to get access to their internals.
 """
+import collections
+import itertools
 import logging
 import copy
 
@@ -28,14 +30,13 @@ import numpy
 from safire.data import FrequencyBasedTransformer, VTextCorpus
 import safire.data.serializer
 import safire.data.sharded_corpus
-#from safire.datasets.dataset import Dataset
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
-#from safire.datasets.transformations import DatasetTransformer
 import safire.datasets.dataset
 #import safire.datasets.transformations
-from safire.utils import IndexedTransformedCorpus
+from safire.utils import IndexedTransformedCorpus, freqdict
+import safire.utils
 import safire.utils.transformers
 
 
@@ -481,3 +482,115 @@ def smart_cast_dataset(pipeline, **kwargs):
     else:
         logging.info('Casting pipeline {0} to dataset.'.format(pipeline))
         return safire.datasets.dataset.Dataset(pipeline, **kwargs)
+
+
+def compute_docname_flatten_mapping(mmdata, mapping_file):
+    """Based on a file with docname pairings and document to ID mappings from
+    a multimodal dataset, computes the list of indexes that can then be used
+    to flatten the given multimodal dataset and work as the text-image mapping
+    for pipeline items. (This is different from using the mapping file, because
+    multiple data points can share the same document name (sentence vectors
+    from a text...).
+
+    Currently works only for a two-component composite dataset.
+    """
+    t2i_map = safire.utils.parse_textdoc2imdoc_map(mapping_file)
+    t2i_list = [[text, image] for text in t2i_map for image in t2i_map[text]]
+    t2i_indexes = docnames2indexes(mmdata,
+                                                                   t2i_list)
+    return t2i_indexes
+
+
+def compute_word2image_map(vtcorp, icorp, t2i_indexes, freqdicts=None):
+    """Takes a multimodal dataset with text and images and computes a mapping
+    between tokens and images.
+
+    :param vtcorp: A VTextCorpus object set to yield documents on iteration.
+
+    :param icorp: An ImagenetCorpus.
+
+    :param t2i_indexes: The mapping between the text and image documents,
+        represented as a list of pairs.
+
+    :param freqdicts: A set of frequency dictionaries, one for each document,
+        can additionally be supplied. This allows using for example
+        tfidf-transformed frequencies instead of the raw counts.
+
+    :return: A pair of dictionaries: w2i, i2w. Tokens are represented in their
+        string form (as themselves), images are represented by their image IDs
+        (filenames relative to the image root of the data directory).
+    """
+    # Get documents as their token representations
+    documents = [doc for doc in vtcorp.get_texts()]
+    word_sets = [frozenset(doc) for doc in documents]
+    word_freqs = [freqdict(doc) for doc in documents]
+
+    # Get text name <=> tid mappings
+    tname2tid = vtcorp.doc2id  # This is a defaultdict(list) -- ex: sentences
+    tid2tname = vtcorp.id2doc  # This is a list
+
+    # Get image name <=> iid mappings
+    iname2iid = icorp.doc2id
+    iid2iname = icorp.id2doc
+
+    # Get t2i, i2t mappings
+    t2i = collections.defaultdict(list)
+    i2t = collections.defaultdict(list)
+    for t, i in t2i_indexes:
+        t2i[t].append(i)
+        i2t[i].append(t)
+
+    # Get word2image mappings
+    # For each word, a list of images and how many time was the word with
+    # the given image.
+    w2i = dict()
+
+    # For each image, a freqdict of tokens
+    i2w = dict()
+
+    # Filling in w2i, i2w
+    for t in t2i:
+        fdict = word_freqs[t]
+        iids = t2i[t]
+        inames = [iid2iname[iid] for iid in iids]
+        #print 'inames for document {0}, tid {1}: {2}'.format(t, tid2tname[t], inames)
+        for iname in inames:
+            for w in fdict:
+                if w not in w2i:
+                    w2i[w] = collections.defaultdict(int)
+                w2i[w][iname] += fdict[w]
+                if iname not in i2w:
+                    i2w[iname] = collections.defaultdict(int)
+                i2w[iname][w] += fdict[w]
+
+    return w2i, i2w
+
+
+def docnames2indexes(data, docnames):
+    """Converts a mapping of document names to indexes into the given datasets.
+    Utility function for flattening datasets that provide a doc2id mapping.
+
+    .. note::
+
+        Currently only supports a non-recursive composite dataset.
+
+    :type data: safire.datasets.dataset.CompositeDataset
+    :param data: A composite dataset from which to extract indexing. (This will
+        be the dataset you then pass to FlattenDataset.) Currently only works
+        with
+
+    :type docnames: list[tuple[str]]
+    :param docnames: A list of the document names that should be flattened into
+        one item when ``data`` is flattened.
+
+    :rtype: list[tuple[int]]
+    :returns: A list of indices into the individual components of the ``data``
+        composite dataset.
+    """
+    doc2ids = [safire.utils.transcorp.bottom_corpus(d).doc2id
+               for d in data.data]
+    output = []
+    for name_item in docnames:
+        idxs = tuple(doc2ids[i][name] for i, name in enumerate(name_item))
+        output.extend(list(itertools.product(*idxs)))
+    return output

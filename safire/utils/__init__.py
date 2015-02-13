@@ -6,6 +6,7 @@ For example ``tile_raster_images`` helps in generating a easy to grasp
 image from a set of samples or weights.
 """
 import cProfile
+import collections
 import copy
 import logging
 import math
@@ -23,6 +24,7 @@ from gensim.matutils import full2sparse, sparse2full, corpus2dense
 
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
+import operator
 
 
 try:
@@ -35,6 +37,7 @@ import numpy.random
 import theano
 import theano.ifelse
 import gensim.interfaces
+
 
 def check_kwargs(kwargs, names):
     """Checks that all \'names\' are in the \'dictionary\'.
@@ -816,6 +819,23 @@ def parse_textdoc2imdoc_map(textdoc2imdoc):
                 t2i_map[text].append(img)
 
     return t2i_map
+
+
+def freqdict(iterable):
+    """Computes a frequency dictionary from the items in the iterable.
+    """
+    freqs = collections.defaultdict(int)
+    for item in iterable:
+        freqs[item] += 1
+    return freqs
+
+
+def print_freqdict(freqdict, top_n=10):
+    print u'\n'.join([
+        u'{0}: {1}'.format(w, f) for w, f in sorted(
+            freqdict.items(), key=operator.itemgetter(1), reverse=True
+        )[:top_n]
+    ])
 
 
 class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):

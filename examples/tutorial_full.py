@@ -14,7 +14,8 @@ import safire
 from safire.data.layouts import DataDirLayout
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.data import VTextCorpus, FrequencyBasedTransformer
-from safire.utils.transcorp import get_composite_source, reset_vtcorp_input
+from safire.utils.transcorp import get_composite_source, reset_vtcorp_input, \
+    docnames2indexes
 from safire.utils.transformers import GeneralFunctionTransform
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.data.serializer import Serializer

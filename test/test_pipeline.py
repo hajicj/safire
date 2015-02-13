@@ -18,11 +18,12 @@ from safire.learning.interfaces import SafireTransformer, \
 from safire.learning.learners import BaseSGDLearner
 from safire.learning.models import DenoisingAutoencoder
 from safire.data.imagenetcorpus import ImagenetCorpus
-from safire.datasets.transformations import FlattenComposite, docnames2indexes
+from safire.datasets.transformations import FlattenComposite
 from safire.utils import parse_textdoc2imdoc_map
 from safire.utils.transcorp import dimension, get_id2word_obj, \
     get_composite_source, reset_vtcorp_input, get_transformers, \
-    run_transformations, log_corpus_stack, bottom_corpus, keymap2dict
+    run_transformations, log_corpus_stack, bottom_corpus, keymap2dict, \
+    compute_docname_flatten_mapping, docnames2indexes
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.datasets.dataset import Dataset, CompositeDataset
@@ -156,11 +157,13 @@ class TestPipeline(SafireTestCase):
         #with open(t2i_file) as t2i_handle:
         #    t2i_linecount = sum([1 for _ in t2i_handle])
 
-        t2i_map = parse_textdoc2imdoc_map(t2i_file)
-        t2i_list = [[text, image]
-                    for text in t2i_map
-                    for image in t2i_map[text]]
-        t2i_indexes = docnames2indexes(multimodal_dataset, t2i_list)
+        # t2i_map = parse_textdoc2imdoc_map(t2i_file)
+        # t2i_list = [[text, image]
+        #             for text in t2i_map
+        #             for image in t2i_map[text]]
+        # t2i_indexes = docnames2indexes(multimodal_dataset, t2i_list)
+        t2i_indexes = compute_docname_flatten_mapping(multimodal_dataset,
+                                                      t2i_file)
 
         print '--Creating flattened dataset--'
         flatten = FlattenComposite(multimodal_dataset,

@@ -1,16 +1,14 @@
 import logging
-import itertools
 
 from gensim.utils import is_corpus
 import numpy
 
 from safire.utils import IndexedTransformedCorpus
-from safire.datasets.dataset import DatasetTransformer
-import safire.utils.transcorp
-import safire.datasets.dataset
+from safire.datasets.dataset import DatasetTransformer, DatasetABC
 from safire.utils import flatten_composite_item
 
 # TODO: refactor/enhance to work with corpora as well as datasets
+
 
 class FlattenComposite(DatasetTransformer):
     """This class flattens a composite dataset into a simple dataset. This
@@ -86,7 +84,7 @@ class FlattenComposite(DatasetTransformer):
 
         iscorpus, _ = is_corpus(item)
 
-        if iscorpus or isinstance(item, safire.datasets.dataset.DatasetABC):
+        if iscorpus or isinstance(item, DatasetABC):
             return self._apply(item)
         else:
             raise ValueError('Cannot apply flatten_composite to individual '
@@ -193,31 +191,3 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
         return total
 
 
-def docnames2indexes(data, docnames):
-    """Converts a mapping of document names to indexes into the given datasets.
-    Utility function for flattening datasets that provide a doc2id mapping.
-
-    .. note::
-
-        Currently only supports a non-recursive composite dataset.
-
-    :type data: safire.datasets.dataset.CompositeDataset
-    :param data: A composite dataset from which to extract indexing. (This will
-        be the dataset you then pass to FlattenDataset.) Currently only works
-        with
-
-    :type docnames: list[tuple[str]]
-    :param docnames: A list of the document names that should be flattened into
-        one item when ``data`` is flattened.
-
-    :rtype: list[tuple[int]]
-    :returns: A list of indices into the individual components of the ``data``
-        composite dataset.
-    """
-    doc2ids = [safire.utils.transcorp.bottom_corpus(d).doc2id
-               for d in data.data]
-    output = []
-    for name_item in docnames:
-        idxs = tuple(doc2ids[i][name] for i, name in enumerate(name_item))
-        output.extend(list(itertools.product(*idxs)))
-    return output

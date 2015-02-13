@@ -11,8 +11,8 @@ __author__ = 'Lenovo'
 import numpy
 import unittest
 
-from safire.datasets.transformations import FlattenComposite, FlattenedDatasetCorpus, \
-    docnames2indexes
+from safire.datasets.transformations import FlattenComposite, FlattenedDatasetCorpus
+from safire.utils.transcorp import docnames2indexes
 from safire.data.serializer import Serializer
 
 
