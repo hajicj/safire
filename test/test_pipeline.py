@@ -404,7 +404,7 @@ class TestPipeline(SafireTestCase):
                                                110, discard_top=10)
         doc_pipeline = freqfilter[doc_pipeline]
 
-        # Pass the dictionary
+        # Generate and lock the dictionary
         freqfiltered_dict = keymap2dict(get_id2word_obj(doc_pipeline))
         token_vtcorp = VTextCorpus(self.vtlist, input_root=self.data_root,
                                    tokens=True,

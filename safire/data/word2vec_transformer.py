@@ -164,11 +164,11 @@ class Word2VecTransformer(TransformationABC):
                 embeddings[i, :] = embedding
                 has_hit = True
                 self.hit_ids.add(wid)
-                print '...hit.'
+                #  print '...hit.'
             except KeyError:
                 self.oov += 1.0
                 self.oov_collector.add((wid, word))
-                print '...no hit.'
+                #  print '...no hit.'
         if not has_hit:
             self.emptydocs += 1
 

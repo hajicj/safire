@@ -46,7 +46,8 @@ class VTextCorpus(TextCorpus):
     def __init__(self, input=None, colnames=['form', 'lemma', 'tag'],
                  retcol='lemma', input_root=None,
                  delimiter='\t', gzipped=True,
-                 sentences=False, tokens=False,
+                 sentences=False,
+                 tokens=False, tokens_use_sentence_separator=False,
                  dictionary=None, allow_dict_updates=True,
                  doc2id=None, id2doc=None, token_filter=None,
                  token_transformer='strip_UFAL',
@@ -77,11 +78,14 @@ class VTextCorpus(TextCorpus):
             but rather sentences.
 
         :param tokens: Set to True if docs should be individual tokens rather
-            than entire files. Note that this will output the special '<s>'
-            token on sentence seam; also note that the dataset will be *very*
+            than entire files. Note that the dataset will be *very*
             long. Also, all filtering methods that depend on co-occurrence of
             tokens in documents will not work (tf-idf), although frequency-based
             filtering and all filtering done within VTextCorpus will work.
+
+        :param tokens_use_sentence_separator: Set to True if you want to output
+            a ``<S>`` special token between sentences. Only works when the
+            ``tokens`` flag is set. [NOT IMPLEMENTED]
 
         :param dictionary: If specified, the corpus will share a dictionary.
             Useful for multiple VTextCorpus instances running on a single
@@ -195,6 +199,7 @@ class VTextCorpus(TextCorpus):
         # Output behavior properties
         self.sentences = sentences
         self.tokens = tokens
+        self.tokens_use_sentence_separator = tokens_use_sentence_separator
 
         # Initializes the positional filter
         self.positional_filter = None
@@ -238,7 +243,7 @@ class VTextCorpus(TextCorpus):
     def doc2bow(self, text, allow_update=None):
         """Mini-method for generating BOW representation of text."""
         if allow_update is None:
-            allow_update=self.allow_dict_updates
+            allow_update = self.allow_dict_updates
         bow = self.dictionary.doc2bow(text,
                                       allow_update=allow_update)
 
@@ -301,11 +306,11 @@ class VTextCorpus(TextCorpus):
                     docid = doc_short_name
                     self.doc2id[docid].append(total_yielded)
                     self.id2doc.append(docid)
-                    total_yielded += 1
-                    #print 'Yielding token: {0}'.format(token)
                     if token not in self.dictionary.token2id:
-                        #print 'Token not in dictionary, skipping.'
                         continue
+                    total_yielded += 1
+                    self.n_processed += 1
+                    self.n_words_processed += 1
                     yield [token]
 
             elif self.sentences:
@@ -318,6 +323,8 @@ class VTextCorpus(TextCorpus):
                     self.doc2id[docid].append(total_yielded)
                     self.id2doc.append(docid)
                     total_yielded += 1
+                    self.n_processed += 1
+                    self.n_words_processed += len(sentence)
                     yield sentence
 
             else:
@@ -327,11 +334,13 @@ class VTextCorpus(TextCorpus):
                     self.doc2id[docid].append(total_yielded)
                     self.id2doc.append(docid)
                 total_yielded += 1
+                self.n_processed += 1
+                self.n_words_processed += len(document)
                 yield document
 
 
             # Logging
-            self.n_processed += 1
+            #self.n_processed += 1
             if self.n_processed % timed_batch_size == 0:
                 batch_end_time = time.clock()
                 batch_time = batch_end_time - batch_start_time
@@ -423,14 +432,19 @@ class VTextCorpus(TextCorpus):
             for i in xrange(len(self)):     # Should cache results (?)
                 _ = self[i]
                 if i % 1000 == 0:
-                    logging.info(' Dry run at {0}, in {1} s'
-                                 ''.format(i, time.clock() - start_time))
+                    logging.info(' Dry run at {0}, in {1} s. Vocabulary size: '
+                                 '{2}'.format(i, time.clock() - start_time,
+                                              len(self.dictionary)))
         else:
             for i, _ in enumerate(self):
                 pass
                 if i % 1000 == 0:
                     logging.info(' Dry run at {0}, in {1} s'
                                  ''.format(i, time.clock() - start_time))
+
+        logging.info('Corpus stats derived from dry run:\n  {0} docs,\n'
+                     '  {1} tokens.\n'.format(self.n_processed,
+                                              self.n_words_processed))
 
     def lock(self):
         """In order to use the corpus as a transformer, it has to be locked: it
@@ -496,7 +510,10 @@ class VTextCorpus(TextCorpus):
         of documents. If it was not precomputed, returns the number of documents
         processed from the current input. Note that resetting the input will
         also reset corpus length; for a total of documents retrieved from the
-        corpus, see the ``n_processed`` attribute."""
+        corpus, see the ``n_processed`` attribute.
+
+        This DOES NOT WORK when yielding ``sentences`` or ``tokens``!!!
+        """
         return len(self.vtlist)
 
     def __del__(self):
@@ -537,6 +554,8 @@ class VTextCorpus(TextCorpus):
                                 'the vtlist.')
             with self._get_doc_handle(self.vtlist[item]) as vthandle:
                 document, _ = self.parse_document_and_sentences(vthandle)
+            self.n_processed += 1
+            self.n_words_processed += len(document)
 
             return self.doc2bow(document, allow_update=allow_update)
 
@@ -619,13 +638,6 @@ class VTextCorpus(TextCorpus):
         # Restoring works, but caching doesn't..?
 
         return corpus
-
-    #def __getstate__(self):
-    #    # logging.debug(u'VTextCorpus dict:\n{0}'.format(
-    #    #     '\n'.join([u'    {0}: {1}'.format(key, value)
-    #    #                for key, value in self.__dict__.iteritems()])
-    #    # ))
-    #    return self.__dict__
 
     def __setstate__(self, d):
         self.__dict__.update(d)

@@ -219,6 +219,5 @@ def docnames2indexes(data, docnames):
     output = []
     for name_item in docnames:
         idxs = tuple(doc2ids[i][name] for i, name in enumerate(name_item))
-        print 'Name item: {0}, idxs: {1}'.format(name_item, idxs)
         output.extend(list(itertools.product(*idxs)))
     return output
