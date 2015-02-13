@@ -713,8 +713,9 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                                  plot_bias=False, backward_handle=None):
         """Plots a sample heatmap of how the dataset will be transformed."""
         sample_size = min(1000, (len(dataset) - dataset._test_doc_offset))
-        batch = 0 # Deterministic plotting.
+        batch = 0  # Deterministic plotting.
         #batch = random.randint(0, dataset.n_test_batches(sample_size))
+        print 'Requesting test batch {0} with size {1}'.format(batch, sample_size)
         sample_data = dataset.test_X_batch(batch, sample_size)
         transformed_data = numpy.array(model_handle.run(sample_data))
 

@@ -163,6 +163,11 @@ class DatasetABC(gensim.utils.SaveLoad):
         if test_p:
             self.test_p = test_p
         self._test_doc_offset = len(self) - int(len(self) * self.test_p)
+        # Devel proportion is counted from the bottom end of the test data
+        # proportion, so if we increased test_p, we would get overlapping
+        # test data and devel data!
+        if hasattr(self, 'devel_p'):
+            self.set_devel_p(self.devel_p)
 
     def set_devel_p(self, devel_p):
         """Helper function for setting a proportion of data as heldout data. For
@@ -315,7 +320,7 @@ class DatasetABC(gensim.utils.SaveLoad):
         elif subset == 'test':
             if kind == 'X':
                 lbound += self._test_doc_offset
-                if lbound > len(self):
+                if lbound + b_size > len(self):
                     raise ValueError('Too high batch index and/or batch size'
                                      ' (%d, %d); testing dataset has only %d documents.' % (b_index, b_size, len(self) - self._test_doc_offset))
                 batch = self._build_batch(lbound, b_size, dtype)

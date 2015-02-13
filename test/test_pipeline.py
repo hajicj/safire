@@ -11,6 +11,8 @@ from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
 import logging
 import numpy
+import time
+import theano
 from safire.data.word2vec_transformer import Word2VecTransformer
 from safire.datasets.word2vec_transformer import \
     Word2VecSamplingDatasetTransformer
@@ -422,6 +424,9 @@ class TestPipeline(SafireTestCase):
                                        get_id2word_obj(token_vtcorp))
         token_word2vec_pipeline = word2vec[token_vtcorp]
 
+        ttanh = GeneralFunctionTransform(numpy.tanh, multiplicative_coef=0.4)
+        token_word2vec_pipeline = ttanh[token_word2vec_pipeline]
+
         # At this point, token_word2vec_pipeline does *NOT* support __getitem__.
         # This would start being a problem when flattening the dataset based on
         # indices. So, we serialize.
@@ -443,6 +448,9 @@ class TestPipeline(SafireTestCase):
                                   self.loader.layout.image_vectors)
         icorp = ImagenetCorpus(image_file, delimiter=';', dim=4096, label='')
         #icorp.dry_run()
+
+        itanh = GeneralFunctionTransform(numpy.tanh, multiplicative_coef=0.4)
+        icorp = itanh[icorp]
 
         serializer = Serializer(icorp, ShardedCorpus,
                                 self.loader.pipeline_serialization_target(
@@ -467,22 +475,31 @@ class TestPipeline(SafireTestCase):
         serialized_mmdata = serializer[flat_mmdata]
 
         dataset = Dataset(serialized_mmdata)
+        dataset.set_test_p(0.1)
+        dataset.set_devel_p(0.1)
 
         print 'Total token dataset length: {0}'.format(len(dataset))
 
         # Train a model over the combination.
         self.model_handle = DenoisingAutoencoder.setup(dataset,
-            n_out=10,
-            reconstruction='cross-entropy',
+            n_out=200,
+            activation=theano.tensor.tanh,
+            backward_activation=theano.tensor.tanh,
+            reconstruction='mse',
             heavy_debug=False)
 
-        self.learner = BaseSGDLearner(3, 100, validation_frequency=10)
+        self.learner = BaseSGDLearner(20, 400, validation_frequency=10,
+                                      plot_transformation=True,
+                                      plot_every=5)
 
         print '--running training--'
+        start = time.clock()
         sftrans = SafireTransformer(self.model_handle,
                                     dataset,
                                     self.learner,
                                     dense_throughput=False)
+        end = time.clock()
+        print '  total trainng time: {0} s'.format(end - start)
         output = sftrans[dataset]
 
         self.assertIsInstance(output, TransformedCorpus)

@@ -555,7 +555,14 @@ class ShardedCorpus(IndexedCorpus):
                                                                  self.n_docs))
 
             # - get range of shards over which to iterate
-            first_shard = self.shard_by_offset(start)
+            try:
+                first_shard = self.shard_by_offset(start)
+            except ValueError:
+                logging.error('For some reason, the *start* of the requested'
+                              ' slice is out of range of the ShardedCorpus ('
+                              'we can tolerate the *end* being a +1 fencepost,'
+                              ' but not the start...)')
+                raise
 
             last_shard = self.n_shards - 1
             if not stop == self.n_docs:

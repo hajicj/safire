@@ -26,7 +26,7 @@ class DenoisingAutoencoder(Autoencoder):
                  W=None, W_prime=None, b=None, b_prime=None, 
                  tied_weights=True, corruption_level=0.3,
                  rng=numpy.random.RandomState(), 
-                 theano_rng = None):
+                 theano_rng=None):
         """ Initialize the parameters of the Denoising Autoencoder.
         A Denoising Autoencoder is an unsupervised model that tries to minimize
         reconstruction error on input with additional noise introduced to the
