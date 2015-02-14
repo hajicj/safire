@@ -392,6 +392,7 @@ class TestPipeline(SafireTestCase):
     def test_tokenbased_word2vec(self):
 
         # Set up the standard pipeline with tf-idf and frequency filtering
+        #
         # Set up a new VTextCorpus that iterates over tokens.
         # We could just lock the vocabulary and use the same tf-idf and
         # frequency filters, but this would give us empty documents for tokens
@@ -410,8 +411,9 @@ class TestPipeline(SafireTestCase):
                                                110, discard_top=10)
         doc_pipeline = freqfilter[doc_pipeline]
 
-        # Generate and lock the dictionary
+        # Generate the dictionary
         freqfiltered_dict = keymap2dict(get_id2word_obj(doc_pipeline))
+        # Initialize token vtcorp and lock the dictionary
         token_vtcorp = VTextCorpus(self.vtlist, input_root=self.data_root,
                                    tokens=True,
                                    dictionary=freqfiltered_dict,

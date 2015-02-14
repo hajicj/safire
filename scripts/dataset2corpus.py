@@ -58,6 +58,9 @@ def build_argument_parser():
                         help='Consider' +
                          'each sentence of a vtext file as a separate ' +
                          'document (default behavior is document per file)')
+    parser.add_argument('-t', '--tokens', action='store_true',
+                        help='Consider each token a separate document. All '
+                             'token filters apply.')
 
     parser.add_argument('-i', '--input_label', action='store', default=None,
                         help='For image processing, which is time-consuming: '
@@ -209,108 +212,6 @@ def main(args):
         raise NotImplementedError('Cleaning not implemented properly through'
                                   ' a loader/layout object.')
 
-        # fnames = loader.layout.required_text_corpus_names(args.label)
-        # logging.info('Clearing corpora with label %s' % args.label)
-        #
-        # for name in fnames:
-        #     full_name = os.path.join(loader.root, loader.layout.corpus_dir,
-        #                              name)
-        #     logging.debug('Attempting to clear file %s' % full_name)
-        #     if os.path.isfile(full_name):
-        #         os.remove(full_name)
-        #
-        # # TODO: Clear dataset
-        # output_prefix = loader.output_prefix(args.label)
-
-        return
-
-    # if args.images:
-    #     #
-    #     # if args.dataset_only: # Doesn't make sense.
-    #     #     logging.info('Building dataset only (assumes icorp and mmcorp)...')
-    #     #     idata = loader.load_img(args.label, {'overwrite': True,
-    #     #                                          'shardsize': args.shardsize})
-    #     #     idata.data.save()
-    #     #     return
-    #
-    #     if loader.has_image_corpora(args.label):
-    #         logging.warn('Overwriting image corpora with label %s' % args.label)
-    #
-    #     if args.input_label:
-    #         if args.input_label == '.':
-    #             args.input_label = None
-    #         icorp = loader.load_image_corpus(args.input_label)
-    #     else:
-    #         # Build the default corpus.
-    #         image_file = os.path.join(args.root, loader.layout.image_vectors)
-    #         icorp = ImagenetCorpus(image_file, delimiter=';',
-    #                                dim=4096, label='')
-    #     pipeline = icorp
-    #
-    #     if args.uniform_covariance:
-    #         logging.info('Transforming to uniform covariance.')
-    #         covariance_transform = LeCunnVarianceScalingTransform(
-    #                                                         pipeline)
-    #         pipeline = covariance_transform[pipeline]
-    #
-    #     if args.scale is not None:
-    #         logging.info('Scaling with cutoff at %f' % args.scale)
-    #         scaling_transform = GlobalUnitScalingTransform(icorp,
-    #                                                         cutoff=args.scale)
-    #         pipeline = scaling_transform[pipeline]
-    #
-    #     if args.tanh:
-    #         logging.info('Squishing through the tanh function with coef. {0}'
-    #                      ''.format(args.tanh))
-    #         tanh_transform = GeneralFunctionTransform(
-    #             numpy.tanh,
-    #             multiplicative_coef=args.tanh)
-    #         pipeline = tanh_transform[pipeline]
-    #
-    #     if args.normalize is not None:
-    #         logging.info('Normalizing each data point to %f' % args.normalize)
-    #         norm_transform = NormalizationTransform(args.normalize)
-    #         pipeline = norm_transform[pipeline]
-    #
-    #     loader.serialize_image_corpus(pipeline, args.label)
-    #     loader.save_image_corpus(pipeline, args.label)
-    #
-    #     output_prefix = loader.img_output_prefix(args.label)
-    #     dataset = ShardedDataset(output_prefix, pipeline,
-    #                              shardsize=args.shardsize,
-    #                              overwrite=(not args.no_overwrite_shdat))
-    #     dataset.save()
-    #
-    #     return
-
-    ###########################################################################
-
-    # Processing #
-
-    # # This branch should go away due to corpus - dataset relationship
-    # # refactoring...
-    # if args.dataset_only:
-    #
-    #     logging.info('Only creating dataset, assuming serialized'
-    #                  ' corpus available for %s' % args.label)
-    #     output_prefix = loader.text_output_prefix(args.label)
-    #
-    #     vt_corpus_filename = loader.layout.required_text_corpus_names(args.label)[1]
-    #     vt_full_filename = os.path.join(args.root, loader.layout.corpus_dir,
-    #                                     vt_corpus_filename)
-    #
-    #     mm_corpus_filename = loader.layout.required_text_corpus_names(args.label)[0]
-    #     mm_full_filename = os.path.join(args.root, loader.layout.corpus_dir,
-    #                                     mm_corpus_filename)
-    #
-    #     dataset = UnsupervisedShardedVTextCorpusDataset(
-    #         output_prefix,
-    #         vt_corpus_filename=vt_full_filename,
-    #         mm_corpus_filename=mm_full_filename,
-    #         shardsize=args.shardsize,
-    #         overwrite=args.overwrite_shdat)
-    #     dataset.data.save()  # Save the ShardedDataset, not the wrapper
-
     if args.input_label is not None:
         logging.info('Loading corpus with label %s' % args.input_label)
         pipeline_fname = loader.pipeline_name(args.input_label)
@@ -346,8 +247,19 @@ def main(args):
                 vtargs['pfilter_full_freqs'] = args.pfilter_fullfreq
         if args.filter_capital:
             vtargs['filter_capital'] = True
+        vtargs['tokens'] = args.tokens
+        vtargs['sentences'] = args.sentences
 
-        logging.info('Deriving corpus from loader with vtargs %s' % str(vtargs))
+        if args.tokens or args.sentences:
+            # This already happens automatically inside VTextCorpus, but it
+            # raises a warning we can avoid if we know about this in advance.
+            vtargs['precompute_vtlist'] = False
+
+        logging.info(u'Deriving corpus from loader with vtargs:\n{0}'.format(
+            u'\n'.join(u'  {0}: {1}'.format(k, v)
+                       for k, v in sorted(vtargs.items())))
+        )
+
         vtcorp = loader.get_text_corpus(vtargs)
         # VTextCorpus initialization is still the same, refactor or not.
         logging.info('Corpus: %s' % str(vtcorp))
@@ -386,6 +298,17 @@ def main(args):
         post_tfidf = TfidfModel(pipeline)
         pipeline = post_tfidf[pipeline]
 
+    if args.word2vec is not None:
+        logging.info('Applying word2vec transformation with embeddings '
+                     '{0}'.format(args.word2vec))
+        w2v_dictionary = get_id2word_obj(pipeline)
+        # Extracting dictionary from FrequencyBasedTransform supported
+        # through utils.transcorp.KeymapDict
+        word2vec = Word2VecTransformer(args.word2vec,
+                                       w2v_dictionary,
+                                       op=args.word2vec_op)
+        pipeline = word2vec[pipeline]
+
     if args.uniform_covariance:
         ucov = LeCunnVarianceScalingTransform(pipeline)
         pipeline = ucov[pipeline]
@@ -406,17 +329,6 @@ def main(args):
         logging.info('Normalizing each data point to %f' % args.normalize)
         norm_transform = NormalizationTransform(args.normalize)
         pipeline = norm_transform[pipeline]
-
-    if args.word2vec is not None:
-        logging.info('Applying word2vec transformation with embeddings '
-                     '%s' % args.word2vec)
-        w2v_dictionary = get_id2word_obj(pipeline)
-        # Extracting dictionary from FrequencyBasedTransform supported
-        # through utils.transcorp.KeymapDict
-        word2vec = Word2VecTransformer(args.word2vec,
-                                       w2v_dictionary,
-                                       op=args.word2vec_op)
-        pipeline = word2vec[pipeline]
 
     logging.info('Serializing...')
     # Rewrite as applying a Serializer block.

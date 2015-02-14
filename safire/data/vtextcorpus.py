@@ -312,7 +312,7 @@ class VTextCorpus(TextCorpus):
                     docid = doc_short_name
                     self.doc2id[docid].append(total_yielded)
                     self.id2doc.append(docid)
-                    if token not in self.dictionary.token2id:
+                    if self.locked and token not in self.dictionary.token2id:
                         continue
                     total_yielded += 1
                     self.n_processed += 1
@@ -347,12 +347,12 @@ class VTextCorpus(TextCorpus):
 
             # Logging
             #self.n_processed += 1
-            if self.n_processed % timed_batch_size == 0:
+            if self.n_processed % timed_batch_size == 0 and self.n_processed > 0:
                 batch_end_time = time.clock()
                 batch_time = batch_end_time - batch_start_time
                 batch_total_time = batch_end_time - start_time
                 logger.info(
-                    'Done batch no. %d, total docs %d. Batch time %f s (%f s / doc), total time %f s (%f s / doc)' % (
+                    'Done batch no. {0}, total docs {1}. Batch time {2} s ({3} s / doc), total time {4} s ({5} s / doc)'.format(
                         batch_no, self.n_processed, batch_time,
                         batch_time / timed_batch_size, batch_total_time,
                         batch_total_time / self.n_processed))
