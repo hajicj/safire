@@ -151,6 +151,11 @@ class DataDirLayout(object):
         self.img_corpname = '.img'
         self.text_corpname = '.vt'
 
+         # Pipeline names should be agnostic to text vs. images (user handles
+         # the naming).
+        self.pipeline_suffix = '.pln'
+        self.pipeline_serialization_suffix = '.pls'
+
         self.mm_corp_suffix = '.mmcorp'
         self.mm_index_suffix = '.mmcorp.index'
         self.text_corp_suffix = '.vtcorp'

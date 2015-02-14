@@ -88,6 +88,7 @@ test/__init__.py
 test/safire_test_case.py
 test/test_base_sgd_learner.py
 test/test_clamped_sampler.py
+test/test_corpus2dense.py
 test/test_da_unsupervised_training.py
 test/test_dataset_transformers.py
 test/test_frequency_based_transform.py
@@ -107,6 +108,7 @@ test/test_safire_transformer.py
 test/test_selftest.py
 test/test_sharded_corpus.py
 test/test_sharded_dataset.py
+test/test_similarity_transformer.py
 test/test_text_browser.py
 test/test_utils.py
 test/test_vtextcorpus.py

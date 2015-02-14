@@ -7,10 +7,10 @@ import numpy
 import os
 import theano
 import sys
-from safire.data.loaders import MultimodalShardedDatasetLoader
+#from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.word2vec_transformer import Word2VecTransformer
-from safire.datasets.dataset import Dataset
-from safire.datasets.transformations import DatasetTransformer
+import safire.datasets.dataset
+from safire.datasets.dataset import DatasetTransformer
 
 __author__ = "Jan Hajic jr."
 
@@ -55,7 +55,7 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
                 raise ValueError('Cannot initialize without either embeddings'
                                  ' matrix (given: {0}) or Word2VecTransformer'
                                  ' (given: {1})'.format(embeddings_matrix,
-                                                         w2v_transformer))
+                                                        w2v_transformer))
             self.embeddings_matrix = \
                 self.w2v_transformer_to_embedding_matrix(w2v_transformer)
 
@@ -86,22 +86,22 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
 
         :return: The transformed batch. Will have ``self.n_out`` columns.
         """
-        if isinstance(batch, Dataset):
+        if isinstance(batch, safire.datasets.dataset.Dataset):
             return self._apply(dataset=batch)
 
         # Sample from each document (batch row) one word (column).
-        logging.debug('  [w2v_dt] Batch shape: {0}'.format(batch.shape))
+        # logging.debug('  [w2v_dt] Batch shape: {0}'.format(batch.shape))
         batch_projection = self.get_batch_sample(batch)
-        logging.debug('  [w2v_dt] Batch projection shape:'
-                      ' {0}'.format(batch_projection.shape))
+        # logging.debug('  [w2v_dt] Batch projection shape:'
+        #               ' {0}'.format(batch_projection.shape))
 
         # Use embedding of given word as document vector.
         # - batch_projection is X * n_in,
         # - embeddings_matrix is n_in * n_out
         embeddings = numpy.dot(batch_projection, self.embeddings_matrix)
 
-        logging.debug('  [w2v_dt] embeddings shape:'
-                      ' {0}'.format(embeddings.shape))
+        # print '  [w2v_dt] embeddings shape:' \
+        #       ' {0}'.format(embeddings.shape)
         return embeddings
 
     def get_batch_sample(self, batch):
@@ -118,6 +118,7 @@ class Word2VecSamplingDatasetTransformer(DatasetTransformer):
         :return: The projection matrix, also as a theano variable.
         """
         # Normalize by row
+        batch = numpy.atleast_2d(batch)
         row_sums = numpy.sum(batch, axis=1)
         normalized_batch = batch.T / row_sums
 

@@ -65,8 +65,6 @@ class RestrictedBoltzmannMachine(BaseUnsupervisedModel):
         written. So, RBMs have their own setup.
 
     """
-    
-
     def __init__(self, inputs, n_in, n_out=100, 
                  activation=TT.nnet.sigmoid,
                  backward_activation=TT.nnet.sigmoid,

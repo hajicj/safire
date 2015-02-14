@@ -10,7 +10,6 @@ from .basefilter import BaseFilter
 logger = logging.getLogger(__name__)
 
 
-
 class PositionalTagTokenFilter(BaseFilter):
     """Implements a positional tag-based filter, either as an exclusion
     filter or an inclusion filter (inclusion, by default: only listed values

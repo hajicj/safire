@@ -1,125 +1,13 @@
-import argparse
 import logging
-from gensim.interfaces import TransformationABC, TransformedCorpus
+
 from gensim.utils import is_corpus
 import numpy
-from safire.utils.transcorp import dimension, bottom_corpus
-from safire.datasets.dataset import Dataset, DatasetABC
-from safire.datasets.unsupervised_dataset import UnsupervisedDataset
 
-
-# TODO: refactor to work with new DatasetABC
+from safire.utils import IndexedTransformedCorpus
+from safire.datasets.dataset import DatasetTransformer, DatasetABC
 from safire.utils import flatten_composite_item
 
-# This may be deprecated/rewritten as a wrapper around TransformedCorpus...
-class TransformedDataset(Dataset):
-    """A class that enables stacking dataset transformations in the training
-    stage, similar to how corpus transformations are done during preprocessing.
-
-    Instead of overriding ``__iter__`` like TransformedCorpus, will need to
-    override ``_get_batch``.
-    """
-    def __init__(self, obj, dataset):
-        """Initializes the transformer.
-
-        :type obj: DatasetTransformer
-        :param obj: The transformer through which a batch from the ``dataset``
-            is run.
-
-        :type dataset: Dataset
-        :param dataset: The underlying dataset whose _get_batch calls are
-            overridden.
-
-        """
-        self.data = dataset
-        self.obj = obj
-
-        self.n_out = self.obj.n_out
-        self.dim = dimension(obj)  # This is the preferred interface.
-
-        # This is a naming hack, because the model setup() method expects
-        # model.n_in == data.n_in. Note that this doesn't matter much: this
-        # is a dataset, so it only has ONE dimension. (The transformer, on the
-        # other hand, does have a separate input and output dimension.)
-        self.n_in = self.n_out
-
-    def _get_batch(self, subset, kind, b_index, b_size):
-        """The underlying mechanism for retrieving batches from
-        the dataset. Note that this method is "hidden" -- the learner and other
-        classes that utilize a Dataset call methods ``train_X_batch()`` etc.,
-        but all these methods internally "redirect" to ``_get_batch()``.
-
-        In this class, the batch is retrieved from the underlying Dataset
-        and then transformed through the transformer's ``__getitem__`` method.
-
-        :param subset:
-
-        :param kind:
-
-        :param b_index:
-
-        :param b_size:
-
-        :return:
-        """
-        batch = self.data._get_batch(subset=subset,
-                                     kind=kind,
-                                     b_index=b_index,
-                                     b_size=b_size)
-        transformed_batch = self.obj[batch]
-        return transformed_batch
-
-    def __getitem__(self, item):
-
-        data = self.data[item]
-        #print '  TransformedDataset.__getitem__: operating on data {0} with ' \
-        #      'item {1}'.format(data, item)
-        result = self.obj[data]
-        return result
-
-
-class DatasetTransformer(TransformationABC):
-    """DatasetTransformer is a base class analogous to gensim's
-    :class:`TransformationABC`, but it operates efficiently on theano batches
-    instead of gensim sparse vectors.
-
-    Constraints on dataset transformations:
-
-    * Batch size cannot change (one item for one item).
-    * Dimension may change; must provide ``n_out`` attribute.
-       * This means output dimension must be a fixed number known at
-         transformer initialization time (but can be derived from initializaton
-         parameters, or can be a parameter directly).
-    * The ``__getitem__`` method must take batches (matrices, incl. theano
-      shared vars!)
-
-    """
-    def __init__(self):
-        self.n_out = None
-        self.n_in = None
-
-    def __getitem__(self, batch):
-        """Transforms a given batch.
-
-        :type batch: numpy.array, theano.shared
-        :param batch: A batch.
-
-        :return: The transformed batch. If a dataset is given instead of
-            a batch, applies the transformer and returns a TransformedDataset.
-        """
-        if isinstance(batch, Dataset):
-            return self._apply(batch)
-
-        raise NotImplementedError
-
-    def _apply(self, dataset, chunksize=None):
-
-        if not isinstance(dataset, Dataset):
-            raise TypeError('Dataset argument given to _apply method not a'
-                            'dataset (type %s)' % type(dataset))
-
-        transformed_dataset = TransformedDataset(dataset=dataset, obj=self)
-        return transformed_dataset
+# TODO: refactor/enhance to work with corpora as well as datasets
 
 
 class FlattenComposite(DatasetTransformer):
@@ -199,10 +87,11 @@ class FlattenComposite(DatasetTransformer):
         if iscorpus or isinstance(item, DatasetABC):
             return self._apply(item)
         else:
-            raise ValueError('Cannot apply serializer to individual documents.')
+            raise ValueError('Cannot apply flatten_composite to individual '
+                             'documents.')
 
 
-class FlattenedDatasetCorpus(TransformedCorpus):
+class FlattenedDatasetCorpus(IndexedTransformedCorpus):
 
     def __init__(self, flatten, dataset):
 
@@ -213,6 +102,8 @@ class FlattenedDatasetCorpus(TransformedCorpus):
         self.dim = self.derive_dimension(self.corpus)
         self.n_in = self.dim
         self.n_out = self.dim
+
+        self.chunksize = None
 
     def __getitem__(self, item):
         """This is where on-the-fly construction of the flattened dataset
@@ -228,9 +119,14 @@ class FlattenedDatasetCorpus(TransformedCorpus):
         else:
             # Possibly inefficient
             indexes = self.indexes[item]
-            idxs_by_dataset = map(list, zip(*indexes))
-            logging.debug('Indexes: {0}, by dataset: {1}'.format(indexes,
-                                                         idxs_by_dataset))
+            try:
+                idxs_by_dataset = map(list, zip(*indexes))
+            except TypeError:
+                # Single item retrieved
+                indexes = [indexes]
+                idxs_by_dataset = map(list, zip(*indexes))
+            logging.debug('Indexes: {0}, by dataset: {1}'
+                          ''.format(indexes, idxs_by_dataset))
             retrieved = []
             for dataset, idxs in zip(self.corpus.data, idxs_by_dataset):
                 logging.debug(' Retrieving: dataset {0}, '
@@ -242,16 +138,27 @@ class FlattenedDatasetCorpus(TransformedCorpus):
 
                 # Depends here on ability of SwapoutCorpus serialized by
                 # ShardedCorpus to deliver numpy ndarrays from lists of indices.
-                partial = numpy.array(dataset[idxs])
+                partial_list = dataset[idxs]
+                partial = numpy.array(partial_list)
                 retrieved.append(partial)
-            logging.debug('Retrieved shapes:'
-                          ' {0}'.format([r.shape for r in retrieved]))
+            logging.debug('Retrieved shapes: {0}'
+                          ''.format([r.shape for r in retrieved]))
             output = self.item2flat(retrieved)
 
         return output
 
     def derive_dimension(self, composite):
         return FlattenedDatasetCorpus.flattened_dimension(composite.dim)
+
+    def __len__(self):
+        if self.indexes is not None:
+            return len(self.indexes)
+        else:
+            return len(self.corpus)
+
+    def __iter__(self):
+        for i in xrange(len(self)):
+            yield self[i]
 
     @staticmethod
     def item2flat(item):
@@ -284,30 +191,3 @@ class FlattenedDatasetCorpus(TransformedCorpus):
         return total
 
 
-def docnames2indexes(data, docnames):
-    """Converts a mapping of document names to indexes into the given datasets.
-    Utility function for flattening datasets that provide a doc2id mapping.
-
-    .. note::
-
-        Currently only supports a non-recursive composite dataset.
-
-    :type data: safire.datasets.dataset.CompositeDataset
-    :param data: A composite dataset from which to extract indexing. (This will
-        be the dataset you then pass to FlattenDataset.) Currently only works
-        with
-
-    :type docnames: list[tuple[str]]
-    :param docnames: A list of the document names that should be flattened into
-        one item when ``data`` is flattened.
-
-    :rtype: list[tuple[int]]
-    :returns: A list of indices into the individual components of the ``data``
-        composite dataset.
-    """
-    doc2ids = [bottom_corpus(d).doc2id for d in data.data]
-    output = []
-    for name_item in docnames:
-        idxs = tuple(doc2ids[i][name] for i, name in enumerate(name_item))
-        output.append(idxs)
-    return output

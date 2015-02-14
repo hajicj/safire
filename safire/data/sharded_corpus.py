@@ -15,6 +15,8 @@ import math
 import numpy
 import scipy.sparse as sparse
 
+import safire.utils.transcorp
+
 #: Specifies which dtype should be used for serializing the shards.
 _default_dtype = float
 try:
@@ -84,7 +86,7 @@ class ShardedCorpus(IndexedCorpus):
     #@profile
     def __init__(self, output_prefix, corpus, dim=None,
                  shardsize=4096, overwrite=False, sparse_serialization=False,
-                 sparse_retrieval=False, gensim=False):
+                 sparse_retrieval=False, gensim=True):
         """Initializes the dataset. If ``output_prefix`` is not found,
         builds the shards.
 
@@ -142,7 +144,7 @@ class ShardedCorpus(IndexedCorpus):
         :type gensim: bool
         :param gensim: If set, will additionally convert the output to gensim
             sparse vectors (list of tuples (id, value)) to make it behave like
-            any other gensim corpus. This **will** slow the dataset down.
+            any other gensim corpus. This **will** slow the corpus down.
 
         """
         self.output_prefix = output_prefix
@@ -190,9 +192,8 @@ class ShardedCorpus(IndexedCorpus):
 
         # Derive dimension from input corpus/init argument
         proposed_dim = self._guess_n_features(corpus)
-        logging.warn('Dataset dimension derived from input corpus'
-                     ' is {0}, are you sure everything is all '
-                     'right?'.format(proposed_dim))
+        logging.info('Dataset dimension derived from input corpus'
+                     ' is {0}.'.format(proposed_dim))
 
         if proposed_dim != self.dim:
             if self.dim is None:
@@ -223,18 +224,22 @@ class ShardedCorpus(IndexedCorpus):
 
         for n, doc_chunk in enumerate(gensim.utils.grouper(corpus,
                                                            chunksize=shardsize)):
-            logging.info('Chunk no. %d at %d s' % (n, time.clock() - start_time))
+            logging.info('Chunk no. %d gathered at %d s' % (n, time.clock() - start_time))
+            logging.info('Chunk type: {0}, length {1}'.format(type(doc_chunk),
+                                                              len(doc_chunk)))
+            logging.info('Chunk element type: {0}'.format(type(doc_chunk[0])))
 
             current_shard = numpy.zeros((len(doc_chunk), self.dim),
                                         dtype=dtype)
             logging.debug('Current chunk dimension: '
                           '{0} x {1}'.format(len(doc_chunk), self.dim))
-
-            for i, doc in enumerate(doc_chunk):
-                doc = dict(doc)
-                #logging.warn('Doc: {0}, chunk {1}'.format(doc, doc_chunk))
-                #logging.warn('Current shard shape: {0}'.format(current_shard.shape))
-                current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
+            if isinstance(doc_chunk[0], numpy.ndarray):
+                for i, doc in enumerate(doc_chunk):
+                    current_shard[i][:] = doc[:]
+            else:
+                for i, doc in enumerate(doc_chunk):
+                    doc = dict(doc)
+                    current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
 
             # Handles the updating as well.
             if self.sparse_serialization:
@@ -322,6 +327,7 @@ class ShardedCorpus(IndexedCorpus):
         if offset >= self.n_docs:
             raise ValueError('Too high offset specified (%d), available docs: %d' % (offset, self.n_docs))
         if offset < 0:
+            #offset = len(self) + offset
             raise ValueError('Negative offset {0} currently not'
                              ' supported.'.format(offset))
         return k
@@ -349,7 +355,7 @@ class ShardedCorpus(IndexedCorpus):
         if self.current_shard_n == self.n_shards:
             return False # There's no next shard.
         return (self.offsets[self.current_shard_n+1] <= offset) \
-               and (offset < self.offsets[self.current_shard_n+2])
+                and (offset < self.offsets[self.current_shard_n+2])
 
     def resize_shards(self, shardsize):
         """Re-process the dataset to new shard size. This may take pretty long.
@@ -360,6 +366,11 @@ class ShardedCorpus(IndexedCorpus):
         :type shardsize: int
         :param shardsize: The new shard size.
         """
+        gensim = self.gensim
+        sparse_retrieval = self.sparse_retrieval
+
+        self.sparse_retrieval = self.sparse_serialization
+        self.gensim = False
 
         # Determine how many new shards there will be
         n_new_shards = int(math.floor(self.n_docs / float(shardsize)))
@@ -418,6 +429,8 @@ class ShardedCorpus(IndexedCorpus):
                 self.offsets = new_offsets
                 self.shardsize = shardsize
                 self.reset()
+                self.gensim = gensim
+                self.sparse_retrieval = sparse_retrieval
 
     def _shard_name(self, n):
         """Generates the name for the n-th shard."""
@@ -431,6 +444,9 @@ class ShardedCorpus(IndexedCorpus):
 
     def _guess_n_features(self, corpus):
         """Attempts to guess number of features in corpus."""
+        #n_features = safire.utils.transcorp.dimension(corpus)
+        #return n_features
+
         n_features = None
         if hasattr(corpus, 'dim'):
             # print 'Guessing from \'dim\' attribute.'
@@ -489,6 +505,8 @@ class ShardedCorpus(IndexedCorpus):
 
     def get_by_offset(self, offset):
         """As opposed to getitem, this one only accepts ints as offsets."""
+        if offset < 0:
+            offset += len(self)
         self._ensure_shard(offset)
         result = self.current_shard[offset - self.current_offset]
         return result
@@ -519,14 +537,32 @@ class ShardedCorpus(IndexedCorpus):
 
         elif isinstance(offset, slice):
             start = offset.start
+
+            if start is None:
+                start = 0
+            elif start < 0:
+                start += len(self)
+
             stop = offset.stop
+            if stop is None:
+                stop = len(self)
+            elif stop < 0:
+                stop += len(self)
+
             if stop > self.n_docs:
                 raise IndexError('Requested slice offset'
                                  ' %d out of range (%d docs)' % (stop,
                                                                  self.n_docs))
 
             # - get range of shards over which to iterate
-            first_shard = self.shard_by_offset(start)
+            try:
+                first_shard = self.shard_by_offset(start)
+            except ValueError:
+                logging.error('For some reason, the *start* of the requested'
+                              ' slice is out of range of the ShardedCorpus ('
+                              'we can tolerate the *end* being a +1 fencepost,'
+                              ' but not the start...)')
+                raise
 
             last_shard = self.n_shards - 1
             if not stop == self.n_docs:

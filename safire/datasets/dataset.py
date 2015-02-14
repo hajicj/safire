@@ -89,18 +89,24 @@ Train/dev/test split is handled at the dataset level.
 
 import logging
 import gensim
+from gensim.interfaces import TransformationABC
 import theano
+import safire.datasets
+import safire.utils
 import safire.utils.transcorp
 
 
 # Doesn't DatasetABC implement the IndexedCorpus interface?
 # Should it be made explicit?
+# TODO: Try to implement DatasetABC as a CorpusABC subclass.
+#       This would greatly simplify a lot of transcorp.py functions.
 class DatasetABC(gensim.utils.SaveLoad):
     """This is the old Dataset, reworked into a wrapper for an IndexedCorpus
     (like, for instance, the ShardedCorpus). It can also serve as a wrapper
     for a Dataset, in order to be subclassable to something that performs
     an on-the-fly transformation of the data."""
-    def __init__(self, data, dim=None, test_p=None, devel_p=None):
+    def __init__(self, data, dim=None, test_p=None, devel_p=None,
+                 ensure_dense=True):
         """Constructs a Dataset wrapper for the given data.
 
         The default train-dev-test split is by proportion of data.
@@ -119,6 +125,12 @@ class DatasetABC(gensim.utils.SaveLoad):
 
         :param devel_p: Proportion of data to be used as development set.
             Will be taken from before the test set.
+
+        :param ensure_dense: If set, makes sure that the ``data`` member really
+            outputs dense numpy ndarrays. This is the expected behavior for
+            Datasets, although in principle there is nothign wrong with
+            outputting gensim sparse vectors (and guaranteeing a dimension at
+            the same time).
         """
         try:
             logging.debug('Dataset init: inspecting sliceability...')
@@ -130,17 +142,37 @@ class DatasetABC(gensim.utils.SaveLoad):
         if not dim:
             dim = self.derive_dimension(data)
 
-        self.data = data
+        _data = data
+        if ensure_dense:
+            logging.info('Ensuring dense output...')
+            _data = safire.utils.transcorp.convert_to_dense(_data)
+        self.data = _data
 
         self.dim = dim
-        self.n_in = dim # Input row dimension/shape
-        self.n_out = dim # Input row dimension/shape
+        self.n_in = dim   # Input row dimension/shape
+        self.n_out = dim  # Input row dimension/shape
 
+        self.set_test_p(test_p)
+        self.set_devel_p(devel_p)
+
+    def set_test_p(self, test_p=None):
+        """Helper function for setting a proportion of data as test data. For
+        simple use cases only; use a CompositeDataset with a train/dev and
+        test split for more principled experiments."""
         self.test_p = 0.0
         if test_p:
             self.test_p = test_p
         self._test_doc_offset = len(self) - int(len(self) * self.test_p)
+        # Devel proportion is counted from the bottom end of the test data
+        # proportion, so if we increased test_p, we would get overlapping
+        # test data and devel data!
+        if hasattr(self, 'devel_p'):
+            self.set_devel_p(self.devel_p)
 
+    def set_devel_p(self, devel_p):
+        """Helper function for setting a proportion of data as heldout data. For
+        simple use cases only; use a CompositeDataset with a train/dev and
+        test split for more principled experiments."""
         self.devel_p = 0.0
         if devel_p:
             self.devel_p = devel_p
@@ -288,7 +320,7 @@ class DatasetABC(gensim.utils.SaveLoad):
         elif subset == 'test':
             if kind == 'X':
                 lbound += self._test_doc_offset
-                if lbound > len(self):
+                if lbound + b_size > len(self):
                     raise ValueError('Too high batch index and/or batch size'
                                      ' (%d, %d); testing dataset has only %d documents.' % (b_index, b_size, len(self) - self._test_doc_offset))
                 batch = self._build_batch(lbound, b_size, dtype)
@@ -399,7 +431,10 @@ class CompositeDataset(DatasetABC):
         self.length = len(data[0])  # TODO: This is very temporary.
         super(CompositeDataset, self).__init__(data, dim=dim,
                                                test_p=test_p,
-                                               devel_p=devel_p)
+                                               devel_p=devel_p,
+                                               ensure_dense=False)
+        # The composite dataset doesn't care if input or output are dense or
+        # not...
 
         if self.aligned:
             for d in data:
@@ -440,7 +475,7 @@ class CompositeDataset(DatasetABC):
                 return tuple([d[item[i]] for i, d in enumerate(self.data)])
             else:
                 return tuple([d[item] for d in self.data])
-        except TypeError:
+        except (TypeError, IndexError):
             if isinstance(item, str):
                 return self.data[self.names_dict[item]]
             else:
@@ -480,3 +515,122 @@ class UnsupervisedDataset(CompositeDataset):
                                                   names=['features'],
                                                   test_p=test_p,
                                                   devel_p=devel_p)
+
+
+class TransformedDataset(Dataset):
+    """A class that enables stacking dataset transformations in the training
+    stage, similar to how corpus transformations are done during preprocessing.
+
+    Instead of overriding ``__iter__`` like TransformedCorpus, will need to
+    override ``_get_batch``.
+
+    (Note: shouldn't this also implement __iter__, to be a TransformedCorpus as
+    well? Goes together with the question whether Datasets shouldn't also be
+    IndexedTransformedCorpora...)
+    """
+    def __init__(self, obj, dataset):
+        """Initializes the transformer.
+
+        :type obj: DatasetTransformer
+        :param obj: The transformer through which a batch from the ``dataset``
+            is run.
+
+        :type dataset: Dataset
+        :param dataset: The underlying dataset whose _get_batch calls are
+            overridden.
+
+        """
+        self.data = dataset
+        self.obj = obj
+
+        self.n_out = self.obj.n_out
+        self.dim = safire.utils.transcorp.dimension(obj)
+        # This is the preferred interface.
+
+        # This is a naming hack, because the model setup() method expects
+        # model.n_in == data.n_in. Note that this doesn't matter much: this
+        # is a dataset, so it only has ONE dimension. (The transformer, on the
+        # other hand, does have a separate input and output dimension.)
+        self.n_in = self.n_out
+
+    def _get_batch(self, subset, kind, b_index, b_size):
+        """The underlying mechanism for retrieving batches from
+        the dataset. Note that this method is "hidden" -- the learner and other
+        classes that utilize a Dataset call methods ``train_X_batch()`` etc.,
+        but all these methods internally "redirect" to ``_get_batch()``.
+
+        In this class, the batch is retrieved from the underlying Dataset
+        and then transformed through the transformer's ``__getitem__`` method.
+
+        :param subset:
+
+        :param kind:
+
+        :param b_index:
+
+        :param b_size:
+
+        :return:
+        """
+        batch = self.data._get_batch(subset=subset,
+                                     kind=kind,
+                                     b_index=b_index,
+                                     b_size=b_size)
+        transformed_batch = self.obj[batch]
+        return transformed_batch
+
+    def __getitem__(self, item):
+
+        # print 'Calling __getitem__ on TransformedDataset with obj of type {0}' \
+        #       'and item {1}'.format(type(self.obj), item)
+        data = self.data[item]
+        # print '  TransformedDataset.__getitem__: operating on type {0} with ' \
+        #       'shape {1}; item {2}'.format(type(data), data.shape, item)
+        result = self.obj[data]
+        # print '      Result: type {0} with shape {1}'.format(type(result),
+        #                                                      result.shape)
+        return result
+
+
+class DatasetTransformer(TransformationABC):
+    """DatasetTransformer is a base class analogous to gensim's
+    :class:`TransformationABC`, but it operates efficiently on theano batches
+    instead of gensim sparse vectors.
+
+    Constraints on dataset transformations:
+
+    * Batch size cannot change (one item for one item).
+    * Dimension may change; must provide ``n_out`` attribute.
+       * This means output dimension must be a fixed number known at
+         transformer initialization time (but can be derived from initializaton
+         parameters, or can be a parameter directly).
+    * The ``__getitem__`` method must take batches (matrices, incl. theano
+      shared vars!)
+
+    """
+    def __init__(self):
+        self.n_out = None
+        self.n_in = None
+
+    def __getitem__(self, batch):
+        """Transforms a given batch.
+
+        :type batch: numpy.array, theano.shared
+        :param batch: A batch.
+
+        :return: The transformed batch. If a dataset is given instead of
+            a batch, applies the transformer and returns a TransformedDataset.
+        """
+        if isinstance(batch, safire.datasets.dataset.Dataset):
+            return self._apply(batch)
+
+        raise NotImplementedError
+
+    def _apply(self, dataset, chunksize=None):
+
+        if not isinstance(dataset, safire.datasets.dataset.Dataset):
+            raise TypeError('Dataset argument given to _apply method not a'
+                            'dataset (type %s)' % type(dataset))
+
+        transformed_dataset = TransformedDataset(dataset=dataset, obj=self)
+        return transformed_dataset
