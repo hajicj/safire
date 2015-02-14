@@ -18,11 +18,12 @@ import matplotlib.pyplot as plt
 import operator
 import os
 from safire.data.word2vec_transformer import Word2VecTransformer
-from safire.datasets.transformations import docnames2indexes, FlattenComposite
+from safire.datasets.transformations import FlattenComposite
 from safire.datasets.word2vec_transformer import \
     Word2VecSamplingDatasetTransformer
 from safire.utils.transcorp import dimension, smart_cast_dataset, \
-    log_corpus_stack, get_id2word_obj, docnames2indexes
+    log_corpus_stack, get_id2word_obj, docnames2indexes, \
+    compute_docname_flatten_mapping
 import safire
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
@@ -314,6 +315,8 @@ def main(args):
     elif args.text_label and args.img_label:
         logging.info('Combining text and image sources into a multimodal '
                      'pipeline.')
+        logging.info('Text pipeline:\n{0}'.format(log_corpus_stack(text_pipeline)))
+        logging.info('Image pipeline:\n{0}'.format(log_corpus_stack(img_pipeline)))
 
         # - Combine into CompositeDatasest
         mm_composite_dataset = CompositeDataset((text_pipeline, img_pipeline),
@@ -323,13 +326,14 @@ def main(args):
         #    - Load flatten indices
         t2i_file = os.path.join(mdloader.root,
                                 mdloader.layout.textdoc2imdoc)
-        t2i_map = parse_textdoc2imdoc_map(t2i_file)
-        t2i_list = [[text, image]
-                    for text in t2i_map
-                    for image in t2i_map[text]]
+        # t2i_map = parse_textdoc2imdoc_map(t2i_file)
+        # t2i_list = [[text, image]
+        #             for text in t2i_map
+        #             for image in t2i_map[text]]
         # Sorting the indices is an optimization for underlying ShardedCorpus
         # serializers.
-        t2i_indexes = sorted(docnames2indexes(mm_composite_dataset, t2i_list))
+        t2i_indexes = compute_docname_flatten_mapping(mm_composite_dataset,
+                                                      t2i_file)
 
         #    - Initialize flattening transformer
         flatten = FlattenComposite(mm_composite_dataset, indexes=t2i_indexes)

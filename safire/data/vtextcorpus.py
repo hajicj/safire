@@ -120,6 +120,14 @@ class VTextCorpus(TextCorpus):
             obtained from MorphoDiTa, from the MorphLex lemma dictionary
             at UFAL. **This is currently the default behavior.**
 
+        :param token_min_freq: The minimum frequency a token must have in
+            a document to stay in the output. Note that "document level" means
+            at the level of one vtext document (vtlist entry), not one returned
+            data item. By default, no minimum frequency is necessary.
+
+            This is something of a document-level filter and may yet be
+            generalized.
+
         :param pfilter: A number, either an integer or a float. If
             an integer (K) is given, will only take the first K sentences from
             the beginning of a document. If a float is given, will use the given

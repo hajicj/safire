@@ -15,17 +15,19 @@ from safire.data import VTextCorpus
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.serializer import Serializer, SwapoutCorpus
 from safire.data.sharded_corpus import ShardedCorpus
+from safire.datasets.dataset import Dataset, CompositeDataset
 from safire.datasets.sharded_dataset import ShardedDataset
 from safire.datasets.sharded_multimodal_dataset import \
     UnsupervisedShardedVTextCorpusDataset
 from safire.data.word2vec_transformer import Word2VecTransformer
+from safire.datasets.transformations import FlattenComposite
 import safire.utils
 from safire.utils import profile_run
 from safire.data.loaders import MultimodalShardedDatasetLoader, IndexLoader
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.data.frequency_based_transform import FrequencyBasedTransformer
 from safire.utils.transcorp import get_id2word_obj, \
-    log_corpus_stack, dimension
+    log_corpus_stack, dimension, compute_docname_flatten_mapping
 from safire.utils.transformers import GlobalUnitScalingTransform, \
     LeCunnVarianceScalingTransform, GeneralFunctionTransform, \
     NormalizationTransform, CappedNormalizationTransform, SimilarityTransformer
@@ -75,6 +77,20 @@ def build_argument_parser():
                         help='If set, will create an image corpus instead of'
                              ' a text corpus. Note that the script currently '
                              'only supports creating the default image corpus.')
+
+    parser.add_argument('--flatten', action='store_true',
+                        help='Will use this t2i file to flatten the provided '
+                             'text and image datasets. '
+                             'If set, will expect the --f_text and -f_images '
+                             'labels to be provided. The provided pipelines'
+                             'will then be flattened and serialized with the'
+                             ' -l infix. (No futher transformations will be'
+                             ' applied.)')
+    parser.add_argument('--f_text', action='store', default=None,
+                        help='The label of the text pipeline to flatten.')
+    parser.add_argument('--f_images', action='store', default=None,
+                        help='The label of the image pipeline to flatten.')
+
     parser.add_argument('--scale', action='store', type=float, default=None,
                         help='Will scale the image dataset to the unit interval'
                              'with the given number as the cutoff for 1.0 after'
@@ -211,6 +227,48 @@ def main(args):
     if args.clear:
         raise NotImplementedError('Cleaning not implemented properly through'
                                   ' a loader/layout object.')
+
+    if args.flatten:
+        if args.f_text is None or args.f_images is None:
+            raise argparse.ArgumentError('Must provide --f_text and --f_images'
+                                         ' when attempting to flatten.')
+
+        logging.info('Loading text pipeline and casting to dataset...')
+        t_pipeline_name = loader.pipeline_name(args.f_text)
+        t_pipeline = SaveLoad.load(t_pipeline_name)
+        t_data = Dataset(t_pipeline)
+
+        logging.info('Loading image pipeline and casting to dataset...')
+        i_pipeline_name = loader.pipeline_name(args.f_images)
+        i_pipeline = SaveLoad.load(i_pipeline_name)
+        i_data = Dataset(i_pipeline)
+
+        logging.info('Creating composite dataset...')
+        mm_data = CompositeDataset((t_data, i_data), names=('text', 'img'),
+                                   aligned=False)
+
+        logging.info('Flattening dataset...')
+        t2i_file = os.path.join(loader.root,
+                                loader.layout.textdoc2imdoc)
+        flatten_indexes = compute_docname_flatten_mapping(mm_data, t2i_file)
+        flatten = FlattenComposite(mm_data, indexes=flatten_indexes)
+        flat_mm_data = flatten[mm_data]
+
+        if not args.label:
+            logging.info('Generating flattened label automatically...')
+            args.label = '__'.join([args.f_text, args.f_images])
+            logging.info('    Generated label: {0}'.format(args.label))
+
+        logging.info('Serializing flattened data...')
+        serialization_name = loader.pipeline_serialization_target(args.label)
+        serializer = Serializer(flat_mm_data, ShardedCorpus, serialization_name)
+        pipeline = serializer[flat_mm_data]
+
+        logging.info('Saving pipeline...')
+        pipeline_name = loader.pipeline_name(args.label)
+        pipeline.save(fname=pipeline_name)
+
+        return
 
     if args.input_label is not None:
         logging.info('Loading corpus with label %s' % args.input_label)

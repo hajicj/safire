@@ -496,8 +496,7 @@ def compute_docname_flatten_mapping(mmdata, mapping_file):
     """
     t2i_map = safire.utils.parse_textdoc2imdoc_map(mapping_file)
     t2i_list = [[text, image] for text in t2i_map for image in t2i_map[text]]
-    t2i_indexes = docnames2indexes(mmdata,
-                                                                   t2i_list)
+    t2i_indexes = docnames2indexes(mmdata, t2i_list)
     return t2i_indexes
 
 
@@ -592,5 +591,6 @@ def docnames2indexes(data, docnames):
     output = []
     for name_item in docnames:
         idxs = tuple(doc2ids[i][name] for i, name in enumerate(name_item))
+        #print idxs
         output.extend(list(itertools.product(*idxs)))
     return output
