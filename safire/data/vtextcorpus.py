@@ -18,6 +18,7 @@ from gensim.corpora.dictionary import Dictionary
 import itertools
 
 import filters.positional_filters as pfilters
+from safire.utils import freqdict
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ class VTextCorpus(TextCorpus):
                  dictionary=None, allow_dict_updates=True,
                  doc2id=None, id2doc=None, token_filter=None,
                  token_transformer='strip_UFAL',
+                 token_min_freq=0,
                  pfilter=None, pfilter_full_freqs=False,
                  filter_capital=False,
                  filter_short=None,
@@ -194,7 +196,7 @@ class VTextCorpus(TextCorpus):
             token_transformer = _strip_UFAL
 
         self.token_transformer = token_transformer
-
+        self.token_min_freq = token_min_freq
         # Initialize column parsing
         self.delimiter = delimiter
         self.colnames = colnames
@@ -385,6 +387,9 @@ class VTextCorpus(TextCorpus):
         flt_sentences = sentences
         if self.positional_filter:
             flt_sentences = self._apply_positional_filter(sentences)
+
+        if self.token_min_freq:
+            flt_sentences = self._apply_token_min_freq(flt_sentences)
 
         document = list(itertools.chain(*flt_sentences))
 
@@ -609,6 +614,23 @@ class VTextCorpus(TextCorpus):
         :return: The filtered document.
         """
         return self.positional_filter(sentences, **self.positional_filter_kwargs)
+
+    def _apply_token_min_freq(self, flt_sentences):
+        """Filters the given set of sentences so that tokens that appear
+        less than ``self.token_min_freq`` times are filtered out."""
+        freqs = freqdict(itertools.chain(*flt_sentences))
+        throw_out = set()
+        for token in freqs:
+            if freqs[token] < self.token_min_freq:
+                throw_out.add(token)
+        filtered_sentences = []
+        for sentence in flt_sentences:
+            filtered_sentence = [token
+                                 for token in sentence
+                                 if token not in throw_out]
+            filtered_sentences.append(filtered_sentence)
+        flt_sentences = filtered_sentences
+        return flt_sentences
 
     def _get_doc_handle(self, doc):
         if self.gzipped:

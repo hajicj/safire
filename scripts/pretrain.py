@@ -98,6 +98,12 @@ def _build_argument_parser():
     parser.add_argument('-t', '--text_label',
                         help='The text corpus label from which to load data. '
                              'Only one of -t, -i can be specified.')
+    parser.add_argument('--mm_label',
+                        help='If an already flattened multimodal dataset is'
+                             ' available, use that dataset right away and do'
+                             ' not unnecesarily do the combination step.'
+                             ' If mm_label is used, img_label and text_label'
+                             ' must *not* be used.')
     parser.add_argument('-l', '--transformation_label', action='store',
                         help='The output label. This is to help distinguish ' +
                         'models made with different options. Controls saving names,'
@@ -263,9 +269,12 @@ def main(args):
     mloader = ModelLoader(args.root, args.name)
 
     # Loading datasets
+    if args.mm_label and (args.img_label or args.text_label):
+        raise ValueError('Cannot specify both mm_label and'
+                         ' img_label/text_label.')
 
-    if not args.img_label and not args.text_label:
-        raise ValueError('Must specify text or image label or both.')
+    if not args.img_label and not args.text_label and not args.mm_label:
+        raise ValueError('Must specify text/image label or both or mm_label.')
 
     if args.img_label and args.text_label:
         logging.info('Will train a multimodal model: text label {0}, image '
@@ -356,6 +365,12 @@ def main(args):
         else:
             logging.warn('Word2vec sampling active, cannot serialize flattened'
                          'corpus.')
+
+    if args.mm_label:
+        logging.info('Loading multimodal pipeline with label {0}'
+                     ''.format(args.mm_label))
+        pipeline_name = mdloader.pipeline_name(args.mm_label)
+        pipeline = SaveLoad.load(pipeline_name)
 
     logging.info('Loaded pipeline:\n{0}'.format(log_corpus_stack(pipeline)))
 
