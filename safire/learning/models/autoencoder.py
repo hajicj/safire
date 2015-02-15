@@ -368,8 +368,8 @@ class Autoencoder(BaseUnsupervisedModel):
         """
         mean_act = TT.mean(self.activation(TT.dot(X, self.W) + self.b),
                            axis=0)
-        mean_act_compl = 1.0 - mean_act
         rho_term = mean_act * TT.log(mean_act / self.sparsity_target)
+        mean_act_compl = 1.0 - mean_act
         neg_rho_term = mean_act_compl * TT.log(mean_act_compl /
                                                (1.0 - self.sparsity_target))
         kl_divergence = TT.sum(rho_term + neg_rho_term)
@@ -387,8 +387,8 @@ class Autoencoder(BaseUnsupervisedModel):
         """
         mean_act = TT.mean(self.activation(TT.dot(X, self.W) + self.b),
                            axis=1)
-        mean_act_compl = 1.0 - mean_act
         rho_term = mean_act * TT.log(mean_act / self.output_sparsity_target)
+        mean_act_compl = 1.0 - mean_act
         neg_rho_term = mean_act_compl * TT.log(mean_act_compl /
                                                (1.0 - self.output_sparsity_target))
         kl_divergence = TT.sum(rho_term + neg_rho_term)
