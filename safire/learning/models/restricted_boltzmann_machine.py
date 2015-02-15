@@ -18,6 +18,7 @@ from safire.learning.interfaces.pretraining_model_handle import PretrainingModel
 from safire.learning.interfaces import ModelHandle
 from safire.utils import check_kwargs
 
+
 class RestrictedBoltzmannMachine(BaseUnsupervisedModel):
     """This class implements the Restricted Boltzmann Machine model.
 
@@ -170,8 +171,12 @@ class RestrictedBoltzmannMachine(BaseUnsupervisedModel):
             instead of features.
 
         :type L1_norm: float
+        :param L1_norm: L1 regularization weight (absolute value of each
+            parameter).
 
         :type L2_norm: float
+        :param L2_norm: L2 regularization weight (quadratic value of each
+            parameter).
 
         :type bias_decay: float
 
@@ -579,9 +584,9 @@ class RestrictedBoltzmannMachine(BaseUnsupervisedModel):
             mean_act = self.activation(TT.dot(X, self.W) + self.b_hidden)
             cost +=  self.prefer_extremes * TT.mean(-TT.log((2.0 * mean_act - 1.0) ** 2 + 0.00001))
 
-        #if self.L1_norm != 0.0:
-        #    cost += self.L1_norm * (2 * TT.sum(self.W) \
-        #         + TT.sum(self.b_hidden) + TT.sum(self.b_visible))
+        if self.L1_norm != 0.0:
+            cost += (2 * TT.sum(self.W) + TT.sum(self.b_hidden)
+                     + TT.sum(self.b_visible)) * self.L1_norm
         if self.bias_decay != 0.0:
             extra_bias_decay = (TT.sum(self.b_hidden ** 2) + TT.sum(self.b_visible ** 2)) * self.bias_decay
             cost += extra_bias_decay
@@ -844,8 +849,6 @@ class RestrictedBoltzmannMachine(BaseUnsupervisedModel):
         
         return PretrainingModelHandle(model, pretrain_model)
         
-
-    
     @classmethod
     def setup(cls, data, model=None, batch_size=500, learning_rate=0.13,
               heavy_debug=False, **model_init_kwargs):
