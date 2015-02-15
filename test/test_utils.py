@@ -111,12 +111,12 @@ class TestUtils(SafireTestCase):
         freq_vtcorp = freq_transform[vtcorp]
         tfidf_freq = TfidfModel(freq_vtcorp)
 
-        with gzip.open(self.vtlist[0]) as vt_handle:
+#        with gzip.open(self.vtlist[0]) as vt_handle:
 
-            output = run_transformations(vt_handle,
-                                         vtcorp,
-                                         freq_transform,
-                                         tfidf_freq)
+        output = run_transformations(0,
+                                     vtcorp,
+                                     freq_transform,
+                                     tfidf_freq)
         print output
         normalized_output = gensim.matutils.unitvec(output)
 

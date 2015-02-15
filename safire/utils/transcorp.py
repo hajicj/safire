@@ -525,12 +525,12 @@ def compute_word2image_map(vtcorp, icorp, t2i_indexes, freqdicts=None):
     word_freqs = [freqdict(doc) for doc in documents]
 
     # Get text name <=> tid mappings
-    tname2tid = vtcorp.doc2id  # This is a defaultdict(list) -- ex: sentences
-    tid2tname = vtcorp.id2doc  # This is a list
+    tname2tid = vtcorp.doc2id  # This will be defaultdict(set) -- ex: sentences
+    tid2tname = vtcorp.id2doc  # This will be a dict
 
     # Get image name <=> iid mappings
     iname2iid = icorp.doc2id
-    iid2iname = icorp.id2doc
+    iid2iname = icorp.id2doc  # This will be a dict
 
     # Get t2i, i2t mappings
     t2i = collections.defaultdict(list)
@@ -591,6 +591,5 @@ def docnames2indexes(data, docnames):
     output = []
     for name_item in docnames:
         idxs = tuple(doc2ids[i][name] for i, name in enumerate(name_item))
-        #print idxs
         output.extend(list(itertools.product(*idxs)))
     return output
