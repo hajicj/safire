@@ -71,7 +71,7 @@ class ImagenetCorpus(CorpusABC):
         self.label = label
 
         if doc2id is None:
-            doc2id = collections.defaultdict(list)
+            doc2id = collections.defaultdict(set)
         if id2doc is None:
             id2doc = []
 
@@ -93,7 +93,7 @@ class ImagenetCorpus(CorpusABC):
     def reset(self):
         """Sets corpus to "clean" state -- as if it was never iterated over."""
         logging.info('Resetting corpus as if it never iterated.')
-        self.doc2id = collections.defaultdict(list)
+        self.doc2id = collections.defaultdict(set)
         self.id2doc = []
         logging.debug('Old n_processed: %d' % self.n_processed)
         self.n_processed = 0
@@ -118,7 +118,7 @@ class ImagenetCorpus(CorpusABC):
             if len(features) != self.dim:
                 raise ValueError('Invalid input data: data dimension %d does not correspond to declared dimension %d (on line %d of input, with docno %s)' % (len(features), self.dim, imno))
 
-            self.doc2id[docname].append(imno)
+            self.doc2id[docname].add(imno)
             self.id2doc.append(docname)
 
             self.n_processed += 1
