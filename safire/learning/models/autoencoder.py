@@ -190,7 +190,12 @@ class Autoencoder(BaseUnsupervisedModel):
             'activation' : self.activation,
             'tied_weights' : self.tied_weights,
             'inputs' : self.inputs,
-            'reconstruction' : self.reconstruction
+            'reconstruction' : self.reconstruction,
+            'L1_norm': self.L1_norm,
+            'L2_norm': self.L2_norm,
+            'bias_decay': self.bias_decay,
+            'sparsity_target': self.sparsity_target,
+            'output_sparsity_target': self.output_sparsity_target,
             # Random number generators are ignored?
         }
 
@@ -336,6 +341,10 @@ class Autoencoder(BaseUnsupervisedModel):
             cost += (TT.sum(self.W ** 2) + TT.sum(self.W_prime ** 2)
                      + TT.sum(self.b ** 2) + TT.sum(self.b_prime ** 2)) \
                     * self.L2_norm
+
+        if self.bias_decay != 0.0:
+            cost += (TT.sum(self.b_hidden ** 2) + TT.sum(self.b_visible ** 2)) \
+                    * self.bias_decay
 
         if self.sparsity_target:
             cost += self._sparsity_cross_entropy(X)
