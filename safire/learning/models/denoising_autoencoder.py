@@ -151,9 +151,9 @@ class DenoisingAutoencoder(Autoencoder):
         :rtype: theano.tensor.TensorType
         :returns: The inputs with some values randomly set to 0.
         """
-        return self.theano_rng.binomial(size = inputs.shape, n = 1, 
-                                        p = 1-self.corruption_level,
-                                        dtype = theano.config.floatX) * inputs
+        return self.theano_rng.binomial(size=inputs.shape, n=1,
+                                        p=1-self.corruption_level,
+                                        dtype=theano.config.floatX) * inputs
 
     def _init_args_snapshot(self):
         """Saves the model in the form of an init kwarg dict, since not all
@@ -162,17 +162,17 @@ class DenoisingAutoencoder(Autoencoder):
         is a classmethod) for an initialization of the model."""
 
         init_arg_dict = {
-            'W' : self.W,
-            'W_prime' : self.W_prime,
-            'b' : self.b,
-            'b_prime' : self.b_prime,
-            'corruption_level' : self.corruption_level,
-            'n_in' : self.n_in,
-            'n_out' : self.n_out,
-            'activation' : self.activation,
-            'reconstruction' : self.reconstruction,
-            'tied_weights' : self.tied_weights,
-            'inputs' : self.inputs
+            'W': self.W,
+            'W_prime': self.W_prime,
+            'b': self.b,
+            'b_prime': self.b_prime,
+            'corruption_level': self.corruption_level,
+            'n_in': self.n_in,
+            'n_out': self.n_out,
+            'activation': self.activation,
+            'reconstruction': self.reconstruction,
+            'tied_weights': self.tied_weights,
+            'inputs': self.inputs
             # Random number generators are ignored?
         }
 

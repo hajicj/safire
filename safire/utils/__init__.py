@@ -363,8 +363,8 @@ def detect_nan(i, node, fn):
                 pdb.set_trace()
                 raise ValueError('Found NaN in computation!')
         except TypeError:
-            print 'Couldn\'t check node for NaN:'
-            theano.printing.debugprint(node)
+            logging.debug('Couldn\'t check node for NaN: {0}'.format(node))
+            #theano.printing.debugprint(node)
 
 
 def merciless_print(i, node, fn):
@@ -394,8 +394,8 @@ def merciless_print(i, node, fn):
                 pdb.set_trace()
                 raise ValueError('Found Inf in computation!')
         except TypeError:
-            print 'Couldn\'t check node for NaN/Inf:'
-            theano.printing.debugprint(node)
+            logging.debug('Couldn\'t check node for NaN/Inf: {0}'.format(node))
+            #theano.printing.debugprint(node)
 
 
 def shuffle_together(*lists):
