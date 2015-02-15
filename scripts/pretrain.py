@@ -171,9 +171,9 @@ def _build_argument_parser():
     parser.add_argument('--bias_decay', type=float, default=0.0,
                         help='A decay coefficient for bias parameters only '
                              '(weights stay untouched).')
-    parser.add_argument('--L1_norm', type=float, default=None,
+    parser.add_argument('--L1_norm', type=float, default=0.0,
                         help='Weight of L1-regularization.')
-    parser.add_argument('--L2_norm', type=float, default=None,
+    parser.add_argument('--L2_norm', type=float, default=0.0,
                         help='Weight of L2-regularization.')
 
     parser.add_argument('--feature_centering', action='store_true',
@@ -407,10 +407,12 @@ def main(args):
         model_init_args['bias_decay'] = args.bias_decay
         model_init_args['sparsity_target'] = args.sparsity
         model_init_args['output_sparsity_target'] = args.output_sparsity
-    if args.model == 'SparseDenoisingAutoencoder' :
+
+    if args.model == 'SparseDenoisingAutoencoder':
         model_init_args['corruption_level'] = args.corruption
         model_init_args['sparsity_target'] = args.sparsity
         model_init_args['reconstruction'] = args.reconstruction
+
     if args.model == 'RestrictedBoltzmannMachine' or args.model == 'ReplicatedSoftmax':
         model_init_args['sparsity_target'] = args.sparsity
         model_init_args['output_sparsity_target'] = args.output_sparsity
@@ -421,6 +423,10 @@ def main(args):
         model_init_args['L1_norm'] = args.L1_norm
         model_init_args['L2_norm'] = args.L2_norm
         model_init_args['noisy_input'] = args.noisy_input
+
+    logging.info('\nModel init args:' +
+                 u'\n'.join([u'  {0}: {1}'.format(k, v)
+                             for k, v in model_init_args.items()]))
 
     # Set up model
     model_handle = model_class.setup(dataset, n_out=args.n_out,

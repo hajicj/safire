@@ -24,7 +24,10 @@ class DenoisingAutoencoder(Autoencoder):
                  backward_activation=TT.nnet.sigmoid,
                  reconstruction='cross-entropy',
                  W=None, W_prime=None, b=None, b_prime=None, 
-                 tied_weights=True, corruption_level=0.3,
+                 tied_weights=True,
+                 corruption_level=0.3,
+                 L1_norm=0.0, L2_norm=0.0, bias_decay=0.0,
+                 sparsity_target=None, output_sparsity_target=None,
                  rng=numpy.random.RandomState(), 
                  theano_rng=None):
         """ Initialize the parameters of the Denoising Autoencoder.
@@ -94,13 +97,36 @@ class DenoisingAutoencoder(Autoencoder):
                                  value will be fixed to 0 during computation
                                  of hidden activations.
 
+        :type sparsity_target: float
+        :param sparsity_target: The target mean for features. If set, incurs
+            a sparsity penalty: the KL divergence of a unit being either off,
+            or on.
+
+        :type output_sparsity_target: float
+        :param output_sparsity_target: The sparsity target for output vectors
+            instead of features.
+
+        :type L1_norm: float
+        :param L1_norm: L1 regularization weight (absolute value of each
+            parameter).
+
+        :type L2_norm: float
+        :param L2_norm: L2 regularization weight (quadratic value of each
+            parameter).
+
+        :type bias_decay: float
+        :param bias_decay: Adds an extra L2 penalty on the bias terms.
         """
         super(DenoisingAutoencoder, self).__init__(inputs, n_in, n_out,
                                                    activation,
                                                    backward_activation,
                                                    reconstruction,
                                                    W, W_prime, b, b_prime,
-                                                   tied_weights, rng,
+                                                   tied_weights,
+                                                   L1_norm, L2_norm, bias_decay,
+                                                   sparsity_target,
+                                                   output_sparsity_target,
+                                                   rng,
                                                    theano_rng)
         self.corruption_level = corruption_level
 

@@ -345,13 +345,14 @@ class Autoencoder(BaseUnsupervisedModel):
                     * self.L2_norm
 
         if self.bias_decay != 0.0:
-            cost += (TT.sum(self.b_hidden ** 2) + TT.sum(self.b_visible ** 2)) \
+            cost += (TT.sum(self.b ** 2) + TT.sum(self.b_prime ** 2)) \
                     * self.bias_decay
 
-        if self.sparsity_target:
+        if self.sparsity_target is not None:
             cost += self._sparsity_cross_entropy(X)
 
-        if self.output_sparsity_target:
+        if self.output_sparsity_target is not None:
+            print 'Setting output sparsity target: {0}'.format(self.output_sparsity_target)
             cost += self._output_sparsity_cross_entropy(X)
 
         return cost
@@ -365,7 +366,7 @@ class Autoencoder(BaseUnsupervisedModel):
 
         :return: The KL-divergence... (see desc.)
         """
-        mean_act = TT.mean(self.activation(TT.dot(X, self.W) + self.b_hidden),
+        mean_act = TT.mean(self.activation(TT.dot(X, self.W) + self.b),
                            axis=0)
         mean_act_compl = 1.0 - mean_act
         rho_term = mean_act * TT.log(mean_act / self.sparsity_target)
@@ -384,7 +385,7 @@ class Autoencoder(BaseUnsupervisedModel):
 
         :return: The KL-divergence... (see desc.)
         """
-        mean_act = TT.mean(self.activation(TT.dot(X, self.W) + self.b_hidden),
+        mean_act = TT.mean(self.activation(TT.dot(X, self.W) + self.b),
                            axis=1)
         mean_act_compl = 1.0 - mean_act
         rho_term = mean_act * TT.log(mean_act / self.output_sparsity_target)
@@ -393,7 +394,6 @@ class Autoencoder(BaseUnsupervisedModel):
         kl_divergence = TT.sum(rho_term + neg_rho_term)
 
         return kl_divergence
-
 
     @classmethod
     def _init_args(cls): # This method will get obsolete.
