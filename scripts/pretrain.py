@@ -406,7 +406,7 @@ def main(args):
         model_init_args['L2_norm'] = args.L2_norm
         model_init_args['bias_decay'] = args.bias_decay
         model_init_args['sparsity_target'] = args.sparsity
-        model_init_args['output_sparsity_target'] = args.output_sparsity
+        model_init_args['output_sparsity_tsarget'] = args.output_sparsity
     if args.model == 'SparseDenoisingAutoencoder' :
         model_init_args['corruption_level'] = args.corruption
         model_init_args['sparsity_target'] = args.sparsity
