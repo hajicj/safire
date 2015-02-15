@@ -334,8 +334,10 @@ class Autoencoder(BaseUnsupervisedModel):
             raise ValueError('Invalid reconstruction set! %s' % self.reconstruction)
 
         if self.L1_norm != 0.0:
-            cost += (TT.sum(self.W) + TT.sum(self.W_prime) + TT.sum(self.b) +
-                     TT.sum(self.b_prime)) * self.L1_norm
+            cost += (TT.sqrt(TT.sum(TT.sqr(self.W)))
+                     + TT.sqrt(TT.sum(TT.sqr(self.W_prime)))
+                     + TT.sqrt(TT.sum(TT.sqr(self.b)))
+                     + TT.sqrt(TT.sum(TT.sqr(self.b_prime)))) * self.L1_norm
 
         if self.L2_norm != 0.0:
             cost += (TT.sum(self.W ** 2) + TT.sum(self.W_prime ** 2)
