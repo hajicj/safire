@@ -500,6 +500,17 @@ def compute_docname_flatten_mapping(mmdata, mapping_file):
     return t2i_indexes
 
 
+def mmcorp_from_t_and_i(vtcorp, icorp):
+    """Utility function for going from a VTextCorpus (or a pipeline) and
+    an ImagenetCorpus (or a pipeline) to a CompositeDataset. Just a shortcut."""
+    tdata = smart_cast_dataset(vtcorp)
+    idata = smart_cast_dataset(icorp)
+    mmdata = safire.datasets.dataset.CompositeDataset((tdata, idata),
+                                                      names=('text', 'img'),
+                                                      aligned=False)
+    return mmdata
+
+
 def compute_word2image_map(vtcorp, icorp, t2i_indexes, freqdicts=None):
     """Takes a multimodal dataset with text and images and computes a mapping
     between tokens and images.
