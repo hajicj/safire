@@ -145,11 +145,8 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
                     self._remove_docid(current_docid)
                     continue
 
-    def _remove_docid(self, docid):
-
-        docname = self.id2doc[docid]
-        self.doc2id[docname].remove(docid)
-        self.id2doc.remove(docid)
+    def __len__(self):
+        return self.n_passed
 
     def __getitem__(self, item):
         """Returns the item-th document of the array-based logic. This supports
@@ -160,3 +157,9 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
         # Slice retrieval: assumes that the corpus can take list-based
         # retrieval.
         return self.corpus[self.new2old[item]]
+
+    def _remove_docid(self, docid):
+
+        docname = self.id2doc[docid]
+        self.doc2id[docname].remove(docid)
+        self.id2doc.remove(docid)
