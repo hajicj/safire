@@ -85,7 +85,32 @@ def get_id2word_obj(corpus):
     elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
         return get_id2word_obj(corpus.data)
 
-    raise NotImplementedError()
+    raise NotImplementedError('get_id2word_obj() not implemented for corpus '
+                              'type {0}'.format(type(corpus)))
+
+
+def get_id2doc_obj(corpus):
+    if hasattr(corpus, 'id2doc'):
+        return corpus.id2doc
+    elif isinstance(corpus, TransformedCorpus):
+        return get_id2doc_obj(corpus.corpus)
+    elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
+        return get_id2doc_obj(corpus.data)
+
+    raise NotImplementedError('get_id2doc_obj() not implemented for corpus '
+                              'type {0}'.format(type(corpus)))
+
+
+def get_doc2id_obj(corpus):
+    if hasattr(corpus, 'id2doc'):
+        return corpus.doc2id
+    elif isinstance(corpus, TransformedCorpus):
+        return get_id2doc_obj(corpus.corpus)
+    elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
+        return get_id2doc_obj(corpus.data)
+
+    raise NotImplementedError('get_doc2id_obj() not implemented for corpus '
+                              'type {0}'.format(type(corpus)))
 
 
 def bottom_corpus(corpus):

@@ -363,7 +363,7 @@ def detect_nan(i, node, fn):
                 pdb.set_trace()
                 raise ValueError('Found NaN in computation!')
         except TypeError:
-            print 'Couldn\'t check node for NaN:'
+            logging.debug('Couldn\'t check node for NaN:')
             theano.printing.debugprint(node)
 
 

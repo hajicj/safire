@@ -114,8 +114,8 @@ class SwapoutCorpus(IndexedTransformedCorpus):
             yield doc
 
     def save(self, *args, **kwargs):
-        print '\n\nSaving SwapoutCorpus with pipeline:\n{0}'.format(
-            safire.utils.transcorp.log_corpus_stack(self))
+        logging.info('\n\nSaving SwapoutCorpus with pipeline:\n{0}'
+                     ''.format(safire.utils.transcorp.log_corpus_stack(self)))
         super(SwapoutCorpus, self).save(*args, **kwargs)
 
     def __len__(self):
