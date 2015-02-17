@@ -63,15 +63,18 @@ class ModelHandle(object):
         Exports a dicitonary that can directly be pickled to sufficiently
         describe the handle.
         """
-        model_pickleable_obj = self.model_instance._export_pickleable_object()
+        if self.model_instance is not None:
+            model_pickleable_obj = self.model_instance._export_pickleable_object()
+        else:
+            model_pickleable_obj = None
 
-        init_args = { 'train' : self.train,
-                      'validate' : self.validate,
-                      'test' : self.test,
-                      'run' : self.run }
+        init_args = {'train': self.train,
+                     'validate': self.validate,
+                     'test': self.test,
+                     'run': self.run}
 
-        save_dict = { 'model' : model_pickleable_obj,
-                      'init_args' : init_args }
+        save_dict = {'model': model_pickleable_obj,
+                     'init_args': init_args}
 
         return save_dict
 
@@ -88,12 +91,16 @@ class ModelHandle(object):
     @classmethod
     def _load_from_save_dict(cls, save_dict):
 
-        model_init_args = save_dict['model']['init_args']
-        model_class = save_dict['model']['class']
+        if save_dict['model'] is not None:
+            model_init_args = save_dict['model']['init_args']
+            model_class = save_dict['model']['class']
 
-        logging.debug('Handle: loading model class: %s' % str(model_class))
+            logging.debug('Handle: loading model class: %s' % str(model_class))
 
-        model = model_class(**model_init_args)
+            model = model_class(**model_init_args)
+
+        else:
+            model = save_dict['model']
 
         handle_init_args = save_dict['init_args']
         model_handle = ModelHandle(model_instance=model, **handle_init_args)
