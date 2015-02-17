@@ -13,7 +13,7 @@ from safire.utils.transcorp import get_doc2id_obj, get_id2doc_obj
 __author__ = "Jan Hajic jr."
 
 
-class DocumentFilter(gensim.interfaces.TransformationABC):
+class DocumentFilterTransform(gensim.interfaces.TransformationABC):
     """This class enables removing documents from the data. It contains none
     of the filtering logic itself; its duty is to ensure that the document
     removal is correctly handled. (This is done by initializing the right
@@ -28,7 +28,7 @@ class DocumentFilter(gensim.interfaces.TransformationABC):
     associated TransformedCorpus subclass, the DocumentFilterCorpus.
     """
     def __init__(self, flt):
-        """Initialize the DocumentFilter transformer.
+        """Initialize the DocumentFilterTransform transformer.
 
         :param flt: The object or function that actually decides whether to
             filter or not. It has to be a callable **and** pickleable object!
@@ -59,8 +59,8 @@ class DocumentFilter(gensim.interfaces.TransformationABC):
         The intended use-case is applying the transformer on a pipeline, not
         filtering individual documents (you can handle that directly using
         the filter you provided to ``__init__()``. Upon ``_apply()``ing, the
-        DocumentFilter constructs a :class:`DocumentFilterCorpus`, which handles
-        document removal logic on safire pipelines.
+        DocumentFilterTransform constructs a :class:`DocumentFilterCorpus`,
+        which handles document removal logic on safire pipelines.
 
         :param item: CorpusABC, DatasetABC or a document.
 
@@ -82,25 +82,25 @@ class DocumentFilter(gensim.interfaces.TransformationABC):
 
 
 class DocumentFilterCorpus(IndexedTransformedCorpus):
-    """Pipeline block for the DocumentFilter transformation. Implements the
-    filtering logic: "manicures" the input data and only lets out those that
-    come out of the associated DocumentFilter not None.
+    """Pipeline block for the DocumentFilterTransform transformation.
+    Implements the filtering logic: "manicures" the input data and only lets
+    out those that come out of the associated DocumentFilterTransform not None.
 
     There are two functionalities involved in removing a document from the data.
     First, it needs to be made inaccessible: skipped during iteration, remapped
     to another index on __getitem__ calls, etc. Second, it needs to be removed
     from the ``id2doc`` and ``doc2id`` mappings, and all requests for doc/id
-    mappings that pass through the DocumentFilter pipeline step have to be
-    handled correctly. This includes several different DocumentFilters on the
+    mappings that pass through the DocumentFilterTransform pipeline step have to
+    be handled correctly. This includes several different DocumentFilters on the
     same pipeline!
 
     """
     def __init__(self, obj, corpus, chunksize=None, dense_throughput=False):
 
         # Because of how specific this corpus is, doesn't allow usage outside of
-        # _apply of DocumentFilter (or a situation that mimics the _apply call).
-        if not isinstance(obj, DocumentFilter):
-            raise TypeError('Supplied obj is not a DocumentFilter! Instead: {0}'
+        # _apply of DocumentFilterTransform (or a situation that mimics the _apply call).
+        if not isinstance(obj, DocumentFilterTransform):
+            raise TypeError('Supplied obj is not a DocumentFilterTransform! Instead: {0}'
                             ''.format(type(obj)))
         self.obj = obj
         self.corpus = corpus
@@ -119,7 +119,7 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
 
     def __iter__(self):
 
-        docid_iterator = iter(self.id2doc)
+        docid_iterator = iter(list(iter(self.id2doc)))
         if self.chunksize is not None:
             for chunk in gensim.utils.grouper(self.corpus, self.chunksize,
                                               as_numpy=self.dense_throughput):
@@ -162,4 +162,4 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
 
         docname = self.id2doc[docid]
         self.doc2id[docname].remove(docid)
-        self.id2doc.remove(docid)
+        del self.id2doc[docid]

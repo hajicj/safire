@@ -1,8 +1,12 @@
 import os
 import gensim
 import logging
+from safire.data import VTextCorpus
+from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.layouts import clean_data_root, init_data_root
 from safire.data.loaders import MultimodalShardedDatasetLoader
+from safire.data.serializer import Serializer
+from safire.data.sharded_corpus import ShardedCorpus
 
 __author__ = 'hajicj'
 
@@ -55,6 +59,17 @@ class SafireTestCase(unittest.TestCase):
         cls.loader.build_default_image_corpora(
             serializer=gensim.corpora.MmCorpus)
 
+        vtlist = os.path.join(cls.loader.root, cls.loader.layout.vtlist)
+        cls.vtcorp = VTextCorpus(vtlist, input_root=cls.loader.root)
+        cls.vtcorp_name = cls.loader.pipeline_name('')
+        cls.vtcorp.save(cls.vtcorp_name)
+
+        ivectors = os.path.join(cls.loader.root,
+                                cls.loader.layout.image_vectors)
+        cls.icorp = ImagenetCorpus(ivectors, delimiter=';', dim=4096)
+        cls.icorp_name = cls.loader.pipeline_name('.img')
+        cls.icorp.save(cls.icorp_name)
+
         cls._no_datasets = no_datasets
         if not no_datasets:
             default_vtcorp = cls.loader.load_text_corpus()
@@ -64,6 +79,16 @@ class SafireTestCase(unittest.TestCase):
             default_icorp = cls.loader.load_image_corpus()
             cls.loader.build_img(default_icorp,
                                  dataset_init_args={'overwrite': True})
+
+            cls.vtcorp_s_name = cls.loader.pipeline_serialization_target()
+            cls.vtcorp.dry_run()
+            t_serializer = Serializer(cls.vtcorp, ShardedCorpus,
+                                      cls.vtcorp_s_name)
+
+            cls.icorp_s_name = cls.loader.pipeline_serialization_target('.img')
+            i_serializer = Serializer(cls.icorp, ShardedCorpus,
+                                      cls.icorp_s_name)
+
 
 
     @classmethod
