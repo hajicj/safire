@@ -494,13 +494,18 @@ class CompositeDataset(DatasetABC):
 
 
 class SupervisedDataset(CompositeDataset):
+    """This dataset supports training supervised models, through combining
+    a ``features`` and ``targets`` dataset.
 
+    Under the hood, it adds ``train_Y_batch()`` and related methods.
+    """
     def __init__(self, data, test_p=None, devel_p=None):
         super(SupervisedDataset, self).__init__(data,
                                                 names=('features', 'targets'),
                                                 test_p=test_p,
                                                 devel_p=devel_p)
 
+    # TODO: copy over train_Y_batch et al., add batch kind 'Y' to _get_batch()
 
 # This only makes sense when implementing some extra batch
 # retrieval methods and NOT using __getitem__ directly (would return
