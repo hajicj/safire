@@ -22,7 +22,7 @@ from safire.data.serializer import Serializer
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.datasets.dataset import Dataset, CompositeDataset
 from safire.utils import parse_textdoc2imdoc_map
-from safire.datasets.transformations import docnames2indexes, FlattenComposite
+from safire.datasets.transformations import FlattenComposite
 from safire.learning.models import DenoisingAutoencoder
 from safire.learning.learners import BaseSGDLearner
 from safire.learning.interfaces import SafireTransformer, \
