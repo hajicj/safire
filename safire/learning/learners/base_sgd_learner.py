@@ -609,13 +609,13 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
         if isinstance(model, BaseSupervisedModel):
             if not isinstance(dataset, SupervisedDataset):
-                raise TypeError('Attempting to train supervised model without'+
-                                 ' a supervised dataset (dataset type: %s) ' % (
-                                     str(type(dataset))))
+                raise TypeError('Attempting to train supervised model without'
+                                ' a supervised dataset (dataset type: {0})'
+                                ''.format( str(type(dataset))))
             train_X = dataset.train_X_batch(batch_index, self.b_size)
             train_y = dataset.train_y_batch(batch_index, self.b_size)
 
-            logging.debug('Train batch: %s' % train_X)
+            logging.debug('Train batch: {0}'.format(train_X))
 
             batch_loss = model_handle.train(train_X, train_y)
 

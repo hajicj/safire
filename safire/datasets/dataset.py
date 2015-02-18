@@ -298,39 +298,55 @@ class DatasetABC(gensim.utils.SaveLoad):
             if kind == 'X':
                 if lbound + b_size > self._devel_doc_offset:
                     raise ValueError('Too high batch index and/or batch size'
-                                     ' (%d, %d); training dataset has only %d documents.' % (b_index, b_size, self._devel_doc_offset))
+                                     ' ({0}, {1}); training dataset has only '
+                                     '%{2} documents.'
+                                     ''.format(b_index,
+                                               b_size,
+                                               self._devel_doc_offset))
                 batch = self._build_batch(lbound, b_size, dtype)
                 return batch
             else:
-                raise ValueError('Wrong batch kind specified:'
-                                 ' %s (unsupervised datasets only support \'X\')' % kind)
+                raise ValueError('Wrong batch kind specified: {0} (simple'
+                                 ' datasets only support \'X\')'.format(kind))
 
         elif subset == 'devel':
             if kind == 'X':
                 lbound += self._devel_doc_offset
                 if lbound + b_size > self._test_doc_offset:
                     raise ValueError('Too high batch index and/or batch size'
-                                     ' (%d, %d); devel dataset has only %d documents.' % (b_index, b_size, self._test_doc_offset - self._devel_doc_offset))
+                                     ' ({0}, {1}); devel dataset has only {2}'
+                                     ' documents.'
+                                     ''.format(b_index,
+                                               b_size,
+                                               self._test_doc_offset -
+                                                    self._devel_doc_offset))
                 batch = self._build_batch(lbound, b_size, dtype)
                 return batch
             else:
                 raise ValueError('Wrong batch kind specified: '
-                                 '%s (unsupervised datasets only support \'X\')' % kind)
+                                 '{0} (simple datasets only support'
+                                 ' \'X\')'.format(kind))
 
         elif subset == 'test':
             if kind == 'X':
                 lbound += self._test_doc_offset
                 if lbound + b_size > len(self):
                     raise ValueError('Too high batch index and/or batch size'
-                                     ' (%d, %d); testing dataset has only %d documents.' % (b_index, b_size, len(self) - self._test_doc_offset))
+                                     ' ({0}, {1}); testing dataset has only {2}'
+                                     ' documents.'
+                                     ''.format(b_index,
+                                               b_size,
+                                               len(self) - self._test_doc_offset))
                 batch = self._build_batch(lbound, b_size, dtype)
                 return batch
             else:
-                raise ValueError('Wrong batch kind specified: %s (unsupervised'
-                                 ' datasets only support \'X\')' % kind)
+                raise ValueError('Wrong batch kind specified: {0} (unsupervised'
+                                 ' datasets only support \'X\')'.foramat(kind))
 
         else:
-            raise ValueError('Wrong batch subset specified: %s (datasets only supports \'train\', \'devel\', \'test\').' % subset)
+            raise ValueError('Wrong batch subset specified: {0} (datasets '
+                             'only supports \'train\', \'devel\','
+                             ' \'test\').'.format(subset))
 
     def _build_batch(self, lbound, batch_size, dtype=theano.config.floatX):
         """Given the first index of a batch and batch size, builds the batch
@@ -497,15 +513,118 @@ class SupervisedDataset(CompositeDataset):
     """This dataset supports training supervised models, through combining
     a ``features`` and ``targets`` dataset.
 
-    Under the hood, it adds ``train_Y_batch()`` and related methods.
+    Under the hood, it re-routes ``train_X_batch()`` and related methods to
+    access the 'features' and 'targets' component datasets, so that you can use
+    the SupervisedDataset "transparently" without having to take the
+    CompositeDataset mechanism into account.
     """
     def __init__(self, data, test_p=None, devel_p=None):
         super(SupervisedDataset, self).__init__(data,
                                                 names=('features', 'targets'),
                                                 test_p=test_p,
                                                 devel_p=devel_p)
+        # Shortcut pointers
+        self.features = self.data[self.names_dict['features']]
+        self.targets = self.data[self.names_dict['targets']]
 
-    # TODO: copy over train_Y_batch et al., add batch kind 'Y' to _get_batch()
+    # TODO: copy over train_Y_batch et al.
+    def _get_batch(self, subset, kind, b_index, b_size,
+                   dtype=theano.config.floatX):
+        """Retrieves a segment of the data, specified by the arguments.
+
+        :type subset: str
+        :param subset: One of ``'train'``, ``'devel'`` or ``'test'``.
+            Specifies which subset of the dataset should be used.
+
+        :type kind: str
+        :param kind: One of ``'X'`` or ``'y'``. Specifies whether we want
+            the features or the targets.
+
+        :type b_index: int
+        :param b_index: The order of the batch in the dataset (0 for first,
+            1 for second, etc.)
+
+        :type b_size: int
+        :param b_size: Size of one batch.
+
+        :raises: ValueError
+
+        :returns: Whatever the given dataset will return as a batch. (Typically
+            a numpy.ndarray.)
+
+        """
+        if kind == 'X':
+            return self.features._get_batch(subset=subset,
+                                            kind='X',
+                                            b_index=b_index,
+                                            b_size=b_size,
+                                            dtype=dtype)
+        elif kind == 'y':
+            return self.targets._get_batch(subset=subset,
+                                           kind='X',
+                                           b_index=b_index,
+                                           b_size=b_size,
+                                           dtype=dtype)
+
+        else:
+            raise ValueError('Wrong batch kind specified: {0} (supervised'
+                             ' datasets only support \'X\' and \'y\')'
+                             ''.format(kind))
+
+    def train_y_batch(self, b_index, b_size):
+        """Slices a batch of ``train_y`` for given batch index and batch size.
+
+        :type b_index: int
+        :param b_index: The order of the batch in the dataset (0 for first,
+                        1 for second, etc.)
+
+        :type b_size: int
+        :param b_size: The size of one batch.
+
+        :returns: A slice of the shared variable ``train_y`` starting at
+                  ``b_index * b_size`` and ending at ``(b_index + 1) *
+                  b_size``.
+
+        :raises: ValueError
+        """
+        return self._get_batch('train', 'y', b_index, b_size)
+
+    def devel_y_batch(self, b_index, b_size):
+        """Slices a batch of ``devel_y`` for given batch index and batch size.
+
+        :type b_index: int
+        :param b_index: The order of the batch in the dataset (0 for first,
+                        1 for second, etc.)
+
+        :type b_size: int
+        :param b_size: The size of one batch.
+
+        :returns: A slice of the shared variable ``devel_y`` starting at
+                  ``b_index * b_size`` and ending at ``(b_index + 1) *
+                  b_size``.
+
+        :raises: ValueError
+        """
+        return self._get_batch('devel', 'y', b_index, b_size)
+
+    def test_y_batch(self, b_index, b_size):
+        """Slices a batch of ``test_y`` for given batch index and batch size.
+
+        :type b_index: int
+        :param b_index: The order of the batch in the dataset (0 for first,
+                        1 for second, etc.)
+
+        :type b_size: int
+        :param b_size: The size of one batch.
+
+        :returns: A slice of the shared variable ``test_y`` starting at
+                  ``b_index * b_size`` and ending at ``(b_index + 1) *
+                  b_size``.
+
+        :raises: ValueError
+        """
+        return self._get_batch('test', 'y', b_index, b_size)
+
 
 # This only makes sense when implementing some extra batch
 # retrieval methods and NOT using __getitem__ directly (would return
@@ -517,7 +636,7 @@ class UnsupervisedDataset(CompositeDataset):
             raise ValueError('UnsupervisedDataset is composed of only 1'
                              'component dataset (not {0})'.format(len(data)))
         super(UnsupervisedDataset, self).__init__(data,
-                                                  names=['features'],
+                                                  names=tuple(['features']),
                                                   test_p=test_p,
                                                   devel_p=devel_p)
 
