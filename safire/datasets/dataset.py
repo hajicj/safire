@@ -527,7 +527,6 @@ class SupervisedDataset(CompositeDataset):
         self.features = self.data[self.names_dict['features']]
         self.targets = self.data[self.names_dict['targets']]
 
-    # TODO: copy over train_Y_batch et al.
     def _get_batch(self, subset, kind, b_index, b_size,
                    dtype=theano.config.floatX):
         """Retrieves a segment of the data, specified by the arguments.
