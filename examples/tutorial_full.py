@@ -409,16 +409,16 @@ def build_multimodal_pipeline(text_pipeline, image_pipeline):
 
     flatten = FlattenComposite(multimodal_dataset,
                                t2i_indexes)
-    flat_multimodal_dataset = flatten[multimodal_dataset]
+    flat_multimodal_corpus = flatten[multimodal_dataset]
     # FlattenComposite is just another transformation block, although
     # specifically designed to deal with composite datasets (it will refuse to
     # work on anything else). Its role is to stitch items from individual
     # subsets of the composite dataset together. (It does this on the fly.)
 
-    serializer = Serializer(flat_multimodal_dataset,
+    serializer = Serializer(flat_multimodal_corpus,
                             ShardedCorpus,
                             serialization_mmname)
-    pipeline = serializer[flat_multimodal_dataset]
+    pipeline = serializer[flat_multimodal_corpus]
     # Finally, we serialize the flattened results.
 
     return pipeline

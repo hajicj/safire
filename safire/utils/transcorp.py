@@ -511,9 +511,24 @@ def mmcorp_from_t_and_i(vtcorp, icorp):
     return mmdata
 
 
+def flatten_corpora(corpora, doc_mapping_file):
+    """Shortcut function for flattening the given corpora that takes care of
+    creating the CompositeDataset and then flattening it again.
+
+    Currently, corpora have to be simple datasets, as some steps during
+    flattening do not support recursively composite datasets yet."""
+    raise NotImplementedError()
+
+
 def compute_word2image_map(vtcorp, icorp, t2i_indexes, freqdicts=None):
     """Takes a multimodal dataset with text and images and computes a mapping
     between tokens and images.
+
+    .. note:
+
+        This function should move into some safire.utils.mmutils file, as it
+        is very specific to our multimodal setting and not applicable for
+        safire pipelines in general.
 
     :param vtcorp: A VTextCorpus object set to yield documents on iteration.
 
