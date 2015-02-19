@@ -15,6 +15,13 @@ class FlattenComposite(DatasetTransformer):
     allows on-the-fly integration of various data sources into unstructured
     batches.
 
+    It is strongly recommended to have serialized all the datasets in the
+    CompositeDataset you will be flattening. This won't slow you down much,
+    as you might have to access these datasets in some weird and repeated
+    patterns anyway, so having a fast random-access version of your data might
+    save you time in the long run, even though you needed a pass over the
+    entire dataset first.
+
     .. warn::
 
         All datasets aggregated in the CompositeDataset being flattened must
@@ -132,7 +139,7 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
                 logging.debug(' Retrieving: dataset {0}, '
                               'idxs {1}'.format(dataset, idxs))
 
-                #partial = numpy.array([dataset[i:i+1] for i in idxs])
+                # partial = numpy.array([dataset[i:i+1] for i in idxs])
                 # The dataset[i:i+1] hack is here to make sure the retrieved
                 # item will be a 2-D ndarray.
 

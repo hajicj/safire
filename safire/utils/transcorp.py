@@ -34,7 +34,6 @@ from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
 import safire.datasets.dataset
-#import safire.datasets.transformations
 from safire.utils import IndexedTransformedCorpus, freqdict
 import safire.utils
 import safire.utils.transformers
@@ -102,12 +101,12 @@ def get_id2doc_obj(corpus):
 
 
 def get_doc2id_obj(corpus):
-    if hasattr(corpus, 'id2doc'):
+    if hasattr(corpus, 'doc2id'):
         return corpus.doc2id
     elif isinstance(corpus, TransformedCorpus):
-        return get_id2doc_obj(corpus.corpus)
+        return get_doc2id_obj(corpus.corpus)
     elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
-        return get_id2doc_obj(corpus.data)
+        return get_doc2id_obj(corpus.data)
 
     raise NotImplementedError('get_doc2id_obj() not implemented for corpus '
                               'type {0}'.format(type(corpus)))
@@ -420,11 +419,71 @@ def convert_to_dense(corpus):
 
 def find_type_in_pipeline(pipeline, type_to_find):
     """Finds the topmost instance of the given block type in the given pipeline.
-    Returns the given block."""
+    Returns the given block. If the given type is not found, returns None."""
     if isinstance(pipeline, type_to_find):
         return pipeline
-    else:
+    elif isinstance(pipeline, TransformedCorpus):
         return find_type_in_pipeline(pipeline.corpus)
+    elif isinstance(pipeline, safire.datasets.dataset.DatasetABC):
+        return find_type_in_pipeline(pipeline.data)
+    else:
+        return None
+
+
+def is_serialized(pipeline, serializer_class=ShardedCorpus):
+    """Checks if the pipeline contains a serializer and """
+    swapout = find_type_in_pipeline(pipeline,
+                                    safire.data.serializer.SwapoutCorpus)
+    if swapout is None:
+        return False
+    else:
+        return (isinstance(swapout.obj, safire.data.serializer.Serializer)
+                and isinstance(swapout.obj.serializer_class, serializer_class))
+
+
+def ensure_serialization(pipeline, force=False, serializer_class=ShardedCorpus,
+                         **serializer_kwargs):
+    """Checks if the pipeline has been serialized using the given class.
+    If not, serializes the class using the supplied kwargs.
+
+    This is used when you need to make sure that all information about the
+    pipeline is available for processing further down the line, like when
+    flattening with another pipeline.
+
+    The kwargs typically have to contain the ``fname`` argument, to tell the
+    serializer class where the data should go.
+
+    :param force: If this flag is set, will serialize not just if the pipeline
+        has a serialization block somewhere; it will serialize unless the top
+        block is a serialized SwapoutCorpus.
+
+    :returns: The original pipeline if it already has been serialized,
+        otherwise it returns the pipeline with a serializer block on top."""
+    reserialize = False
+    if force and not (isinstance(pipeline, safire.data.serializer.SwapoutCorpus)
+                      and isinstance(pipeline.obj,
+                                     safire.data.serializer.Serializer)
+                      and isinstance(pipeline.obj.serializer_class,
+                                     serializer_class)):
+        reserialize = True
+    if not reserialize and not is_serialized(pipeline, serializer_class):
+        reserialize = True
+    if reserialize:
+        logging.info('Pipeline {0} not serialized, serializing using class {1}'
+                     ''.format(pipeline, serializer_class))
+        serializer = safire.data.serializer.Serializer(pipeline,
+                                                       serializer_class,
+                                                       **serializer_kwargs)
+        pipeline = serializer[pipeline]
+    return pipeline
+
+
+def dry_run(pipeline):
+    """Iterates 
+
+    :param pipeline:
+    :return:
+    """
 
 
 def convert_to_dense_recursive(pipeline):
@@ -528,8 +587,8 @@ def compute_docname_flatten_mapping(mmdata, mapping_file):
 def mmcorp_from_t_and_i(vtcorp, icorp):
     """Utility function for going from a VTextCorpus (or a pipeline) and
     an ImagenetCorpus (or a pipeline) to a CompositeDataset. Just a shortcut."""
-    tdata = smart_cast_dataset(vtcorp)
-    idata = smart_cast_dataset(icorp)
+    tdata = smart_cast_dataset(vtcorp, ensure_dense=False)
+    idata = smart_cast_dataset(icorp, ensure_dense=False)
     mmdata = safire.datasets.dataset.CompositeDataset((tdata, idata),
                                                       names=('text', 'img'),
                                                       aligned=False)
@@ -637,10 +696,14 @@ def docnames2indexes(data, docnames):
     :returns: A list of indices into the individual components of the ``data``
         composite dataset.
     """
-    doc2ids = [safire.utils.transcorp.bottom_corpus(d).doc2id
-               for d in data.data]
+    doc2ids = [get_doc2id_obj(d) for d in data.data]
+    print 'Doc2ids: {0}'.format(u'\n'.join([str(type(d)) for d in doc2ids]))
     output = []
     for name_item in docnames:
+        #print 'Name item: {0}'.format(name_item)
         idxs = tuple(doc2ids[i][name] for i, name in enumerate(name_item))
+        #print 'Idxs: {0}'.format(idxs)
+        # This should work for an empty dict because of defaultdict's behavior.
         output.extend(list(itertools.product(*idxs)))
+    print 'Output: {0}'.format(output)
     return output

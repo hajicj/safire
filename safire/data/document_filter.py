@@ -98,10 +98,11 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
     def __init__(self, obj, corpus, chunksize=None, dense_throughput=False):
 
         # Because of how specific this corpus is, doesn't allow usage outside of
-        # _apply of DocumentFilterTransform (or a situation that mimics the _apply call).
+        # _apply of DocumentFilterTransform (or a situation that mimics the
+        #  _apply call).
         if not isinstance(obj, DocumentFilterTransform):
-            raise TypeError('Supplied obj is not a DocumentFilterTransform! Instead: {0}'
-                            ''.format(type(obj)))
+            raise TypeError('Supplied obj is not a DocumentFilterTransform! '
+                            'Instead: {0}'.format(type(obj)))
         self.obj = obj
         self.corpus = corpus
         self.chunksize = chunksize
@@ -156,6 +157,11 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
         """
         # Slice retrieval: assumes that the corpus can take list-based
         # retrieval.
+        print 'Calling: {0} with filter {1}'.format(self, self.obj.filter)
+        print 'Retrieving item: {0}'.format(item)
+        print 'Available: {0}'.format(self.new2old)
+        if isinstance(item, list):
+            return self.corpus[[self.new2old[i] for i in item]]
         return self.corpus[self.new2old[item]]
 
     def _remove_docid(self, docid):
