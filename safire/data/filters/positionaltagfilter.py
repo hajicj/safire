@@ -66,8 +66,6 @@ class PositionalTagTokenFilter(BaseFilter):
         filter, False on item being filtered out."""
         value = self._extract_tag_position(fields)
 
-        #logging.debug('Matching value %s against values %s' % (value, self.values))
-
         return (value in self.values) == self.inclusive
 
     def _extract_tag_position(self, fields):

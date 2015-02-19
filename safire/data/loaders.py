@@ -892,7 +892,7 @@ class MultimodalDatasetLoader(object):
         return os.path.join(self.root,
                             self.layout.corpus_dir,
                             self.layout.name
-                            + infix
+                            + self.__default_infix(infix)
                             + self.layout.pipeline_serialization_suffix)
 
     @classmethod

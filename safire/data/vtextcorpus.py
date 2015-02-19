@@ -184,7 +184,7 @@ class VTextCorpus(TextCorpus):
         if doc2id is None:
             doc2id = collections.defaultdict(set)
         if id2doc is None:
-            id2doc = []
+            id2doc = collections.defaultdict(str)
 
         self.doc2id = doc2id
         self.id2doc = id2doc
@@ -321,7 +321,7 @@ class VTextCorpus(TextCorpus):
                 for token in document:
                     docid = doc_short_name
                     self.doc2id[docid].add(total_yielded)
-                    self.id2doc.append(docid)
+                    self.id2doc[len(self.id2doc)] = docid
                     if self.locked and token not in self.dictionary.token2id:
                         continue
                     total_yielded += 1
@@ -337,7 +337,7 @@ class VTextCorpus(TextCorpus):
                     # with the original document. The id2doc mapping then serves
                     # as the reverse pointer.
                     self.doc2id[docid].add(total_yielded)
-                    self.id2doc.append(docid)
+                    self.id2doc[len(self.id2doc)] = docid
                     total_yielded += 1
                     self.n_processed += 1
                     self.n_words_processed += len(sentence)
@@ -348,7 +348,7 @@ class VTextCorpus(TextCorpus):
                 if not self.precompute_vtlist:
                     docid = doc_short_name
                     self.doc2id[docid].add(total_yielded)
-                    self.id2doc.append(docid)
+                    self.id2doc[len(self.id2doc)] = docid
                 total_yielded += 1
                 self.n_processed += 1
                 self.n_words_processed += len(document)
@@ -514,7 +514,7 @@ class VTextCorpus(TextCorpus):
         self.input = vtlist_filename
         self.vtlist = []
         self.doc2id = collections.defaultdict(set)
-        self.id2doc = []
+        self.id2doc = collections.defaultdict(str)
         if self.precompute_vtlist:
             self.vtlist = self._precompute_vtlist(self.input)
         self._memory.clear()
@@ -650,7 +650,7 @@ class VTextCorpus(TextCorpus):
         with open(input) as vtl_handle:
             for i, vtname in enumerate(vtl_handle):
                 doc_short_name = vtname.strip()
-                self.id2doc.append(doc_short_name)
+                self.id2doc[len(self.id2doc)] = doc_short_name
                 self.doc2id[doc_short_name].add(i)
 
                 doc_full_name = self.doc_full_path(doc_short_name)

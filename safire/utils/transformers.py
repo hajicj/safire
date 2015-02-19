@@ -8,11 +8,13 @@ normalization, sigmoid nonlinearity, etc.).
 import itertools
 import logging
 import operator
+import copy
 import gensim
 from gensim.interfaces import TransformedCorpus
 from gensim.similarities import Similarity
 import numpy
 #from safire.utils.transcorp import dimension
+from safire.data.filters.basefilter import BaseFilter
 import safire.datasets.dataset
 from safire.utils import gensim2ndarray, IndexedTransformedCorpus
 import safire.utils.transcorp
@@ -347,3 +349,4 @@ class SimilarityTransformer(gensim.interfaces.TransformationABC):
     def _apply(self, corpus, chunksize=None):
 
         return safire.utils.transcorp.smart_apply_transcorp(self, corpus)
+
