@@ -4,8 +4,9 @@ from gensim.utils import is_corpus
 import numpy
 
 from safire.utils import IndexedTransformedCorpus
-from safire.datasets.dataset import DatasetTransformer, DatasetABC
 from safire.utils import flatten_composite_item
+import safire.utils.transcorp
+from safire.datasets.dataset import DatasetTransformer, DatasetABC
 
 # TODO: refactor/enhance to work with corpora as well as datasets
 
@@ -83,6 +84,11 @@ class FlattenComposite(DatasetTransformer):
         Future: incorporate a ``precompute`` and/or ``preserialize`` flag."""
         self.composite = composite
         self.indexes = indexes
+
+        if self.indexes is not None:
+            if not safire.utils.transcorp.is_fully_indexable(composite):
+                raise TypeError('Not all data sources are indexable, cannot'
+                                ' perform flattening with indexes.')
 
     def _apply(self, dataset, chunksize=None):
         return FlattenedDatasetCorpus(self, dataset)
