@@ -423,9 +423,9 @@ def find_type_in_pipeline(pipeline, type_to_find):
     if isinstance(pipeline, type_to_find):
         return pipeline
     elif isinstance(pipeline, TransformedCorpus):
-        return find_type_in_pipeline(pipeline.corpus)
+        return find_type_in_pipeline(pipeline.corpus, type_to_find)
     elif isinstance(pipeline, safire.datasets.dataset.DatasetABC):
-        return find_type_in_pipeline(pipeline.data)
+        return find_type_in_pipeline(pipeline.data, type_to_find)
     else:
         return None
 

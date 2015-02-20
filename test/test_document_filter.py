@@ -6,7 +6,7 @@ from safire.data.document_filter import DocumentFilterTransform
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.datasets.transformations import FlattenComposite
 from safire.utils.transcorp import log_corpus_stack, mmcorp_from_t_and_i, \
-    compute_docname_flatten_mapping
+    compute_docname_flatten_mapping, ensure_serialization
 from test.safire_test_case import SafireTestCase
 
 __author__ = 'Jan Hajic jr'
@@ -87,6 +87,10 @@ class TestDocumentFilter(SafireTestCase):
         idocs = [d for d in icorp_filtered]
         print 'Images after filtering: {0}'.format(len(idocs))
 
+        icorp_fname = self.loader.pipeline_serialization_target('.img.filtered')
+        icorp_filtered = ensure_serialization(icorp_filtered,
+                                              fname=icorp_fname)
+
         tfilter = DocumentFilterTransform(OddDocumentFilter())
         tcorp_filtered = tfilter[self.vtcorp]
 
@@ -103,6 +107,9 @@ class TestDocumentFilter(SafireTestCase):
         t2i_indexes = compute_docname_flatten_mapping(mmdata, t2i_file)
 
         print 'Total t2i indexes: {0}'.format(len(t2i_indexes))
+
+        self.assertRaises(TypeError,
+                          FlattenComposite.__init__, mmdata, t2i_indexes)
 
         flatten = FlattenComposite(mmdata, t2i_indexes)
         mmcorp = flatten[mmdata]
