@@ -87,7 +87,7 @@ class ImagenetCorpus(CorpusABC):
         document.
         """
         for i, image in enumerate(self.get_images()):
-            logging.debug('__iter__ Yielding image no. %d' % i)
+            logging.debug('__iter__ Yielding image no. {0}'.format(i))
             yield matutils.full2sparse(image, self.eps)
 
     def reset(self):
@@ -95,7 +95,7 @@ class ImagenetCorpus(CorpusABC):
         logging.info('Resetting corpus as if it never iterated.')
         self.doc2id = collections.defaultdict(set)
         self.id2doc = collections.defaultdict(str)
-        logging.debug('Old n_processed: %d' % self.n_processed)
+        logging.debug('Old n_processed: {0}'.format(self.n_processed))
         self.n_processed = 0
 
     def get_images(self):
@@ -109,14 +109,17 @@ class ImagenetCorpus(CorpusABC):
         self.reset()
 
         for imno, imline in enumerate(input_handle):
-            logger.debug('Processing image no. %d' % imno)
+            logger.debug('Processing image no. {0}'.format(imno))
 
             docname, feature_str = imline.strip().split('\t', 1)
 
             features = map(float, feature_str.split(self.delimiter))
 
             if len(features) != self.dim:
-                raise ValueError('Invalid input data: data dimension %d does not correspond to declared dimension %d (on line %d of input, with docno %s)' % (len(features), self.dim, imno))
+                raise ValueError('Invalid input data: data dimension {0}'
+                                 ' does not correspond to declared dimension {1}'
+                                 ' (on line {2} of input, with docno {3})'
+                                 ''.format(len(features), self.dim, imno))
 
             self.doc2id[docname].add(imno)
             self.id2doc[len(self.id2doc)] = docname

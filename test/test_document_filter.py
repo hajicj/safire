@@ -84,11 +84,14 @@ class TestDocumentFilter(SafireTestCase):
         ifilter = DocumentFilterTransform(LargeDocumentFilter())
         icorp_filtered = ifilter[icorp]
 
-        #idocs = [d for d in icorp_filtered]
-        #print 'Images after filtering: {0}'.format(len(idocs))
+        idocs = [d for d in icorp_filtered]
+        print 'Images after filtering: {0}'.format(len(idocs))
 
         tfilter = DocumentFilterTransform(OddDocumentFilter())
         tcorp_filtered = tfilter[self.vtcorp]
+
+        tdocs = [d for d in tcorp_filtered]
+        print 'Texts after filtering: {0}'.format(len(tdocs))
 
         t2i_file = os.path.join(self.loader.root,
                                 self.loader.layout.textdoc2imdoc)
@@ -103,6 +106,7 @@ class TestDocumentFilter(SafireTestCase):
 
         flatten = FlattenComposite(mmdata, t2i_indexes)
         mmcorp = flatten[mmdata]
+
         docs = [d for d in mmcorp]
         print 'Total docs after flattening: {0}'.format(len(docs))
 

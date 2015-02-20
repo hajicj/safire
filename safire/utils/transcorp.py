@@ -431,7 +431,8 @@ def find_type_in_pipeline(pipeline, type_to_find):
 
 
 def is_serialized(pipeline, serializer_class=ShardedCorpus):
-    """Checks if the pipeline contains a serializer and """
+    """Checks if the pipeline contains a serializer that used the given class
+    for serialization."""
     swapout = find_type_in_pipeline(pipeline,
                                     safire.data.serializer.SwapoutCorpus)
     if swapout is None:
@@ -439,6 +440,23 @@ def is_serialized(pipeline, serializer_class=ShardedCorpus):
     else:
         return (isinstance(swapout.obj, safire.data.serializer.Serializer)
                 and isinstance(swapout.obj.serializer_class, serializer_class))
+
+
+def is_fully_indexable(pipeline):
+    """Checks whether the pipeline is indexable, i.e. whether it responds to
+    __getitem__ requests. Presupposes that the pipeline has at least one
+    data point."""
+    if len(pipeline) == 0:
+        raise ValueError('Cannot inspect empty pipeline!')
+    try:
+        _ = pipeline[0]
+        _ = pipeline[0:1]
+        _ = pipeline[:1]
+        _ = pipeline[-1:]
+        _ = pipeline[[0]]
+        return True
+    except (TypeError, AttributeError, ValueError):
+        return False
 
 
 def ensure_serialization(pipeline, force=False, serializer_class=ShardedCorpus,
@@ -479,11 +497,18 @@ def ensure_serialization(pipeline, force=False, serializer_class=ShardedCorpus,
 
 
 def dry_run(pipeline):
-    """Iterates 
+    """Iterates over the pipeline, but doesn't store any results. (
 
-    :param pipeline:
-    :return:
+    This is useful just for testing; anytime else, you would be better off just
+    serializing whatever you need to iterate through, as it guarantees support
+    for various advanced indexing. This only guarantees that all items have
+    been processed, initializing various things like document to ID mappings,
+    vocabularies...
+
+    :param pipeline: The pipeline over which to iterate.
     """
+    for p in pipeline:
+        pass
 
 
 def convert_to_dense_recursive(pipeline):
@@ -512,7 +537,7 @@ def convert_to_dense_recursive(pipeline):
         if isinstance(corpus, safire.data.serializer.SwapoutCorpus):
             if isinstance(corpus.obj, ShardedCorpus):
                 corpus.obj.gensim = False
-                corpus.obj.sparse_retrieval = False
+                corpus.obdj.sparse_retrieval = False
                 return
             else:
                 # Let's try whether we can make the obj from which SwapoutCorpus

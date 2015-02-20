@@ -570,6 +570,8 @@ class VTextCorpus(TextCorpus):
                              'tokens as documents.')
         if isinstance(item, slice):
             return [self[i] for i in xrange(item.start, item.stop, 1)]
+        if isinstance(item, list):
+            return [self[i] for i in item]
         if isinstance(item, int):
             if not self.precompute_vtlist:
                 raise TypeError('Doesn\'t support indexing without precomputing'
