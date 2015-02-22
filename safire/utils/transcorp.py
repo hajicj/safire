@@ -102,6 +102,7 @@ def get_id2doc_obj(corpus):
 
 def get_doc2id_obj(corpus):
     if hasattr(corpus, 'doc2id'):
+        print 'Returning doc2id from corpus: {0}'.format(type(corpus))
         return corpus.doc2id
     elif isinstance(corpus, TransformedCorpus):
         return get_doc2id_obj(corpus.corpus)
@@ -445,7 +446,10 @@ def is_serialized(pipeline, serializer_class=ShardedCorpus):
 def is_fully_indexable(pipeline):
     """Checks whether the pipeline is indexable, i.e. whether it responds to
     __getitem__ requests. Presupposes that the pipeline has at least one
-    data point."""
+    data point.
+
+    Checks only duck typing.
+    """
     if len(pipeline) == 0:
         raise ValueError('Cannot inspect empty pipeline!')
     try:
@@ -456,6 +460,7 @@ def is_fully_indexable(pipeline):
         _ = pipeline[[0]]
         return True
     except (TypeError, AttributeError, ValueError):
+        raise
         return False
 
 
@@ -609,11 +614,11 @@ def compute_docname_flatten_mapping(mmdata, mapping_file):
     return t2i_indexes
 
 
-def mmcorp_from_t_and_i(vtcorp, icorp):
+def mmcorp_from_t_and_i(vtcorp, icorp, ensure_dense=False):
     """Utility function for going from a VTextCorpus (or a pipeline) and
     an ImagenetCorpus (or a pipeline) to a CompositeDataset. Just a shortcut."""
-    tdata = smart_cast_dataset(vtcorp, ensure_dense=False)
-    idata = smart_cast_dataset(icorp, ensure_dense=False)
+    tdata = smart_cast_dataset(vtcorp, ensure_dense=ensure_dense)
+    idata = smart_cast_dataset(icorp, ensure_dense=ensure_dense)
     mmdata = safire.datasets.dataset.CompositeDataset((tdata, idata),
                                                       names=('text', 'img'),
                                                       aligned=False)
@@ -722,7 +727,10 @@ def docnames2indexes(data, docnames):
         composite dataset.
     """
     doc2ids = [get_doc2id_obj(d) for d in data.data]
-    print 'Doc2ids: {0}'.format(u'\n'.join([str(type(d)) for d in doc2ids]))
+    # Problem: returned doc2id object in DocumentFilterCorpus retains the
+    # original IDs, not the new ones. We need to convert these IDs
+    #print 'Doc2ids:\n  {0}'.format(u'  \n'.join([str(type(d)) for d in doc2ids]))
+    #print 'Doc2ids:\n{0}'.format(u'  \n'.join([str(d) for d in doc2ids]))
     output = []
     for name_item in docnames:
         #print 'Name item: {0}'.format(name_item)
@@ -730,5 +738,5 @@ def docnames2indexes(data, docnames):
         #print 'Idxs: {0}'.format(idxs)
         # This should work for an empty dict because of defaultdict's behavior.
         output.extend(list(itertools.product(*idxs)))
-    print 'Output: {0}'.format(output)
+    #print 'Output: {0}'.format(output)
     return output
