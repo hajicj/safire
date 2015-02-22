@@ -173,8 +173,8 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
         else:
             for counter, doc in enumerate(self.corpus):
                 persistent_docid = docid_iterator.next()
-                print 'Filtering document with persistent ID {0}' \
-                      ''.format(persistent_docid)
+                # print 'Filtering document with persistent ID {0}' \
+                #       ''.format(persistent_docid)
                 transformed = self.obj[doc]
                 if transformed:
                     # Update new <=> old mapping
@@ -190,7 +190,7 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
                     self.n_passed += 1
                     yield transformed
                 else:
-                    print '    Removing document!'
+                    # print '    Removing document!'
                     self._remove_docid(persistent_docid)
                     continue
 
@@ -212,9 +212,9 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
         """
         # Slice retrieval: assumes that the corpus can take list-based
         # retrieval.
-        #print 'Calling: {0} with filter {1}'.format(self, self.obj.filter)
-        #print 'Retrieving item: {0}'.format(item)
-        #print 'Available: {0}'.format(self.new2old)
+        # print 'Calling: {0} with filter {1}'.format(self, self.obj.filter)
+        # print 'Retrieving item: {0}'.format(item)
+        # print 'Available: {0}'.format(self.new2old)
         if isinstance(item, int):
             return self.corpus[self.new2old[item]]
         if isinstance(item, list):
@@ -226,10 +226,10 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
     def _remove_docid(self, docid):
 
         docname = self.persistent_id2doc[docid]
-        try:
-            self.persistent_doc2id[docname].remove(docid)
-        except KeyError:
-            print 'persistent_doc2id[{0}] = {1}' \
-                  ''.format(docname, self.persistent_doc2id[docname])
-            raise
+        # try:
+        self.persistent_doc2id[docname].remove(docid)
+        # except KeyError:
+        #     #print 'persistent_doc2id[{0}] = {1}' \
+        #     #      ''.format(docname, self.persistent_doc2id[docname])
+        #     raise
         del self.persistent_id2doc[docid]

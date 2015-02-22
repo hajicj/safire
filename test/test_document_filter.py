@@ -33,7 +33,8 @@ class LargeDocumentFilter(BaseFilter):
         limit = 11.0
         for i, f in enumerate(fields):
             if f[1] > limit:
-                print 'Field {0} larger than limit: {1} > {2}'.format(i, f, limit)
+                # print 'Field {0} larger than limit: {1} > {2}' \
+                #       ''.format(i, f, limit)
                 return False
         return True
 

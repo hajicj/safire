@@ -102,7 +102,7 @@ def get_id2doc_obj(corpus):
 
 def get_doc2id_obj(corpus):
     if hasattr(corpus, 'doc2id'):
-        print 'Returning doc2id from corpus: {0}'.format(type(corpus))
+        # print 'Returning doc2id from corpus: {0}'.format(type(corpus))
         return corpus.doc2id
     elif isinstance(corpus, TransformedCorpus):
         return get_doc2id_obj(corpus.corpus)
@@ -127,7 +127,7 @@ def bottom_corpus(corpus):
 def dimension(corpus):
     """Finds the topmost corpus that can provide information about its
     output dimension."""
-    print 'Deriving dimension of corpus {0}'.format(type(corpus))
+    # print 'Deriving dimension of corpus {0}'.format(type(corpus))
     if isinstance(corpus, numpy.ndarray) and len(corpus.shape) == 2:
         return corpus.shape[1]
     current_corpus = corpus
@@ -135,9 +135,9 @@ def dimension(corpus):
         # Covers almost everything non-recursive in safire.
         return current_corpus.dim
     if hasattr(current_corpus, 'n_out'):
-        return current_corpus.n_out  # This is stupid! It's an *output* dimension.
+        return current_corpus.n_out
     if hasattr(current_corpus, 'n_in'):
-        return current_corpus.n_in  # This is stupid! It's an *output* dimension.
+        return current_corpus.n_in  # This is stupid! It's *output* dimension.
     if isinstance(current_corpus, TextCorpus):
         return len(current_corpus.dictionary)
     if isinstance(current_corpus, ImagenetCorpus):
@@ -193,23 +193,10 @@ def run_transformations(item, *transformations):
     out = item
     for tr in transformations:
         out = tr[out]
-        print 'Transformation applied: %s' % str(tr)
-        print 'Result: %s' % str(out)
+        # print 'Transformation applied: %s' % str(tr)
+        # print 'Result: %s' % str(out)
     return out
 
-
-# def get_transformers(corpus):
-#     """Recovers the Transformation objects from a stack of TransformedCorpora.
-#     """
-#     tr = []
-#     current_corpus = corpus
-#     while isinstance(current_corpus, TransformedCorpus):
-#         tr.append(current_corpus.obj)
-#         current_corpus = current_corpus.corpus
-#     if isinstance(current_corpus, VTextCorpus): # Also has __getitem__...
-#         tr.append(current_corpus)
-#     tr.reverse()
-#     return tr
 
 def get_transformers(pipeline):
     """Recovers the Transformation objects from a pipeline.
