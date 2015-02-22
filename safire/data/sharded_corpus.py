@@ -14,6 +14,7 @@ import cPickle
 import math
 import numpy
 import scipy.sparse as sparse
+from safire.utils import gensim2ndarray
 
 import safire.utils.transcorp
 
@@ -86,7 +87,8 @@ class ShardedCorpus(IndexedCorpus):
     #@profile
     def __init__(self, output_prefix, corpus, dim=None,
                  shardsize=4096, overwrite=False, sparse_serialization=False,
-                 sparse_retrieval=False, gensim=True):
+                 gensim_serialization=False, sparse_retrieval=False,
+                 gensim=True):
         """Initializes the dataset. If ``output_prefix`` is not found,
         builds the shards.
 
@@ -131,6 +133,10 @@ class ShardedCorpus(IndexedCorpus):
             a dense representation, the best practice is to create another
             ShardedDataset object.)
 
+        :type gensim_serialization: bool
+        :param gensim_serialization: If set, will save the data as gensim
+            sparse vectors. Each shard will thus be a list of lists of 2-tuples.
+
         :type sparse_retrieval: bool
         :param sparse_retrieval: If set, will retrieve data as sparse vectors
             (numpy csr matrices). If unset, will return ndarrays.
@@ -160,6 +166,7 @@ class ShardedCorpus(IndexedCorpus):
         # Sparse vs. dense serialization and retrieval.
         self._pickle_protocol = -1
         self.sparse_serialization = sparse_serialization
+        self.gensim_serialization = gensim_serialization
         self.sparse_retrieval = sparse_retrieval
         self.gensim = gensim
 
@@ -224,10 +231,16 @@ class ShardedCorpus(IndexedCorpus):
 
         for n, doc_chunk in enumerate(gensim.utils.grouper(corpus,
                                                            chunksize=shardsize)):
-            logging.info('Chunk no. %d gathered at %d s' % (n, time.clock() - start_time))
-            logging.info('Chunk type: {0}, length {1}'.format(type(doc_chunk),
-                                                              len(doc_chunk)))
+            logging.info('Chunk no. {0} gathered at {1} s'
+                         ''.format(n, time.clock() - start_time))
+            logging.info('Chunk type: {0}, length {1}'
+                         ''.format(type(doc_chunk), len(doc_chunk)))
             logging.info('Chunk element type: {0}'.format(type(doc_chunk[0])))
+
+            # No conversion necessary.
+            if self.gensim_serialization:
+                self.save_shard(doc_chunk)
+                continue
 
             current_shard = numpy.zeros((len(doc_chunk), self.dim),
                                         dtype=dtype)
@@ -241,10 +254,10 @@ class ShardedCorpus(IndexedCorpus):
                     doc = dict(doc)
                     current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
 
-            # Handles the updating as well.
             if self.sparse_serialization:
                 current_shard = sparse.csr_matrix(current_shard)
 
+            # Handles the updating as well.
             self.save_shard(current_shard)
 
         end_time = time.clock()
@@ -700,7 +713,13 @@ class ShardedCorpus(IndexedCorpus):
             return s_result
 
     def _getitem_format(self, s_result):
-        if self.sparse_serialization:
+        if self.gensim_serialization:
+            if not self.gensim:
+                if not self.sparse_serialization:
+                    s_result = gensim2ndarray(s_result)
+                else:
+                    s_result = sparse.csr_matrix(gensim2ndarray(s_result))
+        elif self.sparse_serialization:
             if self.gensim:
                 s_result = self._getitem_sparse2gensim(s_result)
             elif not self.sparse_retrieval:

@@ -625,9 +625,6 @@ class SupervisedDataset(CompositeDataset):
         return self._get_batch('test', 'y', b_index, b_size)
 
 
-# This only makes sense when implementing some extra batch
-# retrieval methods and NOT using __getitem__ directly (would return
-# a 1-tuple).
 class UnsupervisedDataset(CompositeDataset):
 
     def __init__(self, data, test_p=None, devel_p=None):
