@@ -14,9 +14,9 @@ import cPickle
 import math
 import numpy
 import scipy.sparse as sparse
-from safire.utils import gensim2ndarray
+import safire.utils
 
-import safire.utils.transcorp
+#import safire.utils.transcorp
 
 #: Specifies which dtype should be used for serializing the shards.
 _default_dtype = float
@@ -182,6 +182,7 @@ class ShardedCorpus(IndexedCorpus):
             self.init_shards(output_prefix, corpus, shardsize)
             self.save()  # Save automatically, to facillitate re-loading
         else:
+            print 'Cloning existing...'
             logging.info('Cloning existing...')
             self.init_by_clone()
 
@@ -299,9 +300,14 @@ class ShardedCorpus(IndexedCorpus):
         with open(filename, 'wb') as pickle_handle:
             cPickle.dump(shard, pickle_handle, protocol=self._pickle_protocol)
 
+        if hasattr(shard, 'shape'):
+            shard_length = shard.shape[0]
+        else:
+            shard_length = len(shard)
+
         if new_shard:
-            self.offsets.append(self.offsets[-1] + shard.shape[0])
-            self.n_docs += shard.shape[0]
+            self.offsets.append(self.offsets[-1] + shard_length)
+            self.n_docs += shard_length
             self.n_shards += 1
 
     #@profile
@@ -715,10 +721,9 @@ class ShardedCorpus(IndexedCorpus):
     def _getitem_format(self, s_result):
         if self.gensim_serialization:
             if not self.gensim:
-                if not self.sparse_serialization:
-                    s_result = gensim2ndarray(s_result)
-                else:
-                    s_result = sparse.csr_matrix(gensim2ndarray(s_result))
+                s_result = safire.utils.gensim2ndarray(s_result, dim=self.dim)
+                if self.sparse_serialization:
+                    s_result = sparse.csr_matrix(s_result)
         elif self.sparse_serialization:
             if self.gensim:
                 s_result = self._getitem_sparse2gensim(s_result)
