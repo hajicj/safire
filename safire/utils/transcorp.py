@@ -100,6 +100,11 @@ def get_id2doc_obj(corpus):
                               'type {0}'.format(type(corpus)))
 
 
+def id2doc(corpus, docid):
+    obj = get_id2doc_obj(corpus)
+    return obj[docid]
+
+
 def get_doc2id_obj(corpus):
     if hasattr(corpus, 'doc2id'):
         # print 'Returning doc2id from corpus: {0}'.format(type(corpus))
@@ -111,6 +116,11 @@ def get_doc2id_obj(corpus):
 
     raise NotImplementedError('get_doc2id_obj() not implemented for corpus '
                               'type {0}'.format(type(corpus)))
+
+
+def doc2id(corpus, docname):
+    obj = get_doc2id_obj(corpus)
+    return obj[docname]
 
 
 def bottom_corpus(corpus):
@@ -612,6 +622,7 @@ def mmcorp_from_t_and_i(vtcorp, icorp, ensure_dense=False):
     return mmdata
 
 
+# Not implemented...
 def flatten_corpora(corpora, doc_mapping_file):
     """Shortcut function for flattening the given corpora that takes care of
     creating the CompositeDataset and then flattening it again.
