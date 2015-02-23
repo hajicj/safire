@@ -491,8 +491,7 @@ class TestPipeline(SafireTestCase):
             heavy_debug=False)
 
         self.learner = BaseSGDLearner(20, 400, validation_frequency=10,
-                                      plot_transformation=True,
-                                      plot_every=5)
+                                      plot_transformation=False)
 
         print '--running training--'
         start = time.clock()

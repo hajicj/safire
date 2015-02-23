@@ -77,9 +77,10 @@ class ShardedCorpus(IndexedCorpus):
     Gensim interface
     ----------------
 
-    The ShardedDataset simultaneously implements a gensim-style corpus
+    The ShardedCorpus simultaneously implements a gensim-style corpus
     interface: the :class:`IndexedCorpus` abstract base class for O(1)
-    random-access corpora. (It of course overrides everything
+    random-access corpora. Also, gensim-style serialization and retrieval
+    are supported as well.
     """
 
     #@profile
