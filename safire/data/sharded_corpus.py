@@ -247,11 +247,7 @@ class ShardedCorpus(IndexedCorpus):
                           '{0} x {1}'.format(len(doc_chunk), self.dim))
             if isinstance(doc_chunk[0], numpy.ndarray):
                 for i, doc in enumerate(doc_chunk):
-                    try:
-                        current_shard[i][:] = doc[:]
-                    except ValueError:
-                        print doc
-                        raise
+                    current_shard[i][:] = doc[:]
             else:
                 for i, doc in enumerate(doc_chunk):
                     doc = dict(doc)

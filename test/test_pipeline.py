@@ -423,9 +423,6 @@ class TestPipeline(SafireTestCase):
         token_vtcorp.lock()
         token_vtcorp.dry_run()
 
-        print token_vtcorp.doc2id['text/idn-00000.vt.txt.gz']
-        print token_vtcorp.id2doc[300]
-
         # Initialize word2vec
         word2vec = Word2VecTransformer(self.edict_pkl_fname,
                                        get_id2word_obj(token_vtcorp))
@@ -463,15 +460,18 @@ class TestPipeline(SafireTestCase):
         itanh = GeneralFunctionTransform(numpy.tanh, multiplicative_coef=0.4)
         icorp = itanh[icorp]
 
+        print '--serializing icorp--'
         serializer = Serializer(icorp, ShardedCorpus,
                                 self.loader.pipeline_serialization_target(
                                     '.icorp'))
         icorp = serializer[icorp]
         idata = Dataset(icorp)
 
+        print '--building mmdata--'
         mmdata = CompositeDataset((tdata, idata), names=('text', 'img'),
                                   aligned=False)
 
+        print '--flattening mmdata--'
         t2i_file = os.path.join(self.loader.root,
                                 self.loader.layout.textdoc2imdoc)
         t2i_indexes = compute_docname_flatten_mapping(mmdata, t2i_file)
@@ -480,11 +480,13 @@ class TestPipeline(SafireTestCase):
         flat_mmdata = flatten[mmdata]
 
         # Serialize.
+        print '--serializing flattened mmdata--'
         serializer = Serializer(flat_mmdata, ShardedCorpus,
                                 self.loader.pipeline_serialization_target(
                                     '.tokenw2v_mmdata'))
         serialized_mmdata = serializer[flat_mmdata]
 
+        print '--casting to dataset--'
         dataset = Dataset(serialized_mmdata)
         dataset.set_test_p(0.1)
         dataset.set_devel_p(0.1)

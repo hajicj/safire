@@ -270,7 +270,7 @@ def reset_vtcorp_input(corpus, filename, input_root=None, lock=True,
     vtcorp = bottom_corpus(corpus)
     if not isinstance(vtcorp, VTextCorpus):
         raise ValueError('Bottom corpus '
-                         '%s instead of VTextCorpus.' % type(vtcorp))
+                         '{0} instead of VTextCorpus.'.format(type(vtcorp)))
     vtcorp.reset_input(filename, input_root=input_root, lock=lock)
 
 
