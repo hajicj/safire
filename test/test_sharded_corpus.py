@@ -39,7 +39,7 @@ class TestShardedCorpus(unittest.TestCase):
 
     def setUp(self):
         self.corpus = ShardedCorpus(self.tmp_fname, self.data, dim=self.dim,
-                                    shardsize=100)
+                                    shardsize=100, overwrite=True)
 
     def test_init(self):
 
@@ -91,6 +91,7 @@ class TestShardedCorpus(unittest.TestCase):
         no_exception = True
         try:
             dataset = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                                    overwrite=True,
                                     dim=self.dim, sparse_serialization=True)
         except Exception:
             no_exception = False
@@ -101,6 +102,7 @@ class TestShardedCorpus(unittest.TestCase):
     def test_getitem_dense2dense(self):
 
         corpus = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                               overwrite=True,
                                dim=self.dim, sparse_serialization=False,
                                sparse_retrieval=False, gensim=False)
 
@@ -121,6 +123,7 @@ class TestShardedCorpus(unittest.TestCase):
     def test_getitem_dense2sparse(self):
 
         corpus = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                               overwrite=True,
                                dim=self.dim, sparse_serialization=False,
                                sparse_retrieval=True, gensim=False)
 
@@ -142,10 +145,12 @@ class TestShardedCorpus(unittest.TestCase):
 
         sp_tmp_fname = self.tmp_fname + '.sparse'
         corpus = ShardedCorpus(sp_tmp_fname, self.data, shardsize=100,
+                               overwrite=True,
                                dim=self.dim, sparse_serialization=True,
                                sparse_retrieval=True, gensim=False)
 
         dense_corpus = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                                     overwrite=True,
                                      dim=self.dim, sparse_serialization=False,
                                      sparse_retrieval=True, gensim=False)
 
@@ -172,10 +177,12 @@ class TestShardedCorpus(unittest.TestCase):
     def test_getitem_sparse2dense(self):
         sp_tmp_fname = self.tmp_fname + '.sparse'
         corpus = ShardedCorpus(sp_tmp_fname, self.data, shardsize=100,
+                               overwrite=True,
                                dim=self.dim, sparse_serialization=True,
                                sparse_retrieval=False, gensim=False)
 
         dense_corpus = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                                     overwrite=True,
                                      dim=self.dim, sparse_serialization=False,
                                      sparse_retrieval=False, gensim=False)
 
@@ -199,7 +206,100 @@ class TestShardedCorpus(unittest.TestCase):
     def test_getitem_dense2gensim(self):
 
         corpus = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                               overwrite=True,
                                dim=self.dim, sparse_serialization=False,
+                               gensim=True)
+
+        item = corpus[3]
+        self.assertIsInstance(item, list)
+        self.assertIsInstance(item[0], tuple)
+
+        dslice = corpus[2:6]
+        self.assertTrue(hasattr(dslice, 'next'))
+        dslice = list(dslice)
+        self.assertIsInstance(dslice, list)
+        self.assertIsInstance(dslice[0], list)
+        self.assertIsInstance(dslice[0][0], tuple)
+
+        iscorp, _ = is_corpus(dslice)
+        self.assertTrue(iscorp, "Is the object returned by slice notation "
+                                "a gensim corpus?")
+
+        ilist = corpus[[2, 3, 4, 5]]
+        self.assertTrue(hasattr(ilist, 'next'))
+        ilist = list(ilist)
+        self.assertIsInstance(ilist, list)
+        self.assertIsInstance(ilist[0], list)
+        self.assertIsInstance(ilist[0][0], tuple)
+
+        # From generators to lists
+
+        self.assertEqual(len(ilist), len(dslice))
+        for i in xrange(len(ilist)):
+            self.assertEqual(len(ilist[i]), len(dslice[i]),
+                             "Row %d: dims %d/%d" % (i, len(ilist[i]),
+                                                     len(dslice[i])))
+            for j in xrange(len(ilist[i])):
+                self.assertEqual(ilist[i][j], dslice[i][j],
+                                 "ilist[%d][%d] = %s ,dslice[%d][%d] = %s" % (
+                                     i, j, str(ilist[i][j]), i, j,
+                                     str(dslice[i][j])))
+
+
+        iscorp, _ = is_corpus(ilist)
+        self.assertTrue(iscorp, "Is the object returned by list notation "
+                                "a gensim corpus?")
+
+    def test_getitem_gensim2dense(self):
+
+        corpus = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                               overwrite=True,
+                               dim=self.dim, sparse_serialization=False,
+                               gensim_serialization=True,
+                               sparse_retrieval=False, gensim=False)
+
+        item = corpus[3]
+        self.assertIsInstance(item, numpy.ndarray)
+        self.assertEqual(item.shape, (corpus.n_out,))
+
+        dslice = corpus[2:6]
+        self.assertIsInstance(dslice, numpy.ndarray)
+        self.assertEqual(dslice.shape, (4, corpus.n_out))
+
+        ilist = corpus[[2, 3, 4, 5]]
+        self.assertIsInstance(ilist, numpy.ndarray)
+        self.assertEqual(ilist.shape, (4, corpus.n_out))
+
+        self.assertEqual(ilist.all(), dslice.all())
+
+    def test_getitem_gensim2sparse(self):
+
+        corpus = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                               overwrite=True,
+                               dim=self.dim, sparse_serialization=False,
+                               gensim_serialization=True,
+                               sparse_retrieval=True, gensim=False)
+
+        item = corpus[3]
+        self.assertIsInstance(item, sparse.csr_matrix)
+        self.assertEqual(item.shape, (1, corpus.n_out))
+
+        dslice = corpus[2:6]
+        self.assertIsInstance(dslice, sparse.csr_matrix)
+        self.assertEqual(dslice.shape, (4, corpus.n_out))
+
+        ilist = corpus[[2, 3, 4, 5]]
+        self.assertIsInstance(ilist, sparse.csr_matrix)
+        self.assertEqual(ilist.shape, (4, corpus.n_out))
+
+        self.assertEqual((ilist != dslice).getnnz(), 0)
+
+    def test_getitem_gensim2gensim(self):
+
+        corpus = ShardedCorpus(self.tmp_fname, self.data, shardsize=100,
+                               overwrite=True,
+                               dim=self.dim, sparse_serialization=False,
+                               gensim_serialization=True,
                                gensim=True)
 
         item = corpus[3]

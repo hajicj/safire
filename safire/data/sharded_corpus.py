@@ -14,8 +14,7 @@ import cPickle
 import math
 import numpy
 import scipy.sparse as sparse
-
-import safire.utils.transcorp
+import safire.utils
 
 #: Specifies which dtype should be used for serializing the shards.
 _default_dtype = float
@@ -78,15 +77,17 @@ class ShardedCorpus(IndexedCorpus):
     Gensim interface
     ----------------
 
-    The ShardedDataset simultaneously implements a gensim-style corpus
+    The ShardedCorpus simultaneously implements a gensim-style corpus
     interface: the :class:`IndexedCorpus` abstract base class for O(1)
-    random-access corpora. (It of course overrides everything
+    random-access corpora. Also, gensim-style serialization and retrieval
+    are supported as well.
     """
 
     #@profile
     def __init__(self, output_prefix, corpus, dim=None,
                  shardsize=4096, overwrite=False, sparse_serialization=False,
-                 sparse_retrieval=False, gensim=True):
+                 gensim_serialization=False, sparse_retrieval=False,
+                 gensim=True):
         """Initializes the dataset. If ``output_prefix`` is not found,
         builds the shards.
 
@@ -131,6 +132,10 @@ class ShardedCorpus(IndexedCorpus):
             a dense representation, the best practice is to create another
             ShardedDataset object.)
 
+        :type gensim_serialization: bool
+        :param gensim_serialization: If set, will save the data as gensim
+            sparse vectors. Each shard will thus be a list of lists of 2-tuples.
+
         :type sparse_retrieval: bool
         :param sparse_retrieval: If set, will retrieve data as sparse vectors
             (numpy csr matrices). If unset, will return ndarrays.
@@ -160,6 +165,7 @@ class ShardedCorpus(IndexedCorpus):
         # Sparse vs. dense serialization and retrieval.
         self._pickle_protocol = -1
         self.sparse_serialization = sparse_serialization
+        self.gensim_serialization = gensim_serialization
         self.sparse_retrieval = sparse_retrieval
         self.gensim = gensim
 
@@ -224,10 +230,16 @@ class ShardedCorpus(IndexedCorpus):
 
         for n, doc_chunk in enumerate(gensim.utils.grouper(corpus,
                                                            chunksize=shardsize)):
-            logging.info('Chunk no. %d gathered at %d s' % (n, time.clock() - start_time))
-            logging.info('Chunk type: {0}, length {1}'.format(type(doc_chunk),
-                                                              len(doc_chunk)))
+            logging.info('Chunk no. {0} gathered at {1} s'
+                         ''.format(n, time.clock() - start_time))
+            logging.info('Chunk type: {0}, length {1}'
+                         ''.format(type(doc_chunk), len(doc_chunk)))
             logging.info('Chunk element type: {0}'.format(type(doc_chunk[0])))
+
+            # No conversion necessary.
+            if self.gensim_serialization:
+                self.save_shard(doc_chunk)
+                continue
 
             current_shard = numpy.zeros((len(doc_chunk), self.dim),
                                         dtype=dtype)
@@ -241,10 +253,10 @@ class ShardedCorpus(IndexedCorpus):
                     doc = dict(doc)
                     current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
 
-            # Handles the updating as well.
             if self.sparse_serialization:
                 current_shard = sparse.csr_matrix(current_shard)
 
+            # Handles the updating as well.
             self.save_shard(current_shard)
 
         end_time = time.clock()
@@ -286,9 +298,14 @@ class ShardedCorpus(IndexedCorpus):
         with open(filename, 'wb') as pickle_handle:
             cPickle.dump(shard, pickle_handle, protocol=self._pickle_protocol)
 
+        if hasattr(shard, 'shape'):
+            shard_length = shard.shape[0]
+        else:
+            shard_length = len(shard)
+
         if new_shard:
-            self.offsets.append(self.offsets[-1] + shard.shape[0])
-            self.n_docs += shard.shape[0]
+            self.offsets.append(self.offsets[-1] + shard_length)
+            self.n_docs += shard_length
             self.n_shards += 1
 
     #@profile
@@ -472,8 +489,8 @@ class ShardedCorpus(IndexedCorpus):
             if not self.dim:
                 #print self.dim
                 raise TypeError('Couldn\'t find number of features, '
-                                 'refusing to guess.'
-                                 '(Type of corpus: %s' % type(corpus))
+                                'refusing to guess.'
+                                '(Type of corpus: {0}'.format(type(corpus)))
             else:
                 logging.warn('Couldn\'t find number of features, trusting '
                              'supplied dimension ({0})'.format(self.dim))
@@ -517,8 +534,10 @@ class ShardedCorpus(IndexedCorpus):
 
         Slice notation support added, list support for ints added."""
         if isinstance(offset, list):
-
             # Handle all serialization & retrieval options.
+            if self.gensim_serialization:
+                return self._getitem_format([self.get_by_offset(i)
+                                             for i in offset])
             if self.sparse_serialization:
                 l_result = sparse.vstack([self.get_by_offset(i)
                                           for i in offset])
@@ -677,13 +696,12 @@ class ShardedCorpus(IndexedCorpus):
                 s_result[result_start:result_stop] = self.current_shard[start:stop]
             except ValueError:
                 cpdata = self.current_shard[start:stop]
-                print 'Copied data: type %s, shape %s' % (type(cpdata),
-                                                          str(cpdata.shape))
-                print 'S_result: type %s, shape %s' % (type(s_result),
-                                                       str(s_result.shape))
-                print 'Rstart-Rstop: %d:%d -- start:stop: %d:%d' % (result_start,
-                                                                    result_stop,
-                                                                    start, stop)
+                logging.debug('Copied data: type {0}, shape {1}'
+                              ''.format(type(cpdata), str(cpdata.shape)))
+                logging.debug('S_result: type {0}, shape {1}'
+                              ''.format(type(s_result), str(s_result.shape)))
+                logging.debug('Rstart-Rstop: {0}:{1} -- start:stop: {2}:{3}'
+                              ''.format(result_start, result_stop, start, stop))
                 raise
             return s_result
 
@@ -692,15 +710,26 @@ class ShardedCorpus(IndexedCorpus):
         else:
             if s_result.shape != (result_start, self.dim):
                 raise ValueError('Assuption about sparse s_result shape '
-                                 'invalid: %d expected rows, %d real rows.' % (
-                    result_start, s_result.shape[0]))
+                                 'invalid: {0} expected rows, {1} real rows.'
+                                 ''.format(result_start, s_result.shape[0]))
 
             tmp_matrix = self.current_shard[start:stop]
             s_result = sparse.vstack([s_result, tmp_matrix])
             return s_result
 
     def _getitem_format(self, s_result):
-        if self.sparse_serialization:
+        if self.gensim_serialization:
+            if self.gensim:
+                if isinstance(s_result[0], tuple):
+                    return s_result
+                else:
+                    # cast as a generator
+                    return (gensim_vector for gensim_vector in s_result)
+            else:
+                s_result = safire.utils.gensim2ndarray(s_result, dim=self.dim)
+                if self.sparse_retrieval:
+                    s_result = sparse.csr_matrix(s_result)
+        elif self.sparse_serialization:
             if self.gensim:
                 s_result = self._getitem_sparse2gensim(s_result)
             elif not self.sparse_retrieval:
@@ -725,7 +754,8 @@ class ShardedCorpus(IndexedCorpus):
         return output
 
     def _getitem_dense2gensim(self, result):
-        """Change given dense result matrix to gensim sparse vectors."""
+        """Change given dense result matrix to a list of
+         gensim sparse vectors."""
         if len(result.shape) == 1:
             output = gensim.matutils.full2sparse(result)
         else:
