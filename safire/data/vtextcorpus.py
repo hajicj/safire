@@ -368,15 +368,15 @@ class VTextCorpus(TextCorpus):
                 self.n_words_processed += len(document)
                 yield document
 
-
             # Logging
-            #self.n_processed += 1
+            # self.n_processed += 1
             if self.n_processed % timed_batch_size == 0 and self.n_processed > 0:
                 batch_end_time = time.clock()
                 batch_time = batch_end_time - batch_start_time
                 batch_total_time = batch_end_time - start_time
-                logger.info(
-                    'Done batch no. {0}, total docs {1}. Batch time {2} s ({3} s / doc), total time {4} s ({5} s / doc)'.format(
+                logger.info('Done batch no. {0}, total docs {1}. Batch time '
+                            '{2} s ({3} s / doc), total time {4} s ({5} s /'
+                            ' doc)'.format(
                         batch_no, self.n_processed, batch_time,
                         batch_time / timed_batch_size, batch_total_time,
                         batch_total_time / self.n_processed))

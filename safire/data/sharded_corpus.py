@@ -87,7 +87,7 @@ class ShardedCorpus(IndexedCorpus):
     def __init__(self, output_prefix, corpus, dim=None,
                  shardsize=4096, overwrite=False, sparse_serialization=False,
                  gensim_serialization=False, sparse_retrieval=False,
-                 gensim=True):
+                 gensim_retrieval=False):
         """Initializes the dataset. If ``output_prefix`` is not found,
         builds the shards.
 
@@ -146,7 +146,7 @@ class ShardedCorpus(IndexedCorpus):
             do not correspond, the conversion on the fly will slow the dataset
             down.
 
-        :type gensim: bool
+        :type gensim_retrieval: bool
         :param gensim: If set, will additionally convert the output to gensim
             sparse vectors (list of tuples (id, value)) to make it behave like
             any other gensim corpus. This **will** slow the corpus down.
@@ -167,7 +167,7 @@ class ShardedCorpus(IndexedCorpus):
         self.sparse_serialization = sparse_serialization
         self.gensim_serialization = gensim_serialization
         self.sparse_retrieval = sparse_retrieval
-        self.gensim = gensim
+        self.gensim = gensim_retrieval
 
         # The "state" of the dataset.
         self.current_shard = None    # The current shard itself (numpy ndarray)
@@ -247,7 +247,11 @@ class ShardedCorpus(IndexedCorpus):
                           '{0} x {1}'.format(len(doc_chunk), self.dim))
             if isinstance(doc_chunk[0], numpy.ndarray):
                 for i, doc in enumerate(doc_chunk):
-                    current_shard[i][:] = doc[:]
+                    try:
+                        current_shard[i][:] = doc[:]
+                    except ValueError:
+                        print doc
+                        raise
             else:
                 for i, doc in enumerate(doc_chunk):
                     doc = dict(doc)
@@ -724,7 +728,7 @@ class ShardedCorpus(IndexedCorpus):
                     return s_result
                 else:
                     # cast as a generator
-                    return (gensim_vector for gensim_vector in s_result)
+                    return [gensim_vector for gensim_vector in s_result]
             else:
                 s_result = safire.utils.gensim2ndarray(s_result, dim=self.dim)
                 if self.sparse_retrieval:
@@ -759,8 +763,8 @@ class ShardedCorpus(IndexedCorpus):
         if len(result.shape) == 1:
             output = gensim.matutils.full2sparse(result)
         else:
-            output = (gensim.matutils.full2sparse(result[i])
-                      for i in xrange(result.shape[0]))
+            output = [gensim.matutils.full2sparse(result[i])
+                      for i in xrange(result.shape[0])]
         return output
 
     # Overriding the IndexedCorpus and other corpus superclass methods

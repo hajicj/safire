@@ -113,10 +113,6 @@ def build_argument_parser():
                         help='If set, will normalize each data item to sum to '
                              'the maximum possible number so that no value in '
                              'the corpus will be higher than the given number.')
-    parser.add_argument('--dataset_only', action='store_true',
-                        help='If set, will assume the tcorp/icorp and mmcorp for the '
-                             'given label have already been initialized and will'
-                             ' only create the dataset. Will overwrite.')
     parser.add_argument('--shardsize', type=int, default=4096,
                         help='The output sharded dataset will have this shard '
                              'size.')
@@ -179,9 +175,6 @@ def build_argument_parser():
                              'in the vocabulary of the word2vec transformer. '
                              'Only applicable if --tokens is also set.')
 
-    parser.add_argument('--no_shdat', action='store_true',
-                        help='If set, will NOT automatically create the '
-                             'sharded dataset with the given label.')
     parser.add_argument('--no_overwrite', action='store_true',
                         help='If set, will not overwrite an existing serialized'
                              ' dataset, printing a warning and quitting before '
@@ -218,6 +211,14 @@ def build_argument_parser():
                         ' INFO logging messages.')
     parser.add_argument('--debug', action='store_true', help='Turn on debug '+
                         'prints.')
+
+    parser.add_argument('--serialization_format', action='store',
+                        default='dense',
+                        help='One of the following: \'dense\', \'sparse\' '
+                             'and \'gensim\'. Defines the format in which the '
+                             'data will be serialized: numpy ndarray, scipy '
+                             'CSR matrix or gensim sparse vectors. Default '
+                             'value is \'dense\'.')
 
     return parser
 
@@ -422,9 +423,20 @@ def main(args):
     # currently not supported.)
     serialization_start_time = time.clock()
     logging.info('Starting serialization: {0}'.format(serialization_start_time))
+    sparse_serialization = False
+    gensim_serialization = False
+    if args.serialization_format == 'sparse':
+        sparse_serialization = True
+    elif args.serialization_format == 'gensim':
+        gensim_serialization = True
+    elif args.serialization_format != 'dense':
+        logging.warn('Invalid serialization format specified ({0}), serializing '
+                     'as dense.'.format(args.serialization_format))
     serializer_block = Serializer(pipeline, serializer_class,
                                   data_name,
                                   dim=dimension(pipeline),
+                                  gensim_serialization=gensim_serialization,
+                                  sparse_serialization=sparse_serialization,
                                   overwrite=(not args.no_overwrite))
     serialization_end_time = time.clock()
     logging.info('Serialization finished: {0}'.format(serialization_end_time))

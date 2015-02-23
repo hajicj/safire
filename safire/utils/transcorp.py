@@ -236,7 +236,7 @@ def get_transformers(pipeline):
 
         # If a silent conversion is happening...
         if isinstance(pipeline.obj, ShardedCorpus) and \
-                        pipeline.obj.gensim is False and \
+                        pipeline.obj.gensim_retrieval is False and \
                         pipeline.obj.sparse_retrieval is False:
             # ..add a convertor, so that the resulting stack of transformers
             # can be run.
@@ -375,7 +375,7 @@ def convert_to_dense(corpus):
     # dense output.
     if isinstance(corpus, safire.data.serializer.SwapoutCorpus) \
             and isinstance(corpus.obj, ShardedCorpus):
-            corpus.obj.gensim = False
+            corpus.obj.gensim_retrieval = False
             corpus.obj.sparse_retrieval = False
             return corpus
 
@@ -538,7 +538,7 @@ def convert_to_dense_recursive(pipeline):
         # This is so far the only supported case of converting to dense.
         if isinstance(corpus, safire.data.serializer.SwapoutCorpus):
             if isinstance(corpus.obj, ShardedCorpus):
-                corpus.obj.gensim = False
+                corpus.obj.gensim_retrieval = False
                 corpus.obdj.sparse_retrieval = False
                 return
             else:
