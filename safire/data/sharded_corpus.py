@@ -263,6 +263,16 @@ class ShardedCorpus(IndexedCorpus):
         logging.info('Built %i shards in %d s.' % (self.n_shards,
                                                    end_time - start_time))
 
+        # Re-guess dimension if gensim serialization was involved.
+        if not self.dim and self.gensim_serialization:
+            logging.info('Trying to re-guess dimension after gensim'
+                         ' serialization...')
+            self.dim = self._guess_n_features(corpus)
+            if not self.dim:
+                raise ValueError('Could not determine corpus dimension even'
+                                 ' after serializing; cannot guarantee workable'
+                                 ' pipeline with the serialized corpus.')
+
     #@profile
     def init_by_clone(self):
         """Initializes by copying over attributes of another ShardedDataset
@@ -487,10 +497,16 @@ class ShardedCorpus(IndexedCorpus):
                 return self._guess_n_features(corpus.corpus)
         else:
             if not self.dim:
-                #print self.dim
-                raise TypeError('Couldn\'t find number of features, '
-                                'refusing to guess.'
-                                '(Type of corpus: {0}'.format(type(corpus)))
+                if self.gensim_serialization:
+                    logging.warn('Couldn\'t find number of features, '
+                                 'refusing to guess but because of gensim-'
+                                 'style serialization, will try to re-guess '
+                                 'dimension after serialization. '
+                                 '(Type of corpus: {0}'.format(type(corpus)))
+                else:
+                    raise TypeError('Couldn\'t find number of features, '
+                                    'refusing to guess.'
+                                    '(Type of corpus: {0}'.format(type(corpus)))
             else:
                 logging.warn('Couldn\'t find number of features, trusting '
                              'supplied dimension ({0})'.format(self.dim))

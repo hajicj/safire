@@ -376,10 +376,11 @@ class VTextCorpus(TextCorpus):
                 batch_total_time = batch_end_time - start_time
                 logger.info('Done batch no. {0}, total docs {1}. Batch time '
                             '{2} s ({3} s / doc), total time {4} s ({5} s /'
-                            ' doc)'.format(
-                        batch_no, self.n_processed, batch_time,
-                        batch_time / timed_batch_size, batch_total_time,
-                        batch_total_time / self.n_processed))
+                            ' doc)'
+                            ''.format(batch_no, self.n_processed, batch_time,
+                                      batch_time / timed_batch_size,
+                                      batch_total_time,
+                                      batch_total_time / self.n_processed))
                 batch_no += 1
                 batch_start_time = time.clock()
 
