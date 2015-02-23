@@ -13,6 +13,8 @@ import logging
 import numpy
 import time
 import theano
+from safire.data.document_filter import DocumentFilterTransform
+from safire.data.filters.frequency_filters import zero_length_filter
 from safire.data.word2vec_transformer import Word2VecTransformer
 from safire.datasets.word2vec_transformer import \
     Word2VecSamplingDatasetTransformer
@@ -421,10 +423,17 @@ class TestPipeline(SafireTestCase):
         token_vtcorp.lock()
         token_vtcorp.dry_run()
 
+        print token_vtcorp.doc2id['text/idn-00000.vt.txt.gz']
+        print token_vtcorp.id2doc[300]
+
         # Initialize word2vec
         word2vec = Word2VecTransformer(self.edict_pkl_fname,
                                        get_id2word_obj(token_vtcorp))
         token_word2vec_pipeline = word2vec[token_vtcorp]
+
+        # Add empty document filtering.
+        word2vec_miss_filter = DocumentFilterTransform(zero_length_filter)
+        token_word2vec_pipeline = word2vec_miss_filter[token_word2vec_pipeline]
 
         ttanh = GeneralFunctionTransform(numpy.tanh, multiplicative_coef=0.4)
         token_word2vec_pipeline = ttanh[token_word2vec_pipeline]
@@ -491,8 +500,7 @@ class TestPipeline(SafireTestCase):
             heavy_debug=False)
 
         self.learner = BaseSGDLearner(20, 400, validation_frequency=10,
-                                      plot_transformation=True,
-                                      plot_every=5)
+                                      plot_transformation=False)
 
         print '--running training--'
         start = time.clock()

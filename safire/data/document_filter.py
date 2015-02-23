@@ -174,7 +174,9 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
             for counter, doc in enumerate(self.corpus):
                 persistent_docid = docid_iterator.next()
                 # print 'Filtering document with persistent ID {0}' \
-                #       ''.format(persistent_docid)
+                #       ', docname {1}' \
+                #       ''.format(persistent_docid,
+                #                 self.persistent_id2doc[persistent_docid])
                 transformed = self.obj[doc]
                 if transformed:
                     # Update new <=> old mapping
@@ -190,7 +192,7 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
                     self.n_passed += 1
                     yield transformed
                 else:
-                    # print '    Removing document!'
+                    # print '    Removing document! {0}'.format(doc)
                     self._remove_docid(persistent_docid)
                     continue
 
@@ -226,10 +228,10 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
     def _remove_docid(self, docid):
 
         docname = self.persistent_id2doc[docid]
-        # try:
-        self.persistent_doc2id[docname].remove(docid)
-        # except KeyError:
-        #     #print 'persistent_doc2id[{0}] = {1}' \
-        #     #      ''.format(docname, self.persistent_doc2id[docname])
-        #     raise
+        try:
+            self.persistent_doc2id[docname].remove(docid)
+        except KeyError:
+            print 'persistent_doc2id[{0}] = {1}' \
+                  ''.format(docname, self.persistent_doc2id[docname])
+            raise
         del self.persistent_id2doc[docid]

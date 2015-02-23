@@ -317,13 +317,16 @@ class VTextCorpus(TextCorpus):
                 document, sentences = self.parse_document_and_sentences(
                     doc_handle)
 
+            print 'Total tokens in document {0}: {1}'.format(doc_short_name,
+                                                             len(document))
+
             if self.tokens:
                 for token in document:
                     docid = doc_short_name
-                    self.doc2id[docid].add(total_yielded)
-                    self.id2doc[len(self.id2doc)] = docid
                     if self.locked and token not in self.dictionary.token2id:
                         continue
+                    self.doc2id[docid].add(total_yielded)
+                    self.id2doc[len(self.id2doc)] = docid
                     total_yielded += 1
                     self.n_processed += 1
                     self.n_words_processed += 1
