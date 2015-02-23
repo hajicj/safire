@@ -794,7 +794,7 @@ def gensim2ndarray(corpus, dim, num_docs=None, dtype=numpy.float32):
 
     Mirror function to ``ndarray2gensim``."""
     # Checking for single-vector.
-    print 'Corpus: {0}'.format(corpus)
+    # print 'Corpus: {0}'.format(corpus)
     if isinstance(corpus[0], tuple):
         return sparse2full(corpus, dim)
     return corpus2dense(corpus, dim, num_docs=num_docs, dtype=dtype).T

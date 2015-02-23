@@ -16,8 +16,6 @@ import numpy
 import scipy.sparse as sparse
 import safire.utils
 
-#import safire.utils.transcorp
-
 #: Specifies which dtype should be used for serializing the shards.
 _default_dtype = float
 try:
@@ -182,7 +180,6 @@ class ShardedCorpus(IndexedCorpus):
             self.init_shards(output_prefix, corpus, shardsize)
             self.save()  # Save automatically, to facillitate re-loading
         else:
-            print 'Cloning existing...'
             logging.info('Cloning existing...')
             self.init_by_clone()
 
@@ -491,8 +488,8 @@ class ShardedCorpus(IndexedCorpus):
             if not self.dim:
                 #print self.dim
                 raise TypeError('Couldn\'t find number of features, '
-                                 'refusing to guess.'
-                                 '(Type of corpus: %s' % type(corpus))
+                                'refusing to guess.'
+                                '(Type of corpus: {0}'.format(type(corpus)))
             else:
                 logging.warn('Couldn\'t find number of features, trusting '
                              'supplied dimension ({0})'.format(self.dim))
@@ -536,8 +533,10 @@ class ShardedCorpus(IndexedCorpus):
 
         Slice notation support added, list support for ints added."""
         if isinstance(offset, list):
-
             # Handle all serialization & retrieval options.
+            if self.gensim_serialization:
+                return self._getitem_format([self.get_by_offset(i)
+                                             for i in offset])
             if self.sparse_serialization:
                 l_result = sparse.vstack([self.get_by_offset(i)
                                           for i in offset])
@@ -696,13 +695,12 @@ class ShardedCorpus(IndexedCorpus):
                 s_result[result_start:result_stop] = self.current_shard[start:stop]
             except ValueError:
                 cpdata = self.current_shard[start:stop]
-                print 'Copied data: type %s, shape %s' % (type(cpdata),
-                                                          str(cpdata.shape))
-                print 'S_result: type %s, shape %s' % (type(s_result),
-                                                       str(s_result.shape))
-                print 'Rstart-Rstop: %d:%d -- start:stop: %d:%d' % (result_start,
-                                                                    result_stop,
-                                                                    start, stop)
+                logging.debug('Copied data: type {0}, shape {1}'
+                              ''.format(type(cpdata), str(cpdata.shape)))
+                logging.debug('S_result: type {0}, shape {1}'
+                              ''.format(type(s_result), str(s_result.shape)))
+                logging.debug('Rstart-Rstop: {0}:{1} -- start:stop: {2}:{3}'
+                              ''.format(result_start, result_stop, start, stop))
                 raise
             return s_result
 
@@ -711,8 +709,8 @@ class ShardedCorpus(IndexedCorpus):
         else:
             if s_result.shape != (result_start, self.dim):
                 raise ValueError('Assuption about sparse s_result shape '
-                                 'invalid: %d expected rows, %d real rows.' % (
-                    result_start, s_result.shape[0]))
+                                 'invalid: {0} expected rows, {1} real rows.'
+                                 ''.format(result_start, s_result.shape[0]))
 
             tmp_matrix = self.current_shard[start:stop]
             s_result = sparse.vstack([s_result, tmp_matrix])
@@ -720,9 +718,15 @@ class ShardedCorpus(IndexedCorpus):
 
     def _getitem_format(self, s_result):
         if self.gensim_serialization:
-            if not self.gensim:
+            if self.gensim:
+                if isinstance(s_result[0], tuple):
+                    return s_result
+                else:
+                    # cast as a generator
+                    return (gensim_vector for gensim_vector in s_result)
+            else:
                 s_result = safire.utils.gensim2ndarray(s_result, dim=self.dim)
-                if self.sparse_serialization:
+                if self.sparse_retrieval:
                     s_result = sparse.csr_matrix(s_result)
         elif self.sparse_serialization:
             if self.gensim:
@@ -749,7 +753,8 @@ class ShardedCorpus(IndexedCorpus):
         return output
 
     def _getitem_dense2gensim(self, result):
-        """Change given dense result matrix to gensim sparse vectors."""
+        """Change given dense result matrix to a list of
+         gensim sparse vectors."""
         if len(result.shape) == 1:
             output = gensim.matutils.full2sparse(result)
         else:

@@ -39,7 +39,7 @@ class TestShardedCorpus(unittest.TestCase):
 
     def setUp(self):
         self.corpus = ShardedCorpus(self.tmp_fname, self.data, dim=self.dim,
-                                    shardsize=100)
+                                    shardsize=100, overwrite=True)
 
     def test_init(self):
 
