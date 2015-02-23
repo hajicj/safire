@@ -11,6 +11,8 @@ from gensim.models import TfidfModel
 from gensim.utils import SaveLoad
 import numpy
 from safire.data import VTextCorpus
+from safire.data.document_filter import DocumentFilterTransform
+from safire.data.filters.frequency_filters import zero_length_filter
 
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.serializer import Serializer, SwapoutCorpus
@@ -171,6 +173,11 @@ def build_argument_parser():
                              'applied to the corpus - it applies a'
                              'DatasetTransformer on the dataset before the'
                              'dataset object is saved. [NOT IMPLEMENTED]')
+
+    parser.add_argument('--w2v_filter_empty', action='store_true',
+                        help='If set, will filter out all tokens that are not '
+                             'in the vocabulary of the word2vec transformer. '
+                             'Only applicable if --tokens is also set.')
 
     parser.add_argument('--no_shdat', action='store_true',
                         help='If set, will NOT automatically create the '
@@ -366,6 +373,11 @@ def main(args):
                                        w2v_dictionary,
                                        op=args.word2vec_op)
         pipeline = word2vec[pipeline]
+
+    if args.w2v_filter_empty:
+        print 'Applying word2vec empty doc filtering.'
+        document_filter = DocumentFilterTransform(zero_length_filter)
+        pipeline = document_filter[pipeline]
 
     if args.uniform_covariance:
         ucov = LeCunnVarianceScalingTransform(pipeline)

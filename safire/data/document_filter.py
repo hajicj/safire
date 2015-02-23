@@ -144,15 +144,23 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
         is created, the docname <=> persistent docid mapping is filtered as
         well.
 
-        Note that every time __iter__ is called, the corpus is re-set.
-        The intended pattern"""
+        Note that every time __iter__ is called, the corpus is re-set."""
+        print '\n   Starting document filter corpus iteration...\n'
         self.reset()
         docid_iterator = iter(list(iter(self.persistent_id2doc)))
+        # This causes a problem with a StopIteration when the underlying corpus
+        # has not been iterated over.
         if self.chunksize is not None:
+            print 'Using chunksize.'
             for chunk in gensim.utils.grouper(self.corpus, self.chunksize,
                                               as_numpy=self.dense_throughput):
                 for item in chunk:
                     persistent_docid = docid_iterator.next()
+                    print 'Filtering document with persistent ID {0}' \
+                          ', docname {1}' \
+                          ''.format(persistent_docid,
+                                    self.persistent_id2doc[persistent_docid])
+
                     transformed = self.obj[item]
                     if transformed:
                         # Update new <=> old mapping
@@ -171,12 +179,15 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
                         self._remove_docid(persistent_docid)
                         continue
         else:
+            print 'Not using chunksize.'
+            print 'Input corpus: {0}'.format(type(self.corpus))
             for counter, doc in enumerate(self.corpus):
+                print 'Counter: {0}, doc: {1}'.format(counter, doc)
                 persistent_docid = docid_iterator.next()
-                # print 'Filtering document with persistent ID {0}' \
-                #       ', docname {1}' \
-                #       ''.format(persistent_docid,
-                #                 self.persistent_id2doc[persistent_docid])
+                print 'Filtering document with persistent ID {0}' \
+                      ', docname {1}' \
+                      ''.format(persistent_docid,
+                                self.persistent_id2doc[persistent_docid])
                 transformed = self.obj[doc]
                 if transformed:
                     # Update new <=> old mapping
