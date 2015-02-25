@@ -10,6 +10,7 @@ safire/corpora/__init__.py
 safire/data/MNIST.py
 safire/data/SAFIRE.py
 safire/data/__init__.py
+safire/data/document_filter.py
 safire/data/frequency_based_transform.py
 safire/data/image_browser.py
 safire/data/imagenetcorpus.py
@@ -24,6 +25,7 @@ safire/data/vtextcorpus.py
 safire/data/word2vec_transformer.py
 safire/data/filters/__init__.py
 safire/data/filters/basefilter.py
+safire/data/filters/frequency_filters.py
 safire/data/filters/positional_filters.py
 safire/data/filters/positionaltagfilter.py
 safire/datasets/__init__.py
@@ -91,6 +93,7 @@ test/test_clamped_sampler.py
 test/test_corpus2dense.py
 test/test_da_unsupervised_training.py
 test/test_dataset_transformers.py
+test/test_document_filter.py
 test/test_frequency_based_transform.py
 test/test_handle_saveload.py
 test/test_layouts.py

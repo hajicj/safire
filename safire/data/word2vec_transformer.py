@@ -79,7 +79,9 @@ class Word2VecTransformer(TransformationABC):
             ``embeddings`` parameter to point to a pickled embeddings dict
             instead of a vectors file.
 
-        :param deUFALize: If this flag is set, will assume that
+        :param deUFALize: If this flag is set, will assume that the id2word
+            values are UFAL lemmas that need to be further standardized to
+            correspond to basic forms that are in the word2vec embeddings dict.
         """
         if from_pickle:
             if not isinstance(embeddings, str):
@@ -155,12 +157,19 @@ class Word2VecTransformer(TransformationABC):
         embeddings = numpy.zeros((len(bow), self.n_out))
         has_hit = False
         for i, item in enumerate(bow):
-            wid = item[0]
+            try:
+                wid = item[0]
+            except IndexError:
+                logging.error('IndexError in item of type {0}: {1}'
+                              ''.format(type(item), item))
+                logging.error('Problem document: type {0}\n{1}'
+                              ''.format(type(bow), bow))
+                raise
             word = self._id2word(wid)
             try:
                 embedding = self.embeddings[word]
                 #logging.info('Embedding: %s with shape %s' % (
-                #    type(embedding), str(embedding.shape)))
+                #    btype(embedding), str(embedding.shape)))
                 embeddings[i, :] = embedding
                 has_hit = True
                 self.hit_ids.add(wid)

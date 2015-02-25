@@ -59,7 +59,7 @@ class TestShardedCorpus(unittest.TestCase):
 
     def test_getitem(self):
 
-        self.corpus.gensim = False
+        self.corpus.gensim_retrieval = False
 
         _ = self.corpus[130]
         # Does retrieving the item load the correct shard?
@@ -75,7 +75,7 @@ class TestShardedCorpus(unittest.TestCase):
 
     def test_getitem_advanced_indexing(self):
 
-        self.corpus.gensim = False
+        self.corpus.gensim_retrieval = False
         self.assertTrue(numpy.array_equal(self.corpus[-1],
                                           self.corpus[len(self.corpus) - 1]))
         self.assertTrue(numpy.array_equal(self.corpus[-4:-1],

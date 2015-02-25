@@ -29,7 +29,8 @@ from safire.data.loaders import MultimodalShardedDatasetLoader, IndexLoader
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.data.frequency_based_transform import FrequencyBasedTransformer
 from safire.utils.transcorp import get_id2word_obj, \
-    log_corpus_stack, dimension, compute_docname_flatten_mapping
+    log_corpus_stack, dimension, compute_docname_flatten_mapping, \
+    convert_to_gensim
 from safire.utils.transformers import GlobalUnitScalingTransform, \
     LeCunnVarianceScalingTransform, GeneralFunctionTransform, \
     NormalizationTransform, CappedNormalizationTransform, SimilarityTransformer
@@ -370,6 +371,7 @@ def main(args):
         w2v_dictionary = get_id2word_obj(pipeline)
         # Extracting dictionary from FrequencyBasedTransform supported
         # through utils.transcorp.KeymapDict
+        pipeline = convert_to_gensim(pipeline)
         word2vec = Word2VecTransformer(args.word2vec,
                                        w2v_dictionary,
                                        op=args.word2vec_op)

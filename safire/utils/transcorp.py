@@ -422,14 +422,25 @@ def convert_to_gensim(corpus):
     If the given corpus is of a type that can support gensim output by itself
     (for example a SwapoutCorpus with a ShardedCorpus back-end), will instead
     set the corpus output type to gensim.
+
+    Can deal with setting SwapoutCorpus/ShardedCorpus output to gensim, checking
+    an item for being a gensim sparse vector already (assumes empty list is a
+    a gensim document, which is a policy different from gensim is_corpus) and
+    converting numpy ndarrays and scipy sparse matrices using another block.
     """
     # Straightforward: if we have a gensim output-capable corpus, set it to
     # gensim output.
+    logging.info('Converting pipeline to gensim output:\n{0}'
+                 ''.format(log_corpus_stack(corpus)))
     if isinstance(corpus, safire.data.serializer.SwapoutCorpus) \
-            and isinstance(corpus.obj, ShardedCorpus):
-            corpus.obj.gensim_retrieval = True
-            corpus.obj.sparse_retrieval = False
-            return corpus
+            and isinstance(corpus.obj, ShardedCorpus):#  \
+            #and isinstance(corpus.obj.serializaton_class, ShardedCorpus):
+        logging.info('SwapoutCorpus/ShardedCorpus serializer detected, '
+                     'setting gensim_retrieval to True.')
+        corpus.obj.gensim_retrieval = True
+        corpus.obj.sparse_retrieval = False
+        logging.info('First item of corpus: {0}'.format(corpus[0]))
+        return corpus
 
     else:
         item = iter(corpus).next()

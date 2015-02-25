@@ -162,12 +162,12 @@ class ShardedCorpus(IndexedCorpus):
 
         self.dim = dim  # This number may change during initialization/loading.
 
-        # Sparse vs. dense serialization and retrieval.
+        # Sparse vs. dense vs. gensim serialization and retrieval.
         self._pickle_protocol = -1
         self.sparse_serialization = sparse_serialization
         self.gensim_serialization = gensim_serialization
         self.sparse_retrieval = sparse_retrieval
-        self.gensim = gensim_retrieval
+        self.gensim_retrieval = gensim_retrieval
 
         # The "state" of the dataset.
         self.current_shard = None    # The current shard itself (numpy ndarray)
@@ -393,11 +393,11 @@ class ShardedCorpus(IndexedCorpus):
         :type shardsize: int
         :param shardsize: The new shard size.
         """
-        gensim = self.gensim
+        gensim = self.gensim_retrieval
         sparse_retrieval = self.sparse_retrieval
 
         self.sparse_retrieval = self.sparse_serialization
-        self.gensim = False
+        self.gensim_retrieval = False
 
         # Determine how many new shards there will be
         n_new_shards = int(math.floor(self.n_docs / float(shardsize)))
@@ -456,7 +456,7 @@ class ShardedCorpus(IndexedCorpus):
                 self.offsets = new_offsets
                 self.shardsize = shardsize
                 self.reset()
-                self.gensim = gensim
+                self.gensim_retrieval = gensim
                 self.sparse_retrieval = sparse_retrieval
 
     def _shard_name(self, n):
@@ -557,13 +557,13 @@ class ShardedCorpus(IndexedCorpus):
             if self.sparse_serialization:
                 l_result = sparse.vstack([self.get_by_offset(i)
                                           for i in offset])
-                if self.gensim:
+                if self.gensim_retrieval:
                     l_result = self._getitem_sparse2gensim(l_result)
                 elif not self.sparse_retrieval:
                     l_result = numpy.array(l_result.todense())
             else:
                 l_result = numpy.array([self.get_by_offset(i) for i in offset])
-                if self.gensim:
+                if self.gensim_retrieval:
                     l_result = self._getitem_dense2gensim(l_result)
                 elif self.sparse_retrieval:
                     l_result = sparse.csr_matrix(l_result)
@@ -735,7 +735,7 @@ class ShardedCorpus(IndexedCorpus):
 
     def _getitem_format(self, s_result):
         if self.gensim_serialization:
-            if self.gensim:
+            if self.gensim_retrieval:
                 if isinstance(s_result[0], tuple):
                     return s_result
                 else:
@@ -746,12 +746,12 @@ class ShardedCorpus(IndexedCorpus):
                 if self.sparse_retrieval:
                     s_result = sparse.csr_matrix(s_result)
         elif self.sparse_serialization:
-            if self.gensim:
+            if self.gensim_retrieval:
                 s_result = self._getitem_sparse2gensim(s_result)
             elif not self.sparse_retrieval:
                 s_result = numpy.array(s_result.todense())
         else:
-            if self.gensim:
+            if self.gensim_retrieval:
                 s_result = self._getitem_dense2gensim(s_result)
             elif self.sparse_retrieval:
                 s_result = sparse.csr_matrix(s_result)
