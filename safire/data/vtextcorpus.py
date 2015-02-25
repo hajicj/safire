@@ -309,7 +309,7 @@ class VTextCorpus(TextCorpus):
             doc = doc.strip()
             doc_short_name = doc
 
-            logging.info('Operating on document {0}'.format(doc_short_name))
+            # logging.info('Operating on document {0}'.format(doc_short_name))
 
             doc = self.doc_full_path(doc)
             if not self.precompute_vtlist:
@@ -320,14 +320,14 @@ class VTextCorpus(TextCorpus):
                 document, sentences = self.parse_document_and_sentences(
                     doc_handle)
 
-            if len(document) <= 10:
-                logging.info(u'Total tokens in document {0}: {1} |\n {2}'
-                             u''.format(doc_short_name, len(document),
-                                        '\n '.join([unicode(d)
-                                                    for d in document])))
-            else:
-                logging.info(u'Total tokens in document {0}: {1}'
-                             u''.format(doc_short_name, len(document)))
+            # if len(document) <= 10:
+            #     logging.info(u'Total tokens in document {0}: {1} |\n {2}'
+            #                  u''.format(doc_short_name, len(document),
+            #                             '\n '.join([unicode(d)
+            #                                         for d in document])))
+            # else:
+            #     logging.info(u'Total tokens in document {0}: {1}'
+            #                  u''.format(doc_short_name, len(document)))
 
             if self.tokens:
                 for token in document:
@@ -340,7 +340,7 @@ class VTextCorpus(TextCorpus):
                     self.n_processed += 1
                     self.n_words_processed += 1
 
-                    logging.info(' Yielding token: {0}'.format([token]))
+                    # logging.info(' Yielding token: {0}'.format([token]))
                     yield [token]
 
             elif self.sentences:

@@ -430,14 +430,15 @@ def main(args):
     elif args.serialization_format == 'gensim':
         gensim_serialization = True
     elif args.serialization_format != 'dense':
-        logging.warn('Invalid serialization format specified ({0}), serializing '
-                     'as dense.'.format(args.serialization_format))
+        logging.warn('Invalid serialization format specified ({0}), serializing'
+                     ' as dense.'.format(args.serialization_format))
     serializer_block = Serializer(pipeline, serializer_class,
                                   data_name,
                                   dim=dimension(pipeline),
                                   gensim_serialization=gensim_serialization,
                                   sparse_serialization=sparse_serialization,
-                                  overwrite=(not args.no_overwrite))
+                                  overwrite=(not args.no_overwrite),
+                                  shardsize=args.shardsize)
     serialization_end_time = time.clock()
     logging.info('Serialization finished: {0}'.format(serialization_end_time))
 

@@ -95,6 +95,9 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
     be handled correctly. This includes several different DocumentFilters on the
     same pipeline!
 
+    Note that the __iter__ expects the corpus to have a fully populated id2doc
+    dictionary.
+
     """
     def __init__(self, obj, corpus, chunksize=None, dense_throughput=False):
 

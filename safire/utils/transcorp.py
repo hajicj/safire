@@ -26,6 +26,7 @@ from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
 import gensim.matutils
 import numpy
+import scipy.sparse
 
 from safire.data import FrequencyBasedTransformer, VTextCorpus
 import safire.data.serializer
@@ -413,6 +414,43 @@ def convert_to_dense(corpus):
         # on something that behaves like a corpus but is not an instance of
         # CorpusABC.
         return transformer._apply(corpus)
+
+
+def convert_to_gensim(corpus):
+    """Adds a utility block that outputs items in gensim sparse vector format.
+
+    If the given corpus is of a type that can support gensim output by itself
+    (for example a SwapoutCorpus with a ShardedCorpus back-end), will instead
+    set the corpus output type to gensim.
+    """
+    # Straightforward: if we have a gensim output-capable corpus, set it to
+    # gensim output.
+    if isinstance(corpus, safire.data.serializer.SwapoutCorpus) \
+            and isinstance(corpus.obj, ShardedCorpus):
+            corpus.obj.gensim_retrieval = True
+            corpus.obj.sparse_retrieval = False
+            return corpus
+
+    else:
+        item = iter(corpus).next()
+        if isinstance(item, list):
+            if len(item) == 0: # Assumes gensim output
+                logging.warn('Conversion to gensim: found empty list as item 0,'
+                             ' assuming gensim format on input and not '
+                             'performing any conversion. (Corpus type: {0})'
+                             ''.format(type(corpus)))
+                return corpus
+            else:
+                if isinstance(item[0], tuple):
+                    return corpus
+        if isinstance(item, numpy.ndarray):
+            return gensim.matutils.Dense2Corpus(itertools.chain(item, corpus))
+        elif isinstance(item, scipy.sparse.csr_matrix):
+            return gensim.matutils.Scipy2Corpus(itertools.chain(item, corpus))
+        else:
+            raise ValueError('Cannot perform conversion to gensim, unidentified'
+                             ' item type (type: {0}, item: {1})'
+                             ''.format(type(item), item))
 
 
 def find_type_in_pipeline(pipeline, type_to_find):
