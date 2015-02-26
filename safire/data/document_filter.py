@@ -129,6 +129,7 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
         self.new2old = dict()
         self.old2new = dict()
 
+        self.n_removed = 0
         self.n_passed = 0
 
     def reset(self):
@@ -140,6 +141,7 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
         self.new2old = dict()
         self.old2new = dict()
         self.n_passed = 0
+        self.n_removed = 0
 
     def __iter__(self):
         """Iterates over the input corpus, skipping documents that do not pass
@@ -153,6 +155,12 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
         docid_iterator = iter(list(iter(self.persistent_id2doc)))
         # This causes a problem with a StopIteration when the underlying corpus
         # has not been iterated over.
+        # Also: needs ordering???
+        logging.debug('{0}'.format(self.persistent_id2doc[6330]))
+        logging.debug('{0}'.format(self.persistent_id2doc[0]))
+        logging.debug('{0}'.format(self.persistent_id2doc[6331]))
+        logging.debug('{0}'.format(self.persistent_id2doc[1]))
+        logging.debug('self.corpus length: {0}'.format(len(self.corpus)))
         if self.chunksize is not None:
             logging.debug('Using chunksize.')
             for chunk in gensim.utils.grouper(self.corpus, self.chunksize,
@@ -185,12 +193,15 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
             logging.debug('Not using chunksize.')
             logging.debug('Input corpus: {0}'.format(type(self.corpus)))
             for counter, doc in enumerate(self.corpus):
-                logging.debug('Counter: {0}, doc: {1}'.format(counter, doc))
                 persistent_docid = docid_iterator.next()
+
+                logging.debug('Counter: {0}'.format(counter))
                 logging.debug('Filtering document with persistent ID {0}'
                               ', docname {1}'
                               ''.format(persistent_docid,
                                         self.persistent_id2doc[persistent_docid]))
+                logging.debug('  Available doc2id: {0}'
+                              ''.format(self.persistent_doc2id[self.persistent_id2doc[persistent_docid]]))
                 transformed = self.obj[doc]
                 if transformed:
                     # Update new <=> old mapping
@@ -244,8 +255,17 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
         docname = self.persistent_id2doc[docid]
         try:
             self.persistent_doc2id[docname].remove(docid)
+            self.n_removed += 1
+            del self.persistent_id2doc[docid]
         except KeyError:
-            print 'persistent_doc2id[{0}] = {1}' \
-                  ''.format(docname, self.persistent_doc2id[docname])
+            logging.error('persistent_doc2id[{0}] = {1}' \
+                          ''.format(docname, self.persistent_doc2id[docname]))
+            logging.error('len(self.persistent_doc2id) = {0}'
+                          ''.format(len(self.persistent_doc2id)))
+            logging.error('len(self.persistent_id2doc) = {0}'
+                          ''.format(len(self.persistent_id2doc)))
+            logging.error('Total items in self.persistent_doc2id: {0}'
+                          ''.format(sum([len(x) for x in self.persistent_doc2id.values()])))
+            logging.error('Total items removed: {0}'.format(self.n_removed))
             raise
-        del self.persistent_id2doc[docid]
+

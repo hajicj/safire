@@ -230,6 +230,9 @@ class VTextCorpus(TextCorpus):
                              ' setting self.precompute_vtlist to false.')
                 self.precompute_vtlist = False
             else:
+                logging.debug('Precomputing vtlist '
+                              '(self.precompute_vtlist = {0}'
+                              ''.format(self.precompute_vtlist))
                 self.vtlist = self._precompute_vtlist(self.input)
 
         # Caching
@@ -335,6 +338,7 @@ class VTextCorpus(TextCorpus):
                     if self.locked and token not in self.dictionary.token2id:
                         continue
                     self.doc2id[docid].add(total_yielded)
+                    logging.debug('Adding to id2doc[{0}]: {1}'.format(len(self.id2doc), docid))
                     self.id2doc[len(self.id2doc)] = docid
                     total_yielded += 1
                     self.n_processed += 1
@@ -359,6 +363,8 @@ class VTextCorpus(TextCorpus):
 
             else:
                 # Update document mappings
+                if self.tokens:
+                    logging.debug('Yielding DOCUMENT!!!\n\n')
                 if not self.precompute_vtlist:
                     docid = doc_short_name
                     self.doc2id[docid].add(total_yielded)
@@ -531,6 +537,7 @@ class VTextCorpus(TextCorpus):
         self.doc2id = collections.defaultdict(set)
         self.id2doc = collections.defaultdict(str)
         if self.precompute_vtlist:
+            logging.info('Precomputing vtlist in reset_input()')
             self.vtlist = self._precompute_vtlist(self.input)
         self._memory.clear()
         if lock:
@@ -660,6 +667,7 @@ class VTextCorpus(TextCorpus):
     def _precompute_vtlist(self, input):
         # Should also compute the doc2id and id2doc mapping.
         # Does NOT support sentences.
+        logging.info('VTextCorpus: precomputing vtlist.')
         if not isinstance(input, str):
             raise TypeError('Cannot precompute vtlist from a handle,'
                             ' must supply parameter input as filename.')

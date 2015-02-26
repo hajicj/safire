@@ -152,7 +152,8 @@ class Word2VecTransformer(TransformationABC):
         if len(bow) == 0:
             logging.debug('Running empty doc through Word2VecTransformer.')
         else:
-            logging.debug('-- Word2VecTransformer doc length=%d --' % len(bow))
+            #logging.debug('-- Word2VecTransformer doc length=%d --' % len(bow))
+            pass
 
         embeddings = numpy.zeros((len(bow), self.n_out))
         has_hit = False

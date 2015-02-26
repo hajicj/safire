@@ -408,12 +408,18 @@ def main(args):
 
     if isinstance(pipeline, VTextCorpus):
         logging.info('Checking that VTextCorpus dimension is available.')
-        if not pipeline.precompute_vtlist:
-            pipeline._precompute_vtlist(pipeline.input)
+        #if not pipeline.precompute_vtlist:
+        #    logging.info('    ...to get dimension: precomputing vtlist.')
+        #    pipeline._precompute_vtlist(pipeline.input)
         if pipeline.n_processed < len(pipeline.vtlist):
             logging.info('Have to dry_run() the pipeline\'s VTextCorpus,'
                          'because we cannot derive its dimension.')
-            pipeline.dry_run()
+            if args.serialization_format == 'gensim':
+                logging.info('...deferring dimension check to serialization,'
+                             ' as the requested serialization format does not'
+                             ' need dimension defined beforehand.')
+            else:
+                pipeline.dry_run()
 
     data_name = loader.pipeline_serialization_target(args.label)
     logging.info('  Data name: {0}'.format(data_name))
