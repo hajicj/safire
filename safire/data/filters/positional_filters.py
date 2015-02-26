@@ -18,11 +18,10 @@ def first_k(sentences, k=None):
 
 
 def words_from_first_k(sentences, k):
-    """Retain only words that occur in the first K sentences."""
+    """Retain words that occur in the first K sentences (but retain all their
+    occurrences in the following sentences as well)."""
     retain_words = frozenset(list(itertools.chain(*sentences[:k])))
-    out_sentences = [ [ w for w in s if w in retain_words ] for s in sentences ]
-    #print "sentences: %s" % '\n'.join([' '.join(s) for s in sentences])
-    #print "out_sentences: %s" % '\n'.join([' '.join(s) for s in out_sentences])
+    out_sentences = [[w for w in s if w in retain_words] for s in sentences]
     return out_sentences
 
 
@@ -38,5 +37,12 @@ def words_from_first_p(sentences, p):
     the beginning."""
     k = int(math.ceil(len(sentences) * p))
     retain_words = frozenset(list(itertools.chain(*sentences[:k])))
-    out_sentences = [ [ w for w in s if w in retain_words ] for s in sentences ]
+    out_sentences = [[w for w in s if w in retain_words] for s in sentences]
     return out_sentences
+
+
+def words_from_first_k_plus_p(sentences, p, k):
+    """Returns words from the first ``k + (n_sentences - k) * p`` sentences."""
+    k_sentences = words_from_first_k(sentences, k)
+    p_sentences = words_from_first_p(sentences[k:], p)
+    return list(itertools.chain(k_sentences, p_sentences))

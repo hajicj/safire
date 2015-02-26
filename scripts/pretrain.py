@@ -352,8 +352,9 @@ def main(args):
 
         if not args.w2v:
             #    - Serialize, because multimodal indexed retrieval is *slow*
+            mm_serialization_label = args.text_label + '__' + args.img_label
             serialization_name = mdloader.pipeline_serialization_target(
-                args.text_label + '__' + args.img_label)
+                mm_serialization_label)
             logging.info('Serializing flattened multimodal data to {0}.'
                          ''.format(serialization_name))
 
@@ -363,6 +364,9 @@ def main(args):
                                     dim=dimension(pipeline),
                                     gensim_retrieval=False)
             pipeline = serializer[pipeline]
+
+            mm_name = mdloader.pipeline_name(mm_serialization_label)
+            pipeline.save(mm_name)
         else:
             logging.warn('Word2vec sampling active, cannot serialize flattened'
                          'corpus.')
