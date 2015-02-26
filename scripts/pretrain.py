@@ -360,7 +360,8 @@ def main(args):
             logging.debug('Pre-serialization pipeline: {0}'
                           ''.format(log_corpus_stack(pipeline)))
             serializer = Serializer(pipeline, ShardedCorpus, serialization_name,
-                                    dim=dimension(pipeline), gensim=False)
+                                    dim=dimension(pipeline),
+                                    gensim_retrieval=False)
             pipeline = serializer[pipeline]
         else:
             logging.warn('Word2vec sampling active, cannot serialize flattened'
@@ -470,7 +471,8 @@ def main(args):
     # Training starts here.
     transformer = SafireTransformer(model_handle, dataset, learner,
                                     attempt_resume=args.resume,
-                                    profile_training=args.profile_training)
+                                    profile_training=args.profile_training,
+                                    dense_throughput=True)
 
     # Training is done at this point.
 

@@ -387,6 +387,7 @@ def main(args):
         pipeline = ucov[pipeline]
 
     if args.tanh:
+        pipeline = convert_to_gensim(pipeline)
         tanh_transform = GeneralFunctionTransform(numpy.tanh,
                                                   multiplicative_coef=args.tanh)
         pipeline = tanh_transform[pipeline]

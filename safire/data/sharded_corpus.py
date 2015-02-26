@@ -175,6 +175,10 @@ class ShardedCorpus(IndexedCorpus):
         self.current_offset = None   # The index into the dataset which
                                      # corresponds to index 0 of current shard
 
+        logging.info('ShardedCorpus args: {0}'.format('\n'.join(
+            ['{0}: {1}'.format(k, v) for k, v in self.__dict__.items()]
+        )))
+
         logging.info('Initializing sharded corpus with prefix %s' % output_prefix)
         if (not os.path.isfile(output_prefix)) or overwrite:
             logging.info('Building from corpus...')
@@ -235,6 +239,7 @@ class ShardedCorpus(IndexedCorpus):
             logging.info('Chunk type: {0}, length {1}'
                          ''.format(type(doc_chunk), len(doc_chunk)))
             logging.info('Chunk element type: {0}'.format(type(doc_chunk[0])))
+            logging.debug('Chunk element: {0}'.format(doc_chunk[0]))
 
             # No conversion necessary.
             if self.gensim_serialization:
@@ -250,6 +255,7 @@ class ShardedCorpus(IndexedCorpus):
                     current_shard[i][:] = doc[:]
             else:
                 for i, doc in enumerate(doc_chunk):
+                    logging.debug('Converting from gensim corpus: {0}'.format(doc))
                     doc = dict(doc)
                     current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
 
@@ -855,3 +861,23 @@ class ShardedCorpus(IndexedCorpus):
         serializer.save_corpus(fname, corpus, id2word=id2word,
                                progress_cnt=progress_cnt, metadata=metadata,
                                **kwargs)
+
+    @classmethod
+    def clear_instance(cls, instance):
+        """Deletes all shards belonging to the given instance and then deletes
+        the instance."""
+        if not isinstance(instance, ShardedCorpus):
+            raise TypeError('ShardedCorpus.clear() received an instance of '
+                            'something else than ShardedCorpus, cannot clear!'
+                            ' Received type: {0}'.format(type(instance)))
+
+        logging.info('Clearing ShardedCorpus with output prefix {0}'
+                     ''.format(instance.output_prefix))
+        for i in xrange(instance.n_shards):
+            filename = instance._shard_name(i)
+            logging.info('Clearing shard no. {0}: {1}'.format(i, filename))
+            os.remove(filename)
+
+        logging.info('Clearing')
+        os.remove(instance.output_prefix)
+        del instance

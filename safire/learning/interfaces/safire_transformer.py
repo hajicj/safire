@@ -131,7 +131,7 @@ class SafireTransformer(TransformationABC):
         self.n_out = self.model_handle.n_out
 
         self.chunksize = chunksize
-        self.eps = eps # Using this is not implemented.
+        self.eps = eps   # Using this is not implemented.
         self.dense_throughput = dense_throughput
 
     def save(self, fname, protocol=-1):
@@ -177,25 +177,27 @@ class SafireTransformer(TransformationABC):
         # Note that the ``corpus2dense`` function returns a numpy ndarray with
         # documents as *columns*, while the safire model expects documents as
         # *rows*.
+
+        # logging.debug('SFtrans bag of words type: {0}'.format(type(bow)))
         if not isinstance(bow, numpy.ndarray):
 
             if self.dense_throughput:
                 raise TypeError('dense_throughput set, expecting numpy.ndarray'
                                 'input (got: {0})'.format(type(bow)))
 
-            logging.debug('SFtrans bag of words type: {0}'.format(type(bow)))
             is_corpus, bow = gensim.utils.is_corpus(bow)
             # if not is_corpus:  # If we got a single item: make a one-item
             #                    # corpus from it, to simplify code path.
             #     pass
             if isinstance(bow[0], tuple):  # If we get a single gensim-style
                 bow = [bow]                # vector, we convert it to a 1-doc
-                                           # corpus.
+                # corpus.
 
             # dense_bow = gensim.matutils.corpus2dense(bow,
             #                                          self.n_in,
             #                                          len(bow)).T
             #print 'SFtrans bag of words: {0}'.format(bow)
+
             dense_bow = gensim2ndarray(bow, self.n_in, len(bow))
             # Why not gensim.matutils.corpus2dense? Tansposition!
             # (Due to gensim's corpus2dense returning documents as columns.)
@@ -211,14 +213,19 @@ class SafireTransformer(TransformationABC):
 
         else:
             # This is a bad solution if we *want* dense output.
+            #logging.debug('Dense_out: {0}'.format(dense_out))
             sparse_out = gensim.matutils.Dense2Corpus(dense_out,
                                                       documents_columns=False)#,
-                                                      #eps=self.eps) Param
-                                                      # not available in gensim
-                                                      # 0.10.1
+            #eps=self.eps) Param
+            # not available in gensim
+            # 0.10.1
 
             sparse_out = list(sparse_out)  # Runs through Dense2Corpus.__iter__
             out = sparse_out
+
+        # if self.n_out == 200:  # Very bad debugging practice
+        #    logging.debug('SafireTransformer output: {0}'.format(out))
+        #    logging.debug('                  length: {0}'.format(len(out)))
 
         return out
 
