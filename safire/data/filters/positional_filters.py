@@ -41,8 +41,16 @@ def words_from_first_p(sentences, p):
     return out_sentences
 
 
-def words_from_first_k_plus_p(sentences, p, k):
-    """Returns words from the first ``k + (n_sentences - k) * p`` sentences."""
-    k_sentences = words_from_first_k(sentences, k)
-    p_sentences = words_from_first_p(sentences[k:], p)
+def first_k_plus_p(sentences, k, p):
+    """Returns the first ``k + (n_sentences - k) * p`` sentences."""
+    k_sentences = first_k(sentences, k)
+    p_sentences = first_p(sentences[k:], p)
     return list(itertools.chain(k_sentences, p_sentences))
+
+
+def words_from_first_k_plus_p(sentences, k, p):
+    """Returns words from the first ``k + (n_sentences - k) * p`` sentences."""
+    k_plus_p_sentences = first_k_plus_p(sentences, k, p)
+    words = frozenset(itertools.chain(*k_plus_p_sentences))
+    output = [[w for w in s if w in words] for s in sentences]
+    return output
