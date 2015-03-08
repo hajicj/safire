@@ -324,19 +324,35 @@ class SimilarityTransformer(gensim.interfaces.TransformationABC):
     (albeit from the same vector space as the database vectors) will come as
     queries.
     """
-    def __init__(self, corpus, prefix, **index_init_args):
+    def __init__(self, index=None, corpus=None, prefix=None, **index_init_args):
         """Initializes the similarity index with the given prefix from the given
         corpus. The ``num_features`` argument is derived from the corpus using
         the usual ``safire.utils.transcorp.dimension()`` function.
 
+        Either initializes directly from a finished Similarity index, or
+        constructs the index from a supplied corpus to the given prefix (file).
+
         Other gensim.similarities.Similarity class init kwargs can be
         provided.
-        T"""
+        """
         # Initialize the similarity index
-        dim = safire.utils.transcorp.dimension(corpus)
-        self.index = Similarity(prefix, corpus,
-                                num_features=dim,
-                                **index_init_args)
+        if index is not None:
+            if prefix is not None:
+                logging.warn('Initializing SimilarityTransformer with both '
+                             'index and prefix. (Index prefix: {0}, supplied '
+                             'prefix: {1})'.format(index.output_prefix, prefix))
+            if corpus is not None:
+                logging.warn('Initializing SimilarityTransformer with both '
+                             'index and corpus, corpus will be ignored. '
+                             '(Index prefix: {0}, supplied corpus: {1})'
+                             ''.format(index.output_prefix,
+                                       type(corpus)))
+            self.index = index
+        else:
+            dim = safire.utils.transcorp.dimension(corpus)
+            self.index = Similarity(prefix, corpus,
+                                    num_features=dim,
+                                    **index_init_args)
 
     def __getitem__(self, item):
 

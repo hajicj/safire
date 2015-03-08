@@ -10,11 +10,13 @@ import os
 from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
 import logging
+from gensim.similarities import Similarity
 import numpy
 import time
 import theano
 from safire.data.document_filter import DocumentFilterTransform
 from safire.data.filters.frequency_filters import zero_length_filter
+from safire.data.loaders import IndexLoader
 from safire.data.word2vec_transformer import Word2VecTransformer
 from safire.datasets.word2vec_transformer import \
     Word2VecSamplingDatasetTransformer
@@ -33,7 +35,7 @@ from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.datasets.dataset import Dataset, CompositeDataset
 from safire.utils.transformers import LeCunnVarianceScalingTransform, \
-    GeneralFunctionTransform
+    GeneralFunctionTransform, SimilarityTransformer
 from safire.data import VTextCorpus, FrequencyBasedTransformer
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from test.safire_test_case import SafireTestCase
@@ -445,9 +447,6 @@ class TestPipeline(SafireTestCase):
 
         doc = iter(token_word2vec_pipeline).next()
         self.assertEqual(len(doc), 200)
-        #print doc
-        #docs = [d for d in token_word2vec_pipeline]
-        #print 'Total tokens: {0}'.format(len(docs))
 
         # Combine the pipeline with the image data.
         tdata = Dataset(token_word2vec_pipeline)
@@ -515,6 +514,152 @@ class TestPipeline(SafireTestCase):
         output = sftrans[dataset]
 
         self.assertIsInstance(output, TransformedCorpus)
+
+    def test_multimodal_retrieval(self):
+        """Tests a scenario where a multimodal pipeline is created,
+        a model is trained, a ClampedMultimodalSamplingHandle is created and
+        retrieval is attempted from an index by means of SimilarityTransformer.
+        The index is built from the highest available level of the image data
+        source.
+
+        Uses over a dozen safire features:
+
+        * POS filtering,
+        * token-based retrieval,
+        * word2vec conversion,
+        * filtering word2vec vocabulary misses,
+        * tanh transform on both text and image pipeline,
+        * serialization of text and image pipeline pre-flattening,
+        * combining text and image pipelines by indexes derived from t2i file
+          for token-based corpus,
+        * serialization post-flattening; clearing pre-flattening temporary data,
+        * DenoisingAutoencoder training,
+        * clamped sampling from joint model,
+        * conversion of image pipeline to similarity index,
+        * querying image index with text queries converted by trained pipeline.
+
+        This scenario does NOT test further processing of similarity query
+        results, it only collects those queries.
+        """
+        # - build image pipeline
+        # - build text pipeline
+        # - combine image and text pipelines (with pre- and post-serialization,
+        #   clearing the pre-serialization data)
+        # - train multimodal model
+        # - create t2i transformation pipeline based on multimodal model
+        # - create image index
+        # - add SimilarityTransformer block on top of t2i pipeline
+        # - run transformation to similarity space
+
+        # Building the text pipeline.
+        text_pipeline = VTextCorpus(self.vtlist, input_root=self.data_root,
+                                    tokens=True,
+                                    **vtcorp_settings)
+        text_pipeline.dry_run()
+
+        word2vec = Word2VecTransformer(self.edict_pkl_fname,
+                                       get_id2word_obj(text_pipeline))
+        text_pipeline = word2vec[text_pipeline]
+
+        # Add empty document filtering.
+        word2vec_miss_filter = DocumentFilterTransform(zero_length_filter)
+        text_pipeline = word2vec_miss_filter[text_pipeline]
+
+        ttanh = GeneralFunctionTransform(numpy.tanh, multiplicative_coef=0.4)
+        text_pipeline = ttanh[text_pipeline]
+
+        # Serialize text.
+        t_serializer = Serializer(text_pipeline, ShardedCorpus,
+                                  self.loader.pipeline_serialization_target(
+                                      '.tcorp'))
+        text_pipeline = t_serializer[text_pipeline]
+
+        # Building the image pipeline.
+        image_file = os.path.join(self.data_root,
+                                  self.loader.layout.image_vectors)
+        image_pipeline = ImagenetCorpus(image_file, delimiter=';',
+                                        dim=4096, label='')
+        image_pipeline.dry_run()
+
+        itanh = GeneralFunctionTransform(numpy.tanh, multiplicative_coef=0.4)
+        image_pipeline = itanh[image_pipeline]
+
+        # Serialize images.
+        i_serializer = Serializer(image_pipeline,ShardedCorpus,
+                                  self.loader.pipeline_serialization_target(
+                                      'icorp'))
+        image_pipeline = i_serializer[image_pipeline]
+
+        # Flatten dataset
+        idata = Dataset(image_pipeline)
+        tdata = Dataset(text_pipeline)
+        mmdata = CompositeDataset((tdata, idata), names=('txt', 'img'),
+                                  aligned=False)
+        t2i_file = os.path.join(self.loader.root,
+                                self.loader.layout.textdoc2imdoc)
+        t2i_indexes = compute_docname_flatten_mapping(mmdata, t2i_file)
+        flatten = FlattenComposite(mmdata, indexes=t2i_indexes)
+        mm_pipeline = flatten[mmdata]
+
+        # Serialize
+        mm_serializer = Serializer(mm_pipeline, ShardedCorpus,
+                                   self.loader.pipeline_serialization_target(
+                                       'mmcorp'))
+        mm_pipeline = mm_serializer[mm_pipeline]
+
+        # Train model
+        dataset = Dataset(mm_pipeline)
+        self.model_handle = DenoisingAutoencoder.setup(dataset,
+            n_out=200,
+            activation=theano.tensor.nnet.sigmoid,
+            backward_activation=theano.tensor.tanh,
+            reconstruction='mse',
+            heavy_debug=False)
+
+        self.learner = BaseSGDLearner(20, 400, validation_frequency=10,
+                                      plot_transformation=False)
+
+        sftrans = SafireTransformer(self.model_handle,
+                                    dataset,
+                                    self.learner,
+                                    dense_throughput=False)
+        mm_pipeline = sftrans[mm_pipeline]
+
+        # Build clamped sampler
+        print '-- building clamped sampler --'
+        t2i_handle = MultimodalClampedSamplerModelHandle.clone(
+            self.model_handle,
+            dim_text=get_composite_source(mm_pipeline, 'txt').dim,
+            dim_img=get_composite_source(mm_pipeline, 'img').dim,
+            k=10,
+            sample_visible=False,
+        )
+        print '-- applying clamped sampler --'
+        t2i_transformer = SafireTransformer(t2i_handle)
+        t2i_pipeline = t2i_transformer[text_pipeline]
+
+        # Build index
+        print '-- building index --'
+        iloader = IndexLoader(self.data_root, 'test-data')
+        index = Similarity(iloader.output_prefix('.img'), image_pipeline,
+                           num_features=dimension(image_pipeline))
+
+        # Add similarity search
+        print '-- building similarity transformer --'
+        similarity_transformer = SimilarityTransformer(index=index)
+        retrieval_pipeline = similarity_transformer[t2i_pipeline]
+
+        print '-- resetting vtcorp input --'
+        reset_vtcorp_input(retrieval_pipeline, self.vtlist)
+
+        print '-- retrieving sampled images --'
+        sampled_images = [img for img in t2i_pipeline]
+
+        print '-- querying similarity index --'
+        query_results = [qres for qres in retrieval_pipeline]
+
+        self.assertTrue(len(sampled_images) == len(query_results))
+
 
 ###############################################################################
 

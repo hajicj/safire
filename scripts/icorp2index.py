@@ -73,7 +73,7 @@ def main(args):
     logging.info('Loading pipeline with label %s' % args.label)
 
     pipeline_name = dloader.pipeline_name(args.label)
-    pipeline = SaveLoad(pipeline_name)
+    pipeline = SaveLoad.load(pipeline_name)
 
     index_prefix = iloader.output_prefix(args.label)
 

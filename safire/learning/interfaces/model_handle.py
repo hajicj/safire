@@ -271,7 +271,8 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
     """
 
     def __init__(self, model_instance, train, validate, test, run,
-                 dim_text, dim_img, k=10):
+                 dim_text, dim_img, k=10,
+                 sample_hidden=True, sample_visible=True):
         """Initializes the handle. Assumes the model is sample-able.
 
         :type model_instance: safire.learning.models.BaseModel
@@ -303,7 +304,20 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
 
         :type k: int
         :param k: The number of sampling steps to produce an image sample.
-            The first ``k - 1`` steps are sampled, the
+            Note that setting ``k=1`` will not sample anything at all and use
+            the hidden/visible mean in the one vhv step.
+
+        :type sample_visible: bool
+        :param sample_visible: If set, will sample the visible layer during the
+            first ``k - 1`` steps. Otherwise, uses visible mean. Note that
+            sampling only works when the visible layer activations are in the
+            range ``(0, 1)``. True by default.
+
+        :type sample_hidden: bool
+        :param sample_hidden: If set, will sample the hidden layer during the
+            first ``k - 1`` steps. Otherwise, uses hidden mean. Note that
+            sampling only works when the hidden layer activations are in the
+            range ``(0, 1)``. True by default.
 
         """
         self.model_instance = model_instance
@@ -322,6 +336,9 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
         # handles in SafireTransformer
         self.n_in = self.sampler.n_in
         self.n_out = self.sampler.n_out
+
+        self.sample_hidden = sample_hidden
+        self.sample_visible = sample_visible
 
         # The 'run' function is implemented differently.
         self.get_hidden = run
@@ -359,7 +376,9 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
         """Runs the sampler on text features input. Returns image
         representation."""
         img = self.sampler.t2i_run_chain_mean_last(text_features=text_features,
-                                                   k=self.k)
+                                                   k=self.k,
+                                                   sample_hidden=self.sample_hidden,
+                                                   sample_visible=self.sample_visible)
         return img
 
     def _export_pickleable_obj(self):

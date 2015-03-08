@@ -39,6 +39,7 @@ from safire.learning.interfaces import MultimodalClampedSamplerModelHandle, \
 from safire.learning.interfaces.model_handle import BackwardModelHandle
 from safire.utils.transcorp import dimension, get_transformers, \
     reset_vtcorp_input, bottom_corpus
+from safire.utils.transformers import SimilarityTransformer
 
 __author__ = 'Jan Hajic jr.'
 
@@ -77,11 +78,12 @@ def emit_results(results):
         r = results[text_file]
         images, similarities = zip(*r)
         img_string = ';'.join(images)
-        sim_string = ';'.join([ '%.5f' % s for s in similarities])
+        sim_string = ';'.join(['%.5f' % s for s in similarities])
         line = '\t'.join([text_file, img_string, sim_string])
         output_lines.append(line)
     output = '\n'.join(output_lines)
     return output
+
 
 ###############################################################################
 
@@ -159,15 +161,14 @@ def baseline_run(input_corpus, text_index, image_index, multimodal_dataset,
 
     # Convert to tIDs
     input_vtcorp = bottom_corpus(input_corpus)
-    tids = [ input_vtcorp.id2doc[textno]
-             for textno in xrange(len(input_corpus)) ]
+    tids = [input_vtcorp.id2doc[textno]
+            for textno in xrange(len(input_corpus))]
 
     results = {}
     for i, tid in enumerate(tids):
         results[tid] = output_w_iids[i]
 
     return results
-
 
 
 ###############################################################################
@@ -184,22 +185,28 @@ def main(args):
                                         args.joint_label)
 
     # Initialize loaders
-    logging.info('Initializing loaders (root %s, name %s).' % (args.root, args.name))
+    logging.info(
+        'Initializing loaders (root %s, name %s).' % (args.root, args.name))
     loader = MultimodalShardedDatasetLoader(args.root, args.name)
     mloader = ModelLoader(args.root, args.name)
 
     if not args.index_name:
         args.index_name = args.name
-    logging.info('Initializing index loader (root %s, name %s).' % (args.root, args.index_name))
+    logging.info('Initializing index loader (root %s, name %s).' % (
+        args.root, args.index_name))
     iloader = IndexLoader(args.root, args.index_name)
 
     # Load index
     logging.info('Loading index with label %s' % args.index_label)
     if args.index_label not in img_labels:
-        raise ValueError('Index label (%s) does not correspond to any image processing label (%s).' % (args.index_label, ', '.join(img_labels)))
+        raise ValueError(
+            'Index label (%s) does not correspond to any image processing label (%s).' % (
+                args.index_label, ', '.join(img_labels)))
     index = iloader.load_index(args.index_label)
     if args.num_best > len(index):
-        logging.warn('num_best %d greater than index size %d, setting to index size.' % (args.num_best, len(index)))
+        logging.warn(
+            'num_best %d greater than index size %d, setting to index size.' % (
+                args.num_best, len(index)))
         args.num_best = len(index)
     index.num_best = args.num_best
 
@@ -215,9 +222,11 @@ def main(args):
 
     # At this point, the baseline system code branch branches off.
     if args.baseline:
-        logging.info('Running baseline model with text index %s.' % text_labels[-1])
-        args.text_index_label = text_labels[-1] # This is fixed.
-        tiloader = IndexLoader(args.root, args.name) # Text index from training.
+        logging.info(
+            'Running baseline model with text index %s.' % text_labels[-1])
+        args.text_index_label = text_labels[-1]  # This is fixed.
+        tiloader = IndexLoader(args.root,
+                               args.name)  # Text index from training.
         text_index = tiloader.load_text_index(args.text_index_label)
         reset_vtcorp_input(text_processing_corpus, args.input)
 
@@ -264,7 +273,7 @@ def main(args):
 
     # Transformers now ordered from 0-th level. Need to get handles in reverse.
     backward_image_corpus = joint_sampling_corpus
-    for t_idx in xrange(len(transformers)-1, index_level, -1):
+    for t_idx in xrange(len(transformers) - 1, index_level, -1):
         current_handle = transformers[t_idx].model_handle
         backward_handle = BackwardModelHandle.clone(current_handle)
         backward_transformer = SafireTransformer(backward_handle)
@@ -273,37 +282,41 @@ def main(args):
         backward_image_corpus = backward_transformer[backward_image_corpus]
 
     logging.info('Full pipeline construction finished.')
-    full_pipeline = backward_image_corpus # Renaming, for clarity
+    full_pipeline = backward_image_corpus  # Renaming, for clarity
 
     # Link input vtlist
     logging.info('Setting vtcorp input to %s' % args.input)
     reset_vtcorp_input(full_pipeline, args.input)
+
+    # Add Similarity transformation.
+    similarity = SimilarityTransformer(index=index)
+    full_pipeline = similarity[full_pipeline]
 
     # At this point, the transformation pipeline is set up.
     # We now need to transform the inputs, query the image index
 
     # Run transformations on text inputs
     logging.info('Running transformation on text inputs.')
-    outputs = [ img_features for img_features in full_pipeline ]
+    outputs = [img_features for img_features in full_pipeline]
 
     # Query images
     logging.info('Querying image index.')
-    query_results = [ index[query] for query in outputs ]
+    query_results = [index[query] for query in outputs]
 
     # Map results to image files
     logging.info('Mapping results to image files...')
     icorp = bottom_corpus(img_processing_corpus)
     fnamed_query_results = []
     for query_result in query_results:
-        fq = [ (icorp.id2doc[iid], sim) for iid, sim in query_result ]
+        fq = [(icorp.id2doc[iid], sim) for iid, sim in query_result]
         fnamed_query_results.append(fq)
 
     logging.info('Mapping query documents to text files...')
     vtcorp = bottom_corpus(text_processing_corpus)
-    text_files = [ vtcorp.id2doc[i] for i in xrange(len(query_results)) ]
+    text_files = [vtcorp.id2doc[i] for i in xrange(len(query_results))]
 
     logging.info('Building results data structure.')
-    results = { t : q for t, q in zip(text_files, fnamed_query_results) }
+    results = {t: q for t, q in zip(text_files, fnamed_query_results)}
 
     # Emit results to CSV
     logging.info('Emitting results.')
@@ -315,7 +328,7 @@ def main(args):
 
 def build_argument_parser():
     parser = argparse.ArgumentParser(description=__doc__, add_help=True,
-                        formatter_class=argparse.RawDescriptionHelpFormatter)
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument('-r', '--root', required=True,
                         help='The root dataset directory, passed to Loader.')

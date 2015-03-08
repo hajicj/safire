@@ -105,6 +105,7 @@ test/test_multimodal_dataset.py
 test/test_multimodal_dataset_loader.py
 test/test_multimodal_sharded_dataset_loader.py
 test/test_pipeline.py
+test/test_positional_filters.py
 test/test_rbm_unsupervised_training.py
 test/test_rsm_unsupervised_training.py
 test/test_safire_transformer.py

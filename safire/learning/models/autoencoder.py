@@ -226,7 +226,7 @@ class Autoencoder(BaseUnsupervisedModel):
 
     def sample_v_given_h(self, hidden):
         """Samples the visible layer given the hidden layer."""
-        mean_v = self.activation(TT.dot(hidden, self.W_prime) + self.b_prime)
+        mean_v = self.backward_activation(TT.dot(hidden, self.W_prime) + self.b_prime)
         sample_v = self.theano_rng.binomial(size=mean_v.shape,
                                             n=1, p=mean_v,
                                             dtype=theano.config.floatX)
@@ -234,7 +234,7 @@ class Autoencoder(BaseUnsupervisedModel):
 
     def sample_h_given_v(self, visible):
         """Samples the hidden layer given the visible layer."""
-        mean_h = self.backward_activation(TT.dot(visible, self.W) + self.b)
+        mean_h = self.activation(TT.dot(visible, self.W) + self.b)
         sample_h = self.theano_rng.binomial(size=mean_h.shape,
                                             n=1, p=mean_h,
                                             dtype=theano.config.floatX)
