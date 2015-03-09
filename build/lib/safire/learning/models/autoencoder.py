@@ -26,7 +26,10 @@ class Autoencoder(BaseUnsupervisedModel):
                  backward_activation=TT.nnet.sigmoid,
                  reconstruction='cross-entropy',
                  W=None, W_prime=None, b=None, b_prime=None, 
-                 tied_weights=True, rng=numpy.random.RandomState(),
+                 tied_weights=True,
+                 L1_norm=0.0, L2_norm=0.0, bias_decay=0.0,
+                 sparsity_target=None, output_sparsity_target=None,
+                 rng=numpy.random.RandomState(),
                  theano_rng=None):
         """Initialize the parameters of the Autoencoder.
         An Autoencoder is an unsupervised model that tries to minimize
@@ -88,6 +91,25 @@ class Autoencoder(BaseUnsupervisedModel):
                              hidden-visible transformation use the same
                              weights.
 
+        :type sparsity_target: float
+        :param sparsity_target: The target mean for features. If set, incurs
+            a sparsity penalty: the KL divergence of a unit being either off,
+            or on.
+
+        :type output_sparsity_target: float
+        :param output_sparsity_target: The sparsity target for output vectors
+            instead of features.
+
+        :type L1_norm: float
+        :param L1_norm: L1 regularization weight (absolute value of each
+            parameter).
+
+        :type L2_norm: float
+        :param L2_norm: L2 regularization weight (quadratic value of each
+            parameter).
+
+        :type bias_decay: float
+        :param bias_decay: Adds an extra L2 penalty on the bias terms.
         """
         super(Autoencoder, self).__init__(inputs, n_in, n_out)
 
@@ -95,6 +117,12 @@ class Autoencoder(BaseUnsupervisedModel):
         self.backward_activation = backward_activation
         self.tied_weights = tied_weights # Bookkeeping, basically.
         self.reconstruction = reconstruction
+
+        self.L1_norm = L1_norm
+        self.L2_norm = L2_norm
+        self.bias_decay = bias_decay
+        self.sparsity_target = sparsity_target
+        self.output_sparsity_target = output_sparsity_target
          
         if not W:
             W = self._init_weights('W', (n_in, n_out), rng)
@@ -114,13 +142,10 @@ class Autoencoder(BaseUnsupervisedModel):
                 W_prime = self._init_weights('W_prime', (n_out, n_in), rng)
             else: # Check for consistency of supplied weights 
                 self._init_param_consistency_check(W_prime, (n_out, n_in))
+            self.W_prime = W_prime
 
         if not b:
             b = self._init_bias('b', n_out, rng)
-            # initialize the biases b as a vector of n_out 0s
-            #b = theano.shared(value = numpy.zeros((n_hidden,),
-            #                      dtype = theano.config.floatX),
-            #                  name = 'b')
 
         else:    # Check for consistency in supplied weights
             self._init_param_consistency_check(b, (n_out,))
@@ -149,7 +174,6 @@ class Autoencoder(BaseUnsupervisedModel):
 
         self.theano_rng = theano_rng
 
-
     def _init_args_snapshot(self):
         """Saves the model in the form of an init kwarg dict, since not all
         attributes of the instance can be pickled. Upon loading, the saved
@@ -166,7 +190,12 @@ class Autoencoder(BaseUnsupervisedModel):
             'activation' : self.activation,
             'tied_weights' : self.tied_weights,
             'inputs' : self.inputs,
-            'reconstruction' : self.reconstruction
+            'reconstruction' : self.reconstruction,
+            'L1_norm': self.L1_norm,
+            'L2_norm': self.L2_norm,
+            'bias_decay': self.bias_decay,
+            'sparsity_target': self.sparsity_target,
+            'output_sparsity_target': self.output_sparsity_target,
             # Random number generators are ignored?
         }
 
@@ -210,7 +239,15 @@ class Autoencoder(BaseUnsupervisedModel):
                                             n=1, p=mean_h,
                                             dtype=theano.config.floatX)
         return sample_h
-    
+
+    def sample_vhv(self, visible):
+        """Performs one Gibbs sampling step from visible to visible layer."""
+        return self.sample_v_given_h(self.sample_h_given_v(visible))
+
+    def sample_hvh(self, hidden):
+        """Performs one Gibbs sampling step from hidden to hidden layer."""
+        return self.sample_h_given_v(self.sample_v_given_h(hidden))
+
     def _reconstruction_cross_entropy(self, X):
         """Computes the reconstruction cross-entropy on X.
         
@@ -224,7 +261,7 @@ class Autoencoder(BaseUnsupervisedModel):
         activation_hidden = self.mean_h_given_v(X)
         activation_visible = self.mean_v_given_h(activation_hidden)
         return -TT.sum(X * TT.log(activation_visible) + (1 - X)
-                      * TT.log(1 - activation_visible), axis=1)
+                       * TT.log(1 - activation_visible), axis=1)
             # A -TT.sum(...) here; should the negative really be
             # there or not?
 
@@ -266,16 +303,16 @@ class Autoencoder(BaseUnsupervisedModel):
 
         :returns: The reconstruction cross-entropy (as a number)
         """
-        if self.reconstruction == 'cross-entropy':
-            return TT.mean(self._reconstruction_cross_entropy(X))
-        elif self.reconstruction == 'mse':
-            return TT.mean(self._reconstruction_squared_error(X))
-        elif self.reconstruction == 'exaggerated-mse':
-            return TT.mean(self._reconstruction_hypercubic_exploded_error(X))
-        else:
-            raise ValueError('Invalid reconstruction set! %s' % self.reconstruction)
+        return self._cost(X)
+        # if self.reconstruction == 'cross-entropy':
+        #     return TT.mean(self._reconstruction_cross_entropy(X))
+        # elif self.reconstruction == 'mse':
+        #     return TT.mean(self._reconstruction_squared_error(X))
+        # elif self.reconstruction == 'exaggerated-mse':
+        #     return TT.mean(self._reconstruction_hypercubic_exploded_error(X))
+        # else:
+        #     raise ValueError('Invalid reconstruction set! %s' % self.reconstruction)
 
-   
     def _cost(self, X):
         """Returns the mean reconstruction cross-entropy on X.
         This is the same number which is used for model error.
@@ -284,17 +321,79 @@ class Autoencoder(BaseUnsupervisedModel):
         :param X: A training batch. In comparison to a supervised model,
                   which computes cost on some response vector, the
                   unsupervised model has to compute cost on the inputs.
-                  
+
         :returns: The reconstruction cross-entropy (as a number)
         """
         if self.reconstruction == 'cross-entropy':
-            return TT.mean(self._reconstruction_cross_entropy(X))
+            cost = TT.mean(self._reconstruction_cross_entropy(X))
         elif self.reconstruction == 'mse':
-            return TT.mean(self._reconstruction_squared_error(X))
+            cost = TT.mean(self._reconstruction_squared_error(X))
         elif self.reconstruction == 'exaggerated-mse':
-            return TT.mean(self._reconstruction_hypercubic_exploded_error(X))
+            cost = TT.mean(self._reconstruction_hypercubic_exploded_error(X))
         else:
             raise ValueError('Invalid reconstruction set! %s' % self.reconstruction)
+
+        if self.L1_norm != 0.0:
+            cost += (TT.sqrt(TT.sum(self.W ** 2))
+                     + TT.sqrt(TT.sum(self.W_prime ** 2))
+                     + TT.sqrt(TT.sum(self.b ** 2))
+                     + TT.sqrt(TT.sum(self.b_prime ** 2))) * self.L1_norm
+
+        if self.L2_norm != 0.0:
+            cost += (TT.sum(self.W ** 2) + TT.sum(self.W_prime ** 2)
+                     + TT.sum(self.b ** 2) + TT.sum(self.b_prime ** 2)) \
+                    * self.L2_norm
+
+        if self.bias_decay != 0.0:
+            cost += (TT.sum(self.b ** 2) + TT.sum(self.b_prime ** 2)) \
+                    * self.bias_decay
+
+        if self.sparsity_target is not None:
+            cost += self._sparsity_cross_entropy(X)
+
+        if self.output_sparsity_target is not None:
+            print 'Setting output sparsity target: {0}'.format(self.output_sparsity_target)
+            cost += self._output_sparsity_cross_entropy(X)
+
+        return cost
+
+    def _sparsity_cross_entropy(self, X):
+        """
+        Computes the KL divergence of distribution of the sparsity target
+        w.r.t. mean activation of each hidden neuron.
+
+        :param X: The input data batch.
+
+        :return: The KL-divergence... (see desc.)
+        """
+        mean_act = TT.mean(self.activation(TT.dot(X, self.W) + self.b),
+                           axis=0)
+        rho_term = mean_act * TT.log(mean_act / self.sparsity_target)
+        mean_act_compl = 1.0 - mean_act
+        neg_rho_term = mean_act_compl * TT.log(mean_act_compl /
+                                               (1.0 - self.sparsity_target))
+        kl_divergence = TT.sum(rho_term + neg_rho_term)
+
+        return kl_divergence
+
+    def _output_sparsity_cross_entropy(self, X):
+        """
+        Computes the KL divergence of distribution of the sparsity target
+        w.r.t. mean activation of each hidden neuron.
+
+        :param X: The input data batch.
+
+        :return: The KL-divergence... (see desc.)
+        """
+        mean_act = TT.mean(self.activation(TT.dot(X, self.W) + self.b),
+                           axis=1)
+        rho_term = mean_act * TT.log(mean_act / self.output_sparsity_target)
+        mean_act_compl = 1.0 - mean_act
+        neg_rho_term = mean_act_compl * TT.log(mean_act_compl /
+                                               (1.0 - self.output_sparsity_target))
+        kl_divergence = TT.sum(rho_term + neg_rho_term)
+
+        return kl_divergence
 
     @classmethod
     def _init_args(cls): # This method will get obsolete.

@@ -200,7 +200,8 @@ class BaseModel(object):
     
     def _init_bias(self, name, length, rng = numpy.random.RandomState()):
         """Initialize a bias parameter. The bias values are set to
-        zero (default behavior).
+        0.001 (default behavior to avoid some NaN's in first iteration of
+        training).
         
         :type name: str
         :param name: The name of the bias parameter. Used in naming
@@ -217,9 +218,9 @@ class BaseModel(object):
         :rtype: theano.tensor.sharedvar.TheanoSharedVariable
         :returns: The initialized bias vector.
         """
-        b = theano.shared(value = numpy.zeros((length,),
-                          dtype = theano.config.floatX),
-                          name = name)
+        b = theano.shared(value=numpy.zeros((length,),
+                                            dtype=theano.config.floatX) + 0.001,
+                          name=name)
         return b
         
 

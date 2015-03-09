@@ -182,8 +182,6 @@ class TestUtils(SafireTestCase):
 
 
 
-
-
 if __name__ == '__main__':
     suite = unittest.TestSuite()
     loader = unittest.TestLoader()

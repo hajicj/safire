@@ -7,6 +7,10 @@ compatibility with the pipeline-building framework. Note that a lot of
 functions from safire.utils.transcorp should be tested here.
 """
 import os
+try:
+    import Image
+except ImportError:
+    from PIL import Image
 from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
 import logging
@@ -679,7 +683,14 @@ class TestPipeline(SafireTestCase):
         print '\n'.join(['{0}'.format(d) for d in sorted_qurey_results_docs])
 
         print '-- testing visualization --'
-
+        img_root = os.path.join(self.loader.root,
+                                self.loader.layout.img_dir)
+        import _imaging
+        if not hasattr(_imaging, 'jpeg_decoder'):
+            print '_imaging module loaded, no jpeg decoder.'
+        image = Image.open(os.path.join(img_root,
+                                        sorted_qurey_results_docs[0][0][0]))
+        image.show()
 
         self.assertTrue(len(sampled_images) == len(query_results))
 

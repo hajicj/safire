@@ -3,6 +3,7 @@
 #
 # Logistic regression using Theano
 #
+import logging
 
 import numpy
 import theano
@@ -367,8 +368,12 @@ class BaseUnsupervisedModel(BaseModel):
                 model_init_kwargs['n_out'] = data.n_out
             else:
                 raise ValueError('Must supply n_out either from dataset or **model_init_kwargs.')
+            logging.info('Setting model output dimension '
+                         'to {0}.'.format(model_init_kwargs['n_out']))
 
             # n_out is supplied in model_init_kwargs, either way.
+            logging.info('Setting model input dimension '
+                         'to {0}.'.format(data.n_in))
             model = cls(inputs=X, n_in=data.n_in,
                         **model_init_kwargs)
         else:

@@ -16,6 +16,7 @@ from safire.data.loaders import MultimodalShardedDatasetLoader
 
 from safire.data.vtextcorpus import VTextCorpus
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
+from safire.utils import freqdict
 from test.safire_test_case import SafireTestCase
 
 
@@ -28,7 +29,7 @@ class TestVTextCorpus(SafireTestCase):
 
         cls.vtlist_file = os.path.join(cls.data_root, 'test-data.vtlist')
         with open(cls.vtlist_file) as vtlist_handle:
-            cls.vtlist = [ line.strip() for line in open(cls.vtlist_file)]
+            cls.vtlist = [line.strip() for line in open(cls.vtlist_file)]
 
         cls.token_filter = PositionalTagTokenFilter(['N', 'A', 'D', 'V'], 0)
 
@@ -36,8 +37,8 @@ class TestVTextCorpus(SafireTestCase):
 
         self.corpus = VTextCorpus(self.vtlist_file, input_root=self.data_root)
         self.filtered_corpus = VTextCorpus(self.vtlist_file,
-                                          input_root=self.data_root,
-                                          token_filter=self.token_filter)
+                                           input_root=self.data_root,
+                                           token_filter=self.token_filter)
         self.pfiltered_corpus = VTextCorpus(self.vtlist_file,
                                             input_root=self.data_root,
                                             pfilter=0.3,
@@ -75,6 +76,29 @@ class TestVTextCorpus(SafireTestCase):
 
         self.assertEqual(10, len(docs))
 
+    def test_iter_sentences(self):
+
+        self.corpus.sentences = True
+        docs = []
+        for document in self.corpus:
+
+            #print document
+            docs.append(document)
+
+        self.assertEqual(756, len(docs))
+
+        print iter(self.corpus.get_texts()).next()
+
+    def test_iter_tokens(self):
+
+        self.corpus.tokens = True
+        docs = []
+        for document in self.corpus:
+
+            docs.append(document)
+
+        self.assertEqual(11035, len(docs))
+
     def test_pfilter(self):
 
         docs = []
@@ -109,57 +133,60 @@ class TestVTextCorpus(SafireTestCase):
 
         self.assertTrue(len(docs) == len(pdocs))
 
-    # What is this test???
-    def test_tfidf(self):
+    def test_token_min_freq(self):
 
-        tfidf_corpus = VTextCorpus(self.vtlist_file,
-                                   input_root=self.data_root,
-                                   pfilter=0.3,
-                                   pfilter_full_freqs=True)
+        self.corpus.token_filter = PositionalTagTokenFilter(['N', 'A'], 0)
+        with open(os.path.join(self.corpus.input_root,
+                               self.corpus.input)) as vthandle:
+            docname = os.path.join(self.corpus.input_root,
+                                   vthandle.next().strip())
+        with self.corpus._get_doc_handle(docname) as doc_handle:
+            doc, sentences = self.corpus.parse_document_and_sentences(doc_handle)
 
-        with gzip.open(os.path.join(self.data_root, self.vtlist[0])) as document_handle:
-            tdoc, tsentences = tfidf_corpus.parse_document_and_sentences(
-                document_handle)
-            tbow = tfidf_corpus.doc2bow(tdoc)
-        with gzip.open(os.path.join(self.data_root, self.vtlist[0])) as document_handle:
-            doc, sentences = self.pfiltered_corpus.parse_document_and_sentences(
-                document_handle)
-            bow = self.pfiltered_corpus.doc2bow(doc)
+        self.corpus.token_min_freq = 2
 
-        print tbow
-        print bow
+        with open(os.path.join(self.corpus.input_root,
+                               self.corpus.input)) as vthandle:
+            docname = os.path.join(self.corpus.input_root,
+                                   vthandle.next().strip())
+        with self.corpus._get_doc_handle(docname) as doc_handle:
+            doc2, sentences2 = self.corpus.parse_document_and_sentences(doc_handle)
 
-        tcorp_infix = '.pf0.3.pff.tfidf'
-        dloader = MultimodalShardedDatasetLoader(self.data_root, 'test-data')
-        dloader.save_text_corpus(tfidf_corpus, tcorp_infix)
+        print '\nFirst doc: {0} tokens'.format(len(doc))
+        print u'\n'.join([u'{0}:\t{1}'.format(w, f) for w, f in freqdict(doc).items()])
 
-        loaded_tcorp = dloader.load_text_corpus(tcorp_infix)
-        with gzip.open(os.path.join(self.data_root, self.vtlist[0])) as document_handle:
-            doc, sentences = loaded_tcorp.parse_document_and_sentences(
-                document_handle)
-            ltbow = loaded_tcorp.doc2bow(doc)
+        print '\nSecond doc: {0} tokens'.format(len(doc2))
+        print u'\n'.join([u'{0}:\t{1}'.format(w, f) for w, f in freqdict(doc2).items()])
 
-        print ltbow
-
-        self.assertEqual(tbow, ltbow)
-
-        self.assertEqual(len(tsentences), len(sentences))
+        self.assertNotEqual(len(doc), len(doc2))
 
     def test_getitem(self):
 
         self.corpus.dry_run()
 
-        try:
-            with gzip.open(os.path.join(self.data_root, self.vtlist[0])) as vt_handle:
+        doc = self.corpus[7]
+        with gzip.open(os.path.join(self.data_root, self.vtlist[7])) as vt_handle:
+            doc_direct, _ = self.corpus.parse_document_and_sentences(vt_handle)
+            doc_direct = self.corpus.doc2bow(doc_direct, allow_update=True)
 
-                output = self.corpus[vt_handle]
+        self.assertEqual(doc, doc_direct)
 
-            print output
-        except Exception:
-            self.assertEqual(True, False)
-            raise
-        else:
-            self.assertTrue(True)
+        # Caching?
+        doc = self.corpus[7]
+        self.assertEqual(doc, doc_direct)
+
+    # TODO: tests for doc2id, id2doc
+
+    def test_saveload(self):
+
+        savename = os.path.join(self.data_root,
+                                'corpora',
+                                'saved.vtcorp')
+        self.corpus.save(fname=savename)
+        loaded_corpus = VTextCorpus.load(savename)
+        print 'Getitem: {0}'.format(self.corpus.__getitem__)
+        print 'loaded : {0}'.format(loaded_corpus.__getitem__)
+        self.assertIsInstance(loaded_corpus, VTextCorpus)
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()

@@ -140,13 +140,14 @@ class MultimodalClampedSampler(object):
 
         return img_features
 
-    def t2i_run_chain_mean_last(self, text_features, k=1):
+    def t2i_run_chain_mean_last(self, text_features, k=1,
+                                sample_hidden=True, sample_visible=True):
         """Runs the chain for K steps. In all steps except last, both layers
         are sampled. In the last step, both the hidden and visible layer use
-        means."""
+        means. If k=1, then, no sampling is used at all."""
         img_features = self.t2i_run_chain(text_features, k-1,
-                                          sample_hidden=True,
-                                          sample_visible=True)
+                                          sample_hidden=sample_hidden,
+                                          sample_visible=sample_visible)
         img_features = self.t2i_step(text_features, img_features,
                                      sample_hidden=False,
                                      sample_visible=False)

@@ -1,6 +1,7 @@
 #!c:\users\lenovo\canopy\user\scripts\python.exe
 """Converts an image corpus with the given label to an image index."""
 import logging
+from gensim.utils import SaveLoad
 import safire
 
 __author__ = 'Jan Hajic jr.'
@@ -69,42 +70,20 @@ def main(args):
     dloader = MultimodalShardedDatasetLoader(args.root, args.name)
     iloader = IndexLoader(args.root, args.name)
 
-    logging.info('Loading corpus with label %s' % args.label)
+    logging.info('Loading pipeline with label %s' % args.label)
 
-    if args.use_dataset:
-        # Luckily, the Similarity object can work with numpy arrays as corpus
-        # documents.
-        #icorp_init_args = { 'try_loading' : args.try_loading }
-        if args.text:
-            corpus = dloader.load_text(args.label)
-        else:
-            corpus = dloader.load_img(args.label)
-    else:
-        if args.text:
-            corpus = dloader.load_text_corpus(args.label)
-        else:
-            corpus = dloader.load_image_corpus(args.label)
+    pipeline_name = dloader.pipeline_name(args.label)
+    pipeline = SaveLoad.load(pipeline_name)
 
-    logging.info('Icorp type: %s' % type(corpus))
-
-    if args.text:
-        # Text index has a different naming scheme..? That would break the
-        # index - data symmetry... but how else to do it?
-        logging.warn('Text index selected, %s suffix added to index label.' % iloader.layout.text_corpname)
-        index_prefix = iloader.text_output_prefix(args.label)
-    else:
-        index_prefix = iloader.output_prefix(args.label)
+    index_prefix = iloader.output_prefix(args.label)
 
     logging.info('Creating index with prefix %s' % index_prefix)
 
-    dimension = safire.utils.transcorp.dimension(corpus)
-    index = similarities.Similarity(index_prefix, corpus,
+    dimension = safire.utils.transcorp.dimension(pipeline)
+    index = similarities.Similarity(index_prefix, pipeline,
                                     num_features=dimension)
 
-    if args.text:
-        iloader.save_text_index(index, args.label)
-    else:
-        iloader.save_index(index, args.label)
+    iloader.save_index(index, args.label)
 
 if __name__ == '__main__':
 

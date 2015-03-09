@@ -8,11 +8,16 @@ normalization, sigmoid nonlinearity, etc.).
 import itertools
 import logging
 import operator
+import copy
 import gensim
 from gensim.interfaces import TransformedCorpus
+from gensim.similarities import Similarity
 import numpy
-from safire.utils.transcorp import dimension
-from safire.utils import transcorp
+#from safire.utils.transcorp import dimension
+from safire.data.filters.basefilter import BaseFilter
+import safire.datasets.dataset
+from safire.utils import gensim2ndarray, IndexedTransformedCorpus
+import safire.utils.transcorp
 
 from sklearn.preprocessing import StandardScaler
 
@@ -199,7 +204,7 @@ class LeCunnVarianceScalingTransform(gensim.interfaces.TransformationABC):
         :param chunksize: Accumulate squared sums by this many.
 
         """
-        self.dim = transcorp.dimension(corpus)
+        self.dim = safire.utils.transcorp.dimension(corpus)
 
         squared_sums = [ 0.0 for _ in xrange(self.dim) ]
 
@@ -228,7 +233,7 @@ class LeCunnVarianceScalingTransform(gensim.interfaces.TransformationABC):
         if is_corpus:
             return self._apply(bow, chunksize=chunksize)
 
-        out = [ (i, self.coefficients[i] * x) for i, x in bow ]
+        out = [(i, self.coefficients[i] * x) for i, x in bow]
         #if numpy.random.random() < 0.001:
         #    print 'UCov. Transformation:\n%s\n%s' % (bow[:10], out[:10])
         return out
@@ -252,7 +257,112 @@ class StandardScalingTransformer(gensim.interfaces.TransformationABC):
         self.with_mean = with_mean
         self.with_variance = with_variance
 
-        self.sums = numpy.zeros(dimension(corpus))
-        self.means = numpy.zeros(dimension(corpus))
-        self.squared_sums = numpy.zeros(dimension(corpus))
+        self.sums = numpy.zeros(safire.utils.transcorp.dimension(corpus))
+        self.means = numpy.zeros(safire.utils.transcorp.dimension(corpus))
+        self.squared_sums = numpy.zeros(safire.utils.transcorp.dimension(corpus))
+
+
+class Corpus2Dense(gensim.interfaces.TransformationABC):
+
+    def __init__(self, corpus=None, dim=None,
+                 dense_throughput=False):
+        # Ah, the joys of reliably deriving dimensions and handling missing
+        # values.
+        if dim is None and corpus is None:
+            raise ValueError('Must supply at least one of corpus or dim.')
+        proposed_dim = dim
+        if corpus is not None:
+            try:
+                proposed_dim = safire.utils.transcorp.dimension(corpus)
+                if dim and proposed_dim != dim:
+                    raise ValueError('Derived dimension ({0}) does not '
+                                     'correspond to dimension given as argument'
+                                     ' ({1}); unsure what to do & quitting.'
+                                     ''.format(proposed_dim, dim))
+            except ValueError:
+                logging.info('Corpus2DenseTransformer: could not derive input '
+                             'corpus dimension, using proposed dimension {0}'
+                             ''.format(dim))
+                if dim is None:
+                    raise ValueError('No dimension given and dimension could not'
+                                     ' be derived; quitting.')
+        self.dim = proposed_dim
+        self.dense_throughput = dense_throughput
+
+    def _apply(self, corpus, chunksize=None):
+        return safire.utils.transcorp.smart_apply_transcorp(self,
+                                                            corpus,
+                                                            chunksize=chunksize)
+
+    def __getitem__(self, item):
+        """This one should batch-transform lists of gensim vectors on
+        slice retrieval, so it's wrong to treat them like corpora -- we can
+        apply the transformation on these objects directly. If you want to
+        do that, use _apply directly. That's why we don't use the is_corpus
+        standard method of identifying gensim corpora."""
+        if isinstance(item, gensim.interfaces.CorpusABC):
+            return self._apply(item)
+
+        # need to add logic for one item vs. an array of items?
+        #print 'Transforming item: {0}'.format(item)
+        return gensim2ndarray(item, self.dim)
+
+
+class SimilarityTransformer(gensim.interfaces.TransformationABC):
+    """Adds a pipeline block that will transform the input vector into
+    similarities to vectors in a given database.
+
+    This transformer serves as a pipeline-block wrapper for gensim's Similarity
+    class (and other similarity index objects someone else may potentially
+    code). It views the retrieval process as a transformation: from the space
+    of the input vectors and database vectors to the space of similarities to
+    the database vectors.
+
+    Usually, we initialize transformers with the same pipeline which we then
+    want to run through them. This may be a different case: the similarity index
+    will typically be built from some database, but for queries, new vectors
+    (albeit from the same vector space as the database vectors) will come as
+    queries.
+    """
+    def __init__(self, index=None, corpus=None, prefix=None, **index_init_args):
+        """Initializes the similarity index with the given prefix from the given
+        corpus. The ``num_features`` argument is derived from the corpus using
+        the usual ``safire.utils.transcorp.dimension()`` function.
+
+        Either initializes directly from a finished Similarity index, or
+        constructs the index from a supplied corpus to the given prefix (file).
+
+        Other gensim.similarities.Similarity class init kwargs can be
+        provided.
+        """
+        # Initialize the similarity index
+        if index is not None:
+            if prefix is not None:
+                logging.warn('Initializing SimilarityTransformer with both '
+                             'index and prefix. (Index prefix: {0}, supplied '
+                             'prefix: {1})'.format(index.output_prefix, prefix))
+            if corpus is not None:
+                logging.warn('Initializing SimilarityTransformer with both '
+                             'index and corpus, corpus will be ignored. '
+                             '(Index prefix: {0}, supplied corpus: {1})'
+                             ''.format(index.output_prefix,
+                                       type(corpus)))
+            self.index = index
+        else:
+            dim = safire.utils.transcorp.dimension(corpus)
+            self.index = Similarity(prefix, corpus,
+                                    num_features=dim,
+                                    **index_init_args)
+
+    def __getitem__(self, item):
+
+        if isinstance(item, gensim.interfaces.CorpusABC) or \
+                isinstance(item, safire.datasets.dataset.DatasetABC):
+            return self._apply(item)
+
+        return self.index[item]
+
+    def _apply(self, corpus, chunksize=None):
+
+        return safire.utils.transcorp.smart_apply_transcorp(self, corpus)
 

@@ -211,8 +211,9 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
             else:
                 resume_successful = True
                 # TODO: There should be a sanity check here!
-                # Also, the loading could possibly use TIDs - which would require,
+                # Also, the loading could use TIDs - which would require,
                 # however, a ModelLoader.
+                # XXX: WTF are TIDs?
                 model_handle.model_instance = resuming_instance
 
         try:
@@ -608,13 +609,13 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
         if isinstance(model, BaseSupervisedModel):
             if not isinstance(dataset, SupervisedDataset):
-                raise TypeError('Attempting to train supervised model without'+
-                                 ' a supervised dataset (dataset type: %s) ' % (
-                                     str(type(dataset))))
+                raise TypeError('Attempting to train supervised model without'
+                                ' a supervised dataset (dataset type: {0})'
+                                ''.format( str(type(dataset))))
             train_X = dataset.train_X_batch(batch_index, self.b_size)
             train_y = dataset.train_y_batch(batch_index, self.b_size)
 
-            logging.debug('Train batch: %s' % train_X)
+            logging.debug('Train batch: {0}'.format(train_X))
 
             batch_loss = model_handle.train(train_X, train_y)
 
@@ -649,12 +650,12 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
         if isinstance(model, BaseSupervisedModel):
             if not isinstance(dataset, SupervisedDataset):
-                raise TypeError('Attempting to validate supervised model'+
-                        ' without a supervised dataset (dataset type: %s) ' % (
-                        str(type(dataset))))
+                raise TypeError('Attempting to validate supervised model'
+                        ' without a supervised dataset (dataset type: '
+                        '{0}) '.format(type(dataset)))
 
-            logging.debug('Batch index type: %s' % type(batch_index))
-            logging.debug('Batch size type: %s' % type(self.b_size))
+            logging.debug('Batch index type: {0}'.format(type(batch_index)))
+            logging.debug('Batch size type: {0}'.format(type(self.b_size)))
 
             devel_X = dataset.devel_X_batch(batch_index, self.b_size)
             devel_y = dataset.devel_y_batch(batch_index, self.b_size)
@@ -663,7 +664,6 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
         elif isinstance(model, BaseUnsupervisedModel):
             devel_X = dataset.devel_X_batch(batch_index, self.b_size)
-
             batch_loss = model_handle.validate(devel_X)
 
         return batch_loss
@@ -713,8 +713,9 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                                  plot_bias=False, backward_handle=None):
         """Plots a sample heatmap of how the dataset will be transformed."""
         sample_size = min(1000, (len(dataset) - dataset._test_doc_offset))
-        batch = 0 # Deterministic plotting.
+        batch = 0  # Deterministic plotting.
         #batch = random.randint(0, dataset.n_test_batches(sample_size))
+        #print 'Requesting test batch {0} with size {1}'.format(batch, sample_size)
         sample_data = dataset.test_X_batch(batch, sample_size)
         transformed_data = numpy.array(model_handle.run(sample_data))
 

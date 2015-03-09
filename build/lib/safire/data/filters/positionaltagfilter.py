@@ -10,7 +10,6 @@ from .basefilter import BaseFilter
 logger = logging.getLogger(__name__)
 
 
-
 class PositionalTagTokenFilter(BaseFilter):
     """Implements a positional tag-based filter, either as an exclusion
     filter or an inclusion filter (inclusion, by default: only listed values
@@ -66,8 +65,6 @@ class PositionalTagTokenFilter(BaseFilter):
         """Implements the filtering. Returns True on item passing through the
         filter, False on item being filtered out."""
         value = self._extract_tag_position(fields)
-
-        #logging.debug('Matching value %s against values %s' % (value, self.values))
 
         return (value in self.values) == self.inclusive
 

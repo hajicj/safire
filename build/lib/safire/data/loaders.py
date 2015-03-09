@@ -42,13 +42,26 @@ from safire.learning.interfaces import ModelHandle
 from safire.learning.interfaces.safire_transformer import SafireTransformer
 from safire.learning.learners import BaseSGDLearner
 from safire.learning.models.base_model import BaseModel
-from .vtextcorpus import VTextCorpus
-from .imagenetcorpus import ImagenetCorpus
-from .multimodal_dataset import MultimodalDataset
-from .layouts import DataDirLayout
+from safire.data.vtextcorpus import VTextCorpus
+from safire.data.imagenetcorpus import ImagenetCorpus
+from safire.datasets.multimodal_dataset import MultimodalDataset
+from safire.data.layouts import DataDirLayout
 
 
 logger = logging.getLogger(__name__)
+
+default_label = None
+
+#: Default image corpus arguments. Works for the UFAL ImageNet vector inputs.
+default_icorp_args = {
+    'delimiter': ';',
+    'dim': 4096,
+    'label': default_label}
+# TODO: Move these defaults to somewhere more principled.
+
+#: Default text corpus arguments. They are already encoded within
+#  the VTextCorpus __init__() default values.
+default_vtcorp_args = {}
 
 
 class MultimodalDatasetLoader(object):
@@ -223,22 +236,6 @@ class MultimodalDatasetLoader(object):
 
         return True
 
-    def has_image_corpora(self, infix=None):
-        """Checks whether text corpora for loading the given multimodal dataset
-        have been generated and are in the right place."""
-        corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
-        files = os.listdir(corpus_dir)
-
-        for corpus in self.layout.required_img_corpus_names(infix):
-            if corpus not in files:
-                logger.info('Corpus %s not found in corpus directory %s.' % (
-                            corpus,
-                            corpus_dir))
-                logger.debug('   Available :\n%s' % '\t\t\n'.join(files))
-                return False
-
-        return True
-
     def get_text_corpus(self, vtext_corpus_args=None):
         """Returns the VTextCorpus object correctly initialized to the Loader's
         layout. As opposed to ``build_text_corpus``, does NOT perform
@@ -265,8 +262,9 @@ class MultimodalDatasetLoader(object):
         if 'input_root' in vtext_corpus_args \
                 and vtext_corpus_args['input_root'] != self.root:
             logging.warn(
-                'Building corpora: mismatched vtext args input root (%s) and loader input root (%s).' % (
-                vtext_corpus_args['input_root'], self.root))
+                'Building corpora: mismatched vtext args input root ({0}) '
+                'and loader input root ({1}).'
+                ''.format(vtext_corpus_args['input_root'], self.root))
 
         # When filling in input root, we don't want a side-effect to occur
         # to the input argument.
@@ -280,6 +278,31 @@ class MultimodalDatasetLoader(object):
         text_corpus = VTextCorpus(full_vtlist_path, **vtargs)
 
         return text_corpus
+
+    def get_default_text_corpus(self):
+        """Returns the default image corpus initialized to the loader's layout.
+        """
+        return self.get_text_corpus(default_vtcorp_args)
+
+    def has_image_corpora(self, infix=None):
+        """Checks whether text corpora for loading the given multimodal dataset
+        have been generated and are in the right place.
+
+        Analogous methods for the text and image corpora separately are provided
+        as ``has_text_corpora()`` and ``has_img_corpora()``.
+        """
+        corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
+        files = os.listdir(corpus_dir)
+
+        for corpus in self.layout.required_img_corpus_names(infix):
+            if corpus not in files:
+                logger.info('Corpus %s not found in corpus directory %s.' % (
+                            corpus,
+                            corpus_dir))
+                logger.debug('   Available :\n%s' % '\t\t\n'.join(files))
+                return False
+
+        return True
 
     def get_image_corpus(self, image_corpus_args=None):
         """Returns the ImagenetCorpus object correctly initialized to the Loader's
@@ -314,6 +337,11 @@ class MultimodalDatasetLoader(object):
         img_corpus = ImagenetCorpus(full_ivectors_path, **imargs)
 
         return img_corpus
+
+    def get_default_image_corpus(self):
+        """Returns the default image corpus initialized to the loader's layout.
+        """
+        return self.get_image_corpus(default_icorp_args)
 
     def build_image_corpora(self, img_corpus_args, serializer=None):
         """Creates all *image* corpora necessary for the creation of the
@@ -371,6 +399,12 @@ class MultimodalDatasetLoader(object):
 
         img_corpus.save(os.path.join(corpus_dir, img_obj_name))
 
+    def build_default_image_corpora(self, serializer=None):
+        """Builds (incl. serialization) the default image corpus initialized
+        to the loader's layout. You still have to choose the serializer."""
+        self.build_image_corpora(default_icorp_args,
+                                 serializer=serializer)
+
     def build_text_corpora(self, vtext_corpus_args, serializer=None):
         """Creates all *text* corpora necessary for the creation of the
         :class:`MultimodalDataset` over the given data.
@@ -412,7 +446,8 @@ class MultimodalDatasetLoader(object):
         if 'input_root' in vtext_corpus_args \
                 and vtext_corpus_args['input_root'] != self.root:
             logging.warn(
-                'Building corpora: mismatched vtext args input root (%s) and loader input root (%s).' % (
+                'Building corpora: mismatched vtext args input root'
+                ' (%s) and loader input root (%s).' % (
                     vtext_corpus_args['input_root'], self.root))
 
         # When filling in input root, we don't want a side-effect to occur
@@ -422,22 +457,28 @@ class MultimodalDatasetLoader(object):
 
         corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
         # Text corpus building/serialization
-        with open(os.path.join(self.root, self.layout.vtlist)) as vtlist_handle:
+        vtlist_full_path = os.path.join(self.root, self.layout.vtlist)
 
-            text_corpus = VTextCorpus(vtlist_handle, **vtargs)
-            text_name_infix = self.generate_tcorp_name_infix(text_corpus)
+        text_corpus = VTextCorpus(vtlist_full_path, **vtargs)
+        text_name_infix = self.generate_tcorp_name_infix(text_corpus)
 
-            if self.has_text_corpora(text_name_infix):
-                logging.warn('Text corpora for given infix %s exist; overwriting.' % text_name_infix)
+        if self.has_text_corpora(text_name_infix):
+            logging.warn('Text corpora for given infix %s exist; overwriting.' % text_name_infix)
 
-            text_corpus_names = self.layout.required_text_corpus_names(text_name_infix)
-            text_data_name = text_corpus_names[0]
-            text_obj_name = text_corpus_names[2]
+        text_corpus_names = self.layout.required_text_corpus_names(text_name_infix)
+        text_data_name = text_corpus_names[0]
+        text_obj_name = text_corpus_names[2]
 
-            serializer.serialize(os.path.join(corpus_dir, text_data_name),
-                                           text_corpus)
+        serializer.serialize(os.path.join(corpus_dir, text_data_name),
+                             text_corpus)
 
-            text_corpus.save(os.path.join(corpus_dir, text_obj_name))
+        text_corpus.save(os.path.join(corpus_dir, text_obj_name))
+
+    def build_default_text_corpora(self, serializer=None):
+        """Builds (incl. serialization) the default image corpus initialized
+        to the loader's layout. You still have to choose the serializer."""
+        self.build_text_corpora(default_vtcorp_args,
+                                serializer=serializer)
 
     def build_corpora(self, vtext_corpus_args={}, img_corpus_args={},
                       text_serializer=None, img_serializer=None):
@@ -825,7 +866,8 @@ class MultimodalDatasetLoader(object):
         infix = self.__default_infix(infix)
 
         if not self.has_image_corpus(infix):
-            raise ValueError('Image corpus for infix %s not available.' % infix)
+            raise ValueError('Image corpus '
+                             'for infix %s not available.' % infix)
 
         corpus_file = self.layout.get_image_corpus_file(infix)
         corpus_full_path = os.path.join(self.root, corpus_file)
@@ -835,7 +877,26 @@ class MultimodalDatasetLoader(object):
 
         return corpus
 
-    def __default_infix(self, infix):
+    def pipeline_name(self, infix=None):
+        """Returns the filename to which a safire pipeline should be stored
+        with the given infix."""
+        return os.path.join(self.root,
+                            self.layout.corpus_dir,
+                            self.layout.name
+                            + infix
+                            + self.layout.pipeline_suffix)
+
+    def pipeline_serialization_target(self, infix=None):
+        """Returns the filename which should serve as the ``fname`` argument for
+        safire pipeline serialization."""
+        return os.path.join(self.root,
+                            self.layout.corpus_dir,
+                            self.layout.name
+                            + self.__default_infix(infix)
+                            + self.layout.pipeline_serialization_suffix)
+
+    @classmethod
+    def __default_infix(cls, infix):
         """Handles converting an infix value of None to an empty string,
         because the Layout object does not accept None when looking for
         files/generating file names."""
@@ -1513,12 +1574,15 @@ class ShardedDatasetLoader(object):
 
         return index
 
-    def output_prefix(self, infix=None):
+    def output_prefix(self, infix=None, sparse_serialization=False):
         """Builds the output_prefix parameter for a ShardedDataset object
         so that the dataset can then be correctly saved/loaded."""
         infix = self.__default_infix(infix)
 
         dataset_file = self.layout.get_dataset_file(infix)
+        if sparse_serialization:
+            dataset_file += '.sp'
+
         return os.path.join(self.root, dataset_file)
 
     def __default_infix(self, infix):
@@ -1552,7 +1616,7 @@ class MultimodalShardedDatasetLoader(MultimodalDatasetLoader):
         """Initializes the sharded mulitmodal dataset loader.
 
         :type root: str
-        :param root: The root directory where the safire data lies. The expected
+        :param root: The root directory where the safire data lies. Expected
             contents are the text/ and img/ directories, a ``*.vtlist`` file,
             an Imagenet output file in the format described in
             :class:`ImagenetCorpus` and a text-image mapping as described in
@@ -1698,7 +1762,6 @@ class MultimodalShardedDatasetLoader(MultimodalDatasetLoader):
                              'at %s with infix %s' % (os.path.join(self.root,
                              self.layout.corpus_dir), text_infix))
 
-
         corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
 
         text_corpora_fnames = self.layout.required_text_corpus_names(text_infix)
@@ -1806,12 +1869,12 @@ class MultimodalShardedDatasetLoader(MultimodalDatasetLoader):
         """
         if not self.has_image_corpora(img_infix):
             raise ValueError('Image corpora unavailable in dataset '+
-                             'at %s with infix %s (available: %s)' % (os.path.join(self.root,
-                             self.layout.corpus_dir), img_infix, '\n'.join(
+                             'at %s with infix %s (available: %s)' % (
+                             os.path.join(self.root, self.layout.corpus_dir),
+                             img_infix, '\n'.join(
                                  map(str, os.listdir(os.path.join(self.root,
                                                      self.layout.corpus_dir)))
                              )))
-
 
         corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
 
