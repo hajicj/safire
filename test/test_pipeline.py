@@ -13,6 +13,7 @@ import logging
 from gensim.similarities import Similarity
 import numpy
 import time
+import operator
 import theano
 from safire.data.document_filter import DocumentFilterTransform
 from safire.data.filters.frequency_filters import zero_length_filter
@@ -30,7 +31,7 @@ from safire.utils import parse_textdoc2imdoc_map
 from safire.utils.transcorp import dimension, get_id2word_obj, \
     get_composite_source, reset_vtcorp_input, get_transformers, \
     run_transformations, log_corpus_stack, bottom_corpus, keymap2dict, \
-    compute_docname_flatten_mapping, docnames2indexes
+    compute_docname_flatten_mapping, docnames2indexes, get_id2doc_obj
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.datasets.dataset import Dataset, CompositeDataset
@@ -609,9 +610,10 @@ class TestPipeline(SafireTestCase):
 
         # Train model
         dataset = Dataset(mm_pipeline)
-        self.model_handle = DenoisingAutoencoder.setup(dataset,
+        self.model_handle = DenoisingAutoencoder.setup(
+            dataset,
             n_out=200,
-            activation=theano.tensor.nnet.sigmoid,
+            activation=theano.tensor.nnet.sigmoid,  # Sampleable activation
             backward_activation=theano.tensor.tanh,
             reconstruction='mse',
             heavy_debug=False)
@@ -642,7 +644,8 @@ class TestPipeline(SafireTestCase):
         print '-- building index --'
         iloader = IndexLoader(self.data_root, 'test-data')
         index = Similarity(iloader.output_prefix('.img'), image_pipeline,
-                           num_features=dimension(image_pipeline))
+                           num_features=dimension(image_pipeline),
+                           num_best=10)
 
         # Add similarity search
         print '-- building similarity transformer --'
@@ -653,10 +656,30 @@ class TestPipeline(SafireTestCase):
         reset_vtcorp_input(retrieval_pipeline, self.vtlist)
 
         print '-- retrieving sampled images --'
-        sampled_images = [img for img in t2i_pipeline]
+        start = time.clock()
+        sampled_images = [img for img in t2i_pipeline[:10]]
+        end = time.clock()
+        print '       Done: {0} images in {1} s'.format(len(sampled_images),
+                                                        end - start)
+        print '       First image: {0}'.format(sampled_images[0])
 
         print '-- querying similarity index --'
-        query_results = [qres for qres in retrieval_pipeline]
+        query_results = [qres for qres in retrieval_pipeline[:10]]
+
+        print '-- mapping query results to images --'
+        img_id2doc = get_id2doc_obj(image_pipeline)
+        query_results_docs = []
+        for qres in query_results:
+            query_results_docs.append([(img_id2doc[iid], sim)
+                                       for iid, sim in qres])
+        sorted_qurey_results_docs = [sorted(qres_d, key=operator.itemgetter(1),
+                                            reverse=True)
+                                     for qres_d in query_results_docs]
+
+        print '\n'.join(['{0}'.format(d) for d in sorted_qurey_results_docs])
+
+        print '-- testing visualization --'
+
 
         self.assertTrue(len(sampled_images) == len(query_results))
 
