@@ -17,6 +17,8 @@ url_local_prefix = 'file://localhost'
 #: Cannot use os.path.join(), have to use url_separator.join()
 url_separator = '/'
 
+#: Universal safire HTML introspection output header. Note that it should not be
+#: used unless html_utils.foot is used at the end of the html document.
 head = '''
 <!DOCTYPE html>
 <html lang="en" class="">
@@ -24,6 +26,12 @@ head = '''
 <meta charset="utf-8"/>
 <title>Safire introspection</title>
 </head>
+'''
+
+#: Must close all unclosed tags from head. Never use html_utils.head without
+#: adding html_utils.foot at the end of the document!
+foot = '''
+</html>
 '''
 
 comment_start = '<!--'

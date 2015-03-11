@@ -80,7 +80,12 @@ class WriterABC(object):
 
 
 class HtmlSimpleWriter(WriterABC):
-    """This class writes a simple HTML output into a table.
+    """This class writes a simple HTML output into two divs. It also creates
+    Next and Prev links to (expected) introspection outputs for the next and
+    previous item, to simplify browsing.
+
+    A key method is ``get_html_content()``, which is responsible for generating
+    the html code that corresponds to the content of the introspected item.
     """
 
     def __init__(self, *args, **kwargs):
@@ -88,32 +93,47 @@ class HtmlSimpleWriter(WriterABC):
 
     @staticmethod
     def iid_to_filename(iid):
-        return 'introspection.{0}.html'
+        """Implements the naming scheme."""
+        return 'introspection.{0}.html'.format(iid)
 
     def generate_filename(self, iid):
+        """Generates the absolute filename under which to save the introspection
+        result for the given item ID.
+
+        Note that this function generates a file name, NOT an URL."""
         abs_filename = os.path.abspath(os.path.join(self.root,
                                                     self.iid_to_filename(iid)))
-        return self.url_separator.join([self.url_local_prefix,
-                                        abs_filename])
+        return abs_filename
 
     def write(self, output_handle, iid, value, introspection_transformer):
-
+        """Generates the introspection result and writes it into the given
+        file handle."""
         header = self.get_html_header()
-        output_handle.write(header + '\n\n')
-
         body = self.get_html_body(iid, value, introspection_transformer)
-        output_handle.write(body + '\n\n')
-
         footer = self.get_html_footer()
-        output_handle.write(footer + '\n\n')
 
-    def get_html_header(self):
+        print 'Document:\n'
+        print header
+        print body
+        print footer
+
+        output_handle.write('\n\n'.join([header, body, footer]))
+
+    @staticmethod
+    def get_html_header():
+        """Generates the constant part of the HTML output that comes *before*
+        the content."""
         return html_utils.head
 
-    def get_html_footer(self):
-        return html_utils.as_comment('Generated using HtmlSimpleWriter.')
+    @staticmethod
+    def get_html_footer():
+        """Generates the constant part of the HTML output that comes *after*
+        the content."""
+        return u'\n'.join(
+            [html_utils.as_comment('Generated using HtmlSimpleWriter.'),
+             html_utils.foot])
 
-    def get_html_body(self, iid, value, introspection_transformer):
+    def get_html_content(self, iid, value, introspection_transformer):
 
         elements = []
 
@@ -138,4 +158,8 @@ class HtmlSimpleWriter(WriterABC):
 
         # Combine elements into a single string and wrap in a <body> tag.
         text = u'\n'.join(elements)
-        return html_utils.text_with_tag(text, 'body', newline=True)
+        return text
+
+    def get_html_body(self, iid, value, introspection_transformer):
+        content = self.get_html_content(iid, value, introspection_transformer)
+        return html_utils.text_with_tag(content, 'body', newline=True)

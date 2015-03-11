@@ -12,6 +12,7 @@ writes a simple HTML file.
 import logging
 from gensim.interfaces import TransformationABC, CorpusABC, TransformedCorpus
 from safire.datasets.dataset import DatasetABC
+from safire.introspection.writers import HtmlSimpleWriter
 from safire.utils import IndexedTransformedCorpus
 from safire.utils.transcorp import get_id2doc_obj, get_doc2id_obj, \
     smart_apply_transcorp
@@ -24,13 +25,16 @@ class IntrospectionTransformer(TransformationABC):
     implementation, the corpus simply writes the path to the document into an
     html file.
     """
-    def __init__(self, corpus, **writer_kwargs):
+    def __init__(self, corpus, **writer_kwargs):  # Should add writer_root?
         self.id2doc = get_id2doc_obj(corpus)
         self.doc2id = get_doc2id_obj(corpus)
 
+        self.corpus = corpus
+
         self.dim = 1
 
-        self.writer = HtmlSimpleWriter(**writer_kwargs)   # TODO
+        # This is what actually creates the introspectable files.
+        self.writer = HtmlSimpleWriter(**writer_kwargs)
 
     def __getitem__(self, item):
         """The IntrospectionTransformer needs two items to operate: first, the
@@ -47,7 +51,7 @@ class IntrospectionTransformer(TransformationABC):
         if isinstance(item, CorpusABC) or isinstance(item, DatasetABC):
             return self._apply(item)
 
-        if not isinstance(item, tuple) or not isinstance(tuple[0], int):
+        if not isinstance(item, tuple) or not isinstance(item[0], int):
             raise ValueError('Cannot run IntrospectionTransformer on item type'
                              ' {0}. (Item: {1})'.format(type(item), item))
 
