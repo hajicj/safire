@@ -52,11 +52,10 @@ class IntrospectionTransformer(TransformationABC):
                              ' {0}. (Item: {1})'.format(type(item), item))
 
         iid = item[0]
-        document = self.id2doc[iid]
         value = item[1]
 
-        introspection_file = self.writer.write(document, value)
-        return introspection_file
+        introspection_file = self.writer.run(iid, value, self)
+        return [introspection_file]  # Has to return a 1-dimensional vector.
 
     def _apply(self, corpus, chunksize=None):
         # Doesn't this need a special (Indexed)TransformedCorpus?
