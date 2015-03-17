@@ -1,8 +1,14 @@
 import os
 from PIL import Image
 import webbrowser
+from safire.data.serializer import Serializer
+from safire.data.sharded_corpus import ShardedCorpus
+from safire.datasets.dataset import Dataset, CompositeDataset
+from safire.datasets.transformations import FlattenComposite
 from safire.introspection.interfaces import IntrospectionTransformer
-from safire.utils.transcorp import get_id2word_obj
+from safire.introspection.writers import HtmlSimpleWriter, HtmlStructuredFlattenedWriter
+from safire.utils.transcorp import get_id2word_obj, \
+    compute_docname_flatten_mapping, log_corpus_stack
 
 __author__ = 'Jan Hajic jr'
 
@@ -52,7 +58,43 @@ class TestIntrospection(SafireTestCase):
             self.assertTrue(os.path.isfile(fname_vect[0]))
         webbrowser.open(filenames[0][0])
 
+    def test_composite_introspection(self):
 
+        tserializer = Serializer(self.vtcorp, ShardedCorpus,
+                                 self.loader.pipeline_serialization_target('.text'),
+                                 gensim_serialization=False, gensim_retrieval=False)
+        vtcorp = tserializer[self.vtcorp]
+        tdata = Dataset(vtcorp, ensure_dense=True)
+
+        iserializer = Serializer(self.icorp, ShardedCorpus,
+                                 self.loader.pipeline_serialization_target('.img'),
+                                 gensim_serialization=False, gensim_retrieval=False)
+        icorp = iserializer[self.icorp]
+        idata = Dataset(icorp, ensure_dense=True)
+
+        mmdata = CompositeDataset((tdata, idata), names=('txt', 'img'),
+                                  aligned=False)
+
+        t2i_file = os.path.join(self.loader.root,
+                                self.loader.layout.textdoc2imdoc)
+        t2i_indexes = compute_docname_flatten_mapping(mmdata, t2i_file)
+
+        flatten = FlattenComposite(mmdata, indexes=t2i_indexes, structured=True)
+        mm_pipeline = flatten[mmdata]
+        # mm_results = [mm_vect for mm_vect in mm_pipeline]
+
+        twriter = HtmlSimpleWriter(root=self.loader.root)
+        iwriter = HtmlSimpleWriter(root=self.loader.root)
+        composite_writer = HtmlStructuredFlattenedWriter(root=self.loader.root,
+                                               writers=(twriter, iwriter))
+
+        introspection = IntrospectionTransformer(mm_pipeline,
+                                                 writer=composite_writer)
+        introspected_pipeline = introspection[mm_pipeline]
+        filenames = [fname_vect for fname_vect in introspected_pipeline]
+        for fname_vect in filenames:
+            self.assertTrue(os.path.isfile(fname_vect[0]))
+        webbrowser.open(filenames[0][0])
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()

@@ -96,6 +96,7 @@ test/test_dataset_transformers.py
 test/test_document_filter.py
 test/test_frequency_based_transform.py
 test/test_handle_saveload.py
+test/test_introspection.py
 test/test_layouts.py
 test/test_model_loader.py
 test/test_model_saveload.py
@@ -147,6 +148,16 @@ test/test-data/img/0012572938.jpg
 test/test-data/img/0012591729.jpg
 test/test-data/img/0034517687.jpg
 test/test-data/img/0047938150.jpg
+test/test-data/introspection/introspection.0.html
+test/test-data/introspection/introspection.1.html
+test/test-data/introspection/introspection.2.html
+test/test-data/introspection/introspection.3.html
+test/test-data/introspection/introspection.4.html
+test/test-data/introspection/introspection.5.html
+test/test-data/introspection/introspection.6.html
+test/test-data/introspection/introspection.7.html
+test/test-data/introspection/introspection.8.html
+test/test-data/introspection/introspection.9.html
 test/test-data/text/cen-00064.vt.txt.gz
 test/test-data/text/cen-00066.vt.txt.gz
 test/test-data/text/cen-00145.vt.txt.gz

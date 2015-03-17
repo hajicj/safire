@@ -23,18 +23,20 @@ __author__ = "Jan Hajic jr."
 class IntrospectionTransformer(TransformationABC):
     """This class applies an IntrospectionCorpus. In this simplest
     implementation, the corpus simply writes the path to the document into an
-    html file.
+    html file, but you can supply other Writers.
     """
-    def __init__(self, corpus, **writer_kwargs):  # Should add writer_root?
-        self.id2doc = get_id2doc_obj(corpus)
-        self.doc2id = get_doc2id_obj(corpus)
+    def __init__(self, corpus, writer=None, **writer_kwargs):
+        #self.id2doc = get_id2doc_obj(corpus)
+        #self.doc2id = get_doc2id_obj(corpus)
 
         self.corpus = corpus
 
         self.dim = 1
 
         # This is what actually creates the introspectable files.
-        self.writer = HtmlSimpleWriter(**writer_kwargs)
+        if writer is None:
+            writer = HtmlSimpleWriter(**writer_kwargs)
+        self.writer = writer
 
     def __getitem__(self, item):
         """The IntrospectionTransformer needs two items to operate: first, the

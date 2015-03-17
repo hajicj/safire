@@ -190,6 +190,15 @@ def as_link(url, text=None):
         text = url
     return with_tag(text, 'a', newline=False, href=url)
 
+
+def as_image(url):
+    """Formats the given URL as an image.
+
+    >>> as_image('file://localhost/C:/foo.png')
+    u'<img src="file://localhost/C:/foo.png"/>'
+    """
+    return as_tag('img', pair=False, src=url)
+
 # ---------------------------------------------------------------------------- #
 
 # URL tools

@@ -90,6 +90,7 @@ def get_id2word_obj(corpus):
 
 
 def get_id2doc_obj(corpus):
+    #print 'Calling get_id2doc_obj on corpus type: {0}'.format(type(corpus))
     if hasattr(corpus, 'id2doc'):
         return corpus.id2doc
     elif isinstance(corpus, TransformedCorpus):
@@ -362,8 +363,9 @@ def log_corpus_stack(corpus):
         return '\n'.join([r, '=== STACK END ===\n'])
 
 
-def convert_to_dense(corpus):
-    """Adds a utility block that outputs items in a dense format.
+def convert_to_dense(corpus, dim=None):
+    """Adds a utility block that outputs items in a dense format. If a dimension
+    is not supplied, will try to guess based on the input corpus.
 
     If the given corpus is of a type that can support dense output by itself
     (for example a SwapoutCorpus with a ShardedCorpus back-end), will instead
@@ -408,7 +410,7 @@ def convert_to_dense(corpus):
                      'sparse vector output and applying Corpus2Dense.'
                      ''.format(type(corpus)))
 
-        transformer = safire.utils.transformers.Corpus2Dense(corpus)
+        transformer = safire.utils.transformers.Corpus2Dense(corpus, dim=dim)
         # Have to _apply to make sure the output is a pipeline, because
         # Corpus2Dense call on __getitem__ might call gensim2dense directly
         # on something that behaves like a corpus but is not an instance of
@@ -506,7 +508,7 @@ def is_fully_indexable(pipeline):
         _ = pipeline[[0]]
         return True
     except (TypeError, AttributeError, ValueError):
-        raise
+        # raise
         return False
 
 

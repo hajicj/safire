@@ -145,7 +145,7 @@ class DatasetABC(gensim.utils.SaveLoad):
         _data = data
         if ensure_dense:
             logging.info('Ensuring dense output...')
-            _data = safire.utils.transcorp.convert_to_dense(_data)
+            _data = safire.utils.transcorp.convert_to_dense(_data, dim)
         self.data = _data
 
         self.dim = dim
@@ -464,10 +464,10 @@ class CompositeDataset(DatasetABC):
 
         if names:
             if len(names) != len(data):
-                raise AssertionError('Dataset names too many or too few'
-                                     ' ({0}) for {1} component'
-                                     ' datasets.'.format(len(names),
-                                                         len(data)))
+                raise ValueError('Dataset names too many or too few'
+                                 ' ({0}) for {1} component'
+                                 ' datasets.'.format(len(names),
+                                                     len(data)))
         else:
             names = []
         self.names = names

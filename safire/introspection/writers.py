@@ -4,6 +4,7 @@ This module contains classes that ...
 import logging
 import os
 from safire.introspection import html_utils
+from safire.utils.transcorp import get_id2doc_obj
 
 __author__ = "Jan Hajic jr."
 
@@ -88,8 +89,8 @@ class HtmlSimpleWriter(WriterABC):
     the html code that corresponds to the content of the introspected item.
     """
 
-    def __init__(self, *args, **kwargs):
-        super(HtmlSimpleWriter, self).__init__(*args, **kwargs)
+    def __init__(self, root, *args, **kwargs):
+        super(HtmlSimpleWriter, self).__init__(root, *args, **kwargs)
 
     @staticmethod
     def iid_to_filename(iid):
@@ -134,13 +135,17 @@ class HtmlSimpleWriter(WriterABC):
              html_utils.foot])
 
     def get_html_content(self, iid, value, introspection_transformer):
-
+        """Generates the "interesting" part of the introspection file:
+        formats the contents of the item that is being introspected."""
         elements = []
 
         # Create heading.
-        docname = introspection_transformer.id2doc[iid]
+        docname = get_id2doc_obj(introspection_transformer.corpus)[iid]
+        print 'Docname: {0}'.format(docname)
+        print 'Value: {0}'.format(value)
+        absolute_docname = os.path.join(self.root, docname)
         heading = u'Safire introspection: iid {0}, docname {1}' \
-                  u''.format(iid, docname)
+                  u''.format(iid, absolute_docname)
         elements.append(html_utils.with_tag(heading, 'h1'))
 
         # Paste content.
@@ -161,5 +166,37 @@ class HtmlSimpleWriter(WriterABC):
         return text
 
     def get_html_body(self, iid, value, introspection_transformer):
+        """Formats the content as the ``<body>`` element of an html file."""
         content = self.get_html_content(iid, value, introspection_transformer)
         return html_utils.text_with_tag(content, 'body', newline=True)
+
+
+class HtmlStructuredFlattenedWriter(HtmlSimpleWriter):
+    """This writer combines outputs of several html writers. It formats them
+    in a single-row table. The difference is that ``get_html_content()`` expects
+    a tuple as values, with one value per component writer.
+
+    The writer is (clumsily) designed to be used on top of an index-based
+    FlattenedDatasetCorpus with the ``structured`` flag set. (This may be
+    refactored in the near future if flattening is split into two blocks:
+    reordering and combining.)
+    """
+    def __init__(self, root, writers, *args, **kwargs):
+        self.writers = writers
+        super(HtmlStructuredFlattenedWriter, self).__init__(root, *args, **kwargs)
+
+    def get_html_content(self, iid, values, introspection_transformer):
+        """Combines the contents generated from each of the component writers.
+        Assumes there is one value per writer."""
+        if len(values) != len(self.writers):
+            raise ValueError('Must supply same number of values as there are '
+                             'writers in the HtmlStructuredFlattenedWriter. (Values: {0},'
+                             ' writers: {1})'.format(len(values),
+                                                     len(self.writers)))
+        iids = introspection_transformer.corpus.obj.indexes[iid]
+        contents = [self.writers[i].get_html_content(iids[i],
+                                                     values[i],
+                                                     introspection_transformer)
+                    for i in xrange(len(values))]
+        combined_content = html_utils.as_table([contents])
+        return combined_content
