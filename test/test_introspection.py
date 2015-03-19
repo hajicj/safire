@@ -1,12 +1,15 @@
 import os
 from PIL import Image
 import webbrowser
+from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
+from safire.data.vtextcorpus import VTextCorpus
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.datasets.dataset import Dataset, CompositeDataset
 from safire.datasets.transformations import FlattenComposite
 from safire.introspection.interfaces import IntrospectionTransformer
-from safire.introspection.writers import HtmlSimpleWriter, HtmlStructuredFlattenedWriter
+from safire.introspection.writers import HtmlSimpleWriter, HtmlStructuredFlattenedWriter, \
+    HtmlImageWriter, HtmlVocabularyWriter
 from safire.utils.transcorp import get_id2word_obj, \
     compute_docname_flatten_mapping, log_corpus_stack
 
@@ -60,10 +63,16 @@ class TestIntrospection(SafireTestCase):
 
     def test_composite_introspection(self):
 
-        tserializer = Serializer(self.vtcorp, ShardedCorpus,
+        vtlist = os.path.join(self.loader.root, self.loader.layout.vtlist)
+        vtcorp = VTextCorpus(vtlist, input_root=self.loader.root,
+                             token_filter=PositionalTagTokenFilter(['N', 'A', 'V'], 0),
+                             filter_capital=True)
+        vtcorp.dry_run()
+
+        tserializer = Serializer(vtcorp, ShardedCorpus,
                                  self.loader.pipeline_serialization_target('.text'),
                                  gensim_serialization=False, gensim_retrieval=False)
-        vtcorp = tserializer[self.vtcorp]
+        vtcorp = tserializer[vtcorp]
         tdata = Dataset(vtcorp, ensure_dense=True)
 
         iserializer = Serializer(self.icorp, ShardedCorpus,
@@ -83,10 +92,14 @@ class TestIntrospection(SafireTestCase):
         mm_pipeline = flatten[mmdata]
         # mm_results = [mm_vect for mm_vect in mm_pipeline]
 
-        twriter = HtmlSimpleWriter(root=self.loader.root)
-        iwriter = HtmlSimpleWriter(root=self.loader.root)
+        twriter = HtmlVocabularyWriter(root=self.loader.root,
+                                       top_k=30,
+                                       min_freq=2)
+        iwriter = HtmlImageWriter(root=os.path.join(self.loader.root,
+                                                    self.loader.layout.img_dir))
         composite_writer = HtmlStructuredFlattenedWriter(root=self.loader.root,
-                                               writers=(twriter, iwriter))
+                                                         writers=(twriter,
+                                                                  iwriter))
 
         introspection = IntrospectionTransformer(mm_pipeline,
                                                  writer=composite_writer)

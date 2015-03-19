@@ -60,7 +60,7 @@ class IntrospectionTransformer(TransformationABC):
         iid = item[0]
         value = item[1]
 
-        introspection_file = self.writer.run(iid, value, self)
+        introspection_file = self.writer.run(iid, value, self.corpus)
         return [introspection_file]  # Has to return a 1-dimensional vector.
 
     def _apply(self, corpus, chunksize=None):
