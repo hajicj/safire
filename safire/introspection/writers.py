@@ -8,6 +8,7 @@ from gensim.utils import is_corpus
 import numpy
 import operator
 from safire.datasets.dataset import CompositeDataset
+from safire.datasets.transformations import FlattenedDatasetCorpus
 from safire.introspection import html_utils
 from safire.utils.transcorp import get_id2doc_obj, get_id2word_obj, \
     find_type_in_pipeline
@@ -219,6 +220,11 @@ class HtmlStructuredFlattenedWriter(HtmlSimpleWriter):
                              'writers in the HtmlStructuredFlattenedWriter. (Values: {0},'
                              ' writers: {1})'.format(len(values),
                                                      len(self.writers)))
+        if not isinstance(corpus, FlattenedDatasetCorpus):
+            raise TypeError('Flattened dataset writer only works when the'
+                            ' given corpus is the result of applying'
+                            ' a FlattenComposite transformer.')
+
         elements = []
 
         individual_iids = corpus.obj.indexes[iid]
@@ -333,4 +339,4 @@ class HtmlVocabularyWriter(HtmlSimpleWriter):
         return wf_pairs_table
 
 
-
+class HtmlSimilarImagesWriter

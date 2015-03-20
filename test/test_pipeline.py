@@ -7,10 +7,7 @@ compatibility with the pipeline-building framework. Note that a lot of
 functions from safire.utils.transcorp should be tested here.
 """
 import os
-try:
-    import Image
-except ImportError:
-    from PIL import Image
+from PIL import Image
 from gensim.interfaces import TransformedCorpus
 from gensim.models import TfidfModel
 import logging
