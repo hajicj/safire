@@ -89,7 +89,7 @@ Train/dev/test split is handled at the dataset level.
 
 import logging
 import gensim
-from gensim.interfaces import TransformationABC
+from gensim.interfaces import TransformationABC, CorpusABC
 import theano
 import safire.datasets
 import safire.utils
@@ -105,10 +105,16 @@ import safire.utils.transcorp
 class CastPipelineAsDataset(TransformationABC):
     """Dummy class that acts as an ``obj`` member of a DatasetABC.
     As a transformation, does nothing."""
+    def __init__(self,  **dataset_abc_kwargs):
+        self.dataset_abc_kwargs = dataset_abc_kwargs
+
     def __str__(self):
         return '{0}: stand-in for a TransformationABC'.format(type(self))
 
     def __getitem__(self, item):
+        if isinstance(item, CorpusABC):
+            return self._apply(item, **self.dataset_abc_kwargs)
+
         return item
 
     def _apply(self, corpus, chunksize=None, **dataset_abc_kwargs):
@@ -468,7 +474,7 @@ class CompositeDataset(DatasetABC):
 
         """
         self.aligned = aligned
-        # Check lengths
+        # Check lengths??
         self.length = len(data[0])  # TODO: This is very temporary.
         super(CompositeDataset, self).__init__(data, dim=dim,
                                                test_p=test_p,

@@ -35,7 +35,8 @@ from safire.utils.transcorp import dimension, get_id2word_obj, \
     compute_docname_flatten_mapping, docnames2indexes, get_id2doc_obj
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
-from safire.datasets.dataset import Dataset, CompositeDataset
+from safire.datasets.dataset import Dataset, CompositeDataset, \
+    CastPipelineAsDataset
 from safire.utils.transformers import LeCunnVarianceScalingTransform, \
     GeneralFunctionTransform, SimilarityTransformer
 from safire.data import VTextCorpus, FrequencyBasedTransformer
@@ -118,6 +119,11 @@ class TestPipeline(SafireTestCase):
         self.assertEqual(dataset.dim, 100)
         batch = dataset[1:4]
         print batch
+
+        dataset_caster = CastPipelineAsDataset()
+        dataset = dataset_caster[self.pipeline]
+
+        self.assertEqual(dataset.dim, 100)
 
     def test_setup_multimodal(self):
 
