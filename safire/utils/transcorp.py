@@ -125,10 +125,10 @@ def doc2id(corpus, docname):
     return obj[docname]
 
 
-def bottom_corpus(corpus):
+def bottom_corpus(pipeline):
     """Jumps through a stack of TransformedCorpus or Dataset
     objects all the way to the bottom corpus."""
-    current_corpus = corpus
+    current_corpus = pipeline
     if isinstance(current_corpus, TransformedCorpus):
         return bottom_corpus(current_corpus.corpus)
     if isinstance(current_corpus, safire.datasets.dataset.DatasetABC):
@@ -136,15 +136,60 @@ def bottom_corpus(corpus):
     return current_corpus
 
 
+def set_as_bottom_corpus(pipeline, corpus):
+    """Puts the given corpus at the bottom of the given pipeline.
+    Note that this invalidates all id2doc/doc2id mappings and there's currently
+    no mechanism to fix that.
+
+    :param pipeline: The pipeline which should have its bottom corpus reset.
+
+    :param corpus: The new bottom corpus. (Of course, can be a whole pipeline!)
+
+    """
+    # The "Dataset is not a TransformedCorpus" problem shows up here a *lot*.
+    current_pipeline = pipeline
+    if isinstance(current_pipeline, TransformedCorpus):
+        if not hasattr(current_pipeline, corpus):
+            raise ValueError('Haven\'t yet found bottom-plus-1st corpus, but'
+                             ' already cannot continue (no \'corpus\' attribute'
+                             ' -- something strange is happening.')
+        if isinstance(current_pipeline.corpus, TransformedCorpus) or \
+                isinstance(current_pipeline.corpus,
+                           safire.datasets.dataset.DatasetABC):
+            set_as_bottom_corpus(current_pipeline, corpus)
+        else:
+            logging.info('Setting as bottom corpus of {0}: {1}'
+                         ''.format(current_pipeline.corpus, corpus))
+            current_pipeline.corpus = corpus
+
+    if isinstance(current_pipeline, safire.datasets.dataset.DatasetABC):
+        if not hasattr(current_pipeline, corpus):
+            raise ValueError('Haven\'t yet found bottom-plus-1st corpus, but'
+                             ' already cannot continue (no \'corpus\' attribute'
+                             ' -- something strange is happening.')
+        if isinstance(current_pipeline.corpus, TransformedCorpus) or \
+                isinstance(current_pipeline.corpus,
+                           safire.datasets.dataset.DatasetABC):
+            set_as_bottom_corpus(current_pipeline.data, corpus)
+        else:
+            logging.info('Setting as bottom corpus of {0}: {1}'
+                         ''.format(current_pipeline, corpus))
+            current_pipeline.data = corpus
+
+
 def dimension(corpus):
     """Finds the topmost corpus that can provide information about its
-    output dimension."""
+    output dimension.
+
+    MOST IMPORTANT FUNCTION. EVER. Always use this function to determine the
+    dimension of a pipeline."""
     # print 'Deriving dimension of corpus {0}'.format(type(corpus))
     if isinstance(corpus, numpy.ndarray) and len(corpus.shape) == 2:
         return corpus.shape[1]
     current_corpus = corpus
     if hasattr(current_corpus, 'dim'):
-        # Covers almost everything non-recursive in safire.
+        # Covers almost everything non-recursive in safire (and some recursive,
+        # too; this is also the policy for all future dimension-setting objects)
         return current_corpus.dim
     if hasattr(current_corpus, 'n_out'):
         return current_corpus.n_out
@@ -157,8 +202,8 @@ def dimension(corpus):
 
     # This is the "magic". There's no unified mechanism for providing output
     # corpus dimension in gensim, so we have to deal with it case-by-case.
-    # Stuff that is in safire usually has an 'n_out' attribute (or, in other
-    # words: whenever something in safire has the 'n_out' attribute, it means
+    # Stuff that is in safire usually has an 'dim' attribute (or, in other
+    # words: whenever something in safire has the 'dim' attribute, it means
     # the output dimension).
     if isinstance(current_corpus, TransformedCorpus):
         if isinstance(current_corpus.obj, FrequencyBasedTransformer):

@@ -339,4 +339,5 @@ class HtmlVocabularyWriter(HtmlSimpleWriter):
         return wf_pairs_table
 
 
-class HtmlSimilarImagesWriter
+class HtmlSimilarImagesWriter(HtmlSimpleWriter):
+    pass

@@ -404,8 +404,6 @@ def shuffle_together(*lists):
     random.shuffle(zipped_lists)
     unzipped_lists = map(list, zip(*zipped_lists))
 
-    #print unzipped_lists
-
     return unzipped_lists
 
 

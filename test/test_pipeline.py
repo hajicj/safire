@@ -687,7 +687,8 @@ class TestPipeline(SafireTestCase):
             print '_imaging module loaded, no jpeg decoder.'
         image = Image.open(os.path.join(img_root,
                                         sorted_qurey_results_docs[0][0][0]))
-        image.show()
+        #image.show()
+        print 'Image: {0}'.format(image)
 
         self.assertTrue(len(sampled_images) == len(query_results))
 

@@ -99,12 +99,33 @@ import safire.utils.transcorp
 # Doesn't DatasetABC implement the IndexedCorpus interface?
 # Should it be made explicit?
 # TODO: Try to implement DatasetABC as a CorpusABC subclass.
-#       This would greatly simplify a lot of transcorp.py functions.
-class DatasetABC(gensim.utils.SaveLoad):
-    """This is the old Dataset, reworked into a wrapper for an IndexedCorpus
-    (like, for instance, the ShardedCorpus). It can also serve as a wrapper
-    for a Dataset, in order to be subclassable to something that performs
-    an on-the-fly transformation of the data."""
+#       (would greatly simplify a lot of transcorp.py functions)
+#class DatasetABC(gensim.utils.SaveLoad):
+
+class CastPipelineAsDataset(TransformationABC):
+    """Dummy class that acts as an ``obj`` member of a DatasetABC.
+    As a transformation, does nothing."""
+    def __str__(self):
+        return '{0}: stand-in for a TransformationABC'.format(type(self))
+
+    def __getitem__(self, item):
+        return item
+
+    def _apply(self, corpus, chunksize=None, **dataset_abc_kwargs):
+        return DatasetABC(corpus, **dataset_abc_kwargs)
+
+
+class DatasetABC(safire.utils.IndexedTransformedCorpus):
+    """This is the old Dataset, reworked as an IndexedTransformedCorpus so that
+    it acts just like any pipeline block.
+
+    Note that while it is implemented as a TransformedCorpus block, this block
+    is *not* initialized by/with a transformer, so the 'obj' is a dummy
+    class that does nothing.
+
+    Note: this all points to the fact that the Dataset should *not* be a
+    pipeline component. It should be a wrapper applied by the Learner.
+    """
     def __init__(self, data, dim=None, test_p=None, devel_p=None,
                  ensure_dense=True):
         """Constructs a Dataset wrapper for the given data.
@@ -147,6 +168,10 @@ class DatasetABC(gensim.utils.SaveLoad):
             logging.info('Ensuring dense output...')
             _data = safire.utils.transcorp.convert_to_dense(_data, dim)
         self.data = _data
+
+        # For compatibility with transcorp functions meant for TransformedCorpus
+        self.corpus = self.data
+        self.obj = CastPipelineAsDataset()
 
         self.dim = dim
         self.n_in = dim   # Input row dimension/shape
@@ -661,6 +686,7 @@ class TransformedDataset(Dataset):
 
         """
         self.data = dataset
+        self.corpus = self.data
         self.obj = obj
 
         self.n_out = self.obj.n_out
