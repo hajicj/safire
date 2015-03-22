@@ -31,6 +31,7 @@ import scipy.sparse
 from safire.data import FrequencyBasedTransformer, VTextCorpus
 import safire.data.serializer
 import safire.data.sharded_corpus
+import safire.data.composite_corpus
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
@@ -233,6 +234,8 @@ def get_composite_source(pipeline, name):
                         ''.format(name, type(name)))
     if isinstance(pipeline, safire.datasets.dataset.CompositeDataset):
         return pipeline[name]
+    if isinstance(pipeline, safire.datasets.dataset.CompositeCorpus):
+        return pipeline[name]
     else:
         if isinstance(pipeline, TransformedCorpus):
             return get_composite_source(pipeline.corpus, name)
@@ -383,26 +386,27 @@ def keymap2dict(keymap_dict):
 
 def log_corpus_stack(corpus):
     """Reports the types of corpora and transformations of a given
-    corpus stack. Currently cannot deal with CompositeDataset pipelines."""
+    corpus stack. Can deal with CompositeDataset pipelines."""
     if isinstance(corpus, TransformedCorpus):
         r = 'Type: {0} with obj {1}'.format(type(corpus), type(corpus.obj))
         return '\n'.join([r, log_corpus_stack(corpus.corpus)])
     elif isinstance(corpus, safire.datasets.dataset.TransformedDataset):
         r = 'Type: %s with obj %s' % (type(corpus), type(corpus.obj))
         return '\n'.join([r, log_corpus_stack(corpus.data)])
-    elif isinstance(corpus, safire.datasets.dataset.CompositeDataset):
+    elif isinstance(corpus, safire.datasets.dataset.CompositeDataset)\
+            or isinstance(corpus, safire.data.composite_corpus.CompositeCorpus):
         r = 'Type: {0} with the following datasets: {1}'.format(
             type(corpus),
-            ''.join(['\n    {0}'.format(type(d)) for d in corpus.data])
+            ''.join(['\n    {0}'.format(type(d)) for d in corpus.corpus])
         )
-        individual_logs = [log_corpus_stack(d) for d in corpus.data]
+        individual_logs = [log_corpus_stack(d) for d in corpus.corpus]
         combined_logs = '------component-------\n' + \
                         '------component-------\n'.join(individual_logs)
         return '\n'.join([r, combined_logs])
     elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
         r = 'Type: {0}, passing through DatasetABC to underlying corpus {1}' \
-            ''.format(type(corpus), type(corpus.data))
-        return '\n'.join([r, log_corpus_stack(corpus.data)])
+            ''.format(type(corpus), type(corpus.corpus))
+        return '\n'.join([r, log_corpus_stack(corpus.corpus)])
     else:
         r = 'Type: %s' % (type(corpus))
         return '\n'.join([r, '=== STACK END ===\n'])
