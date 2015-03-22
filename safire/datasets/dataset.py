@@ -133,7 +133,7 @@ class DatasetABC(safire.utils.IndexedTransformedCorpus):
     pipeline component. It should be a wrapper applied by the Learner.
     """
     def __init__(self, data, dim=None, test_p=None, devel_p=None,
-                 ensure_dense=True):
+                 ensure_dense=False):
         """Constructs a Dataset wrapper for the given data.
 
         The default train-dev-test split is by proportion of data.
@@ -470,7 +470,7 @@ class CompositeDataset(DatasetABC):
             from ``data`` have the same length. If unset, will not check this
             and advertise the length of the first given dataset as its length;
             only do this if you are flattening the dataset immediately after
-            initialization!
+            initialization (and using indexes to flatten)!
 
         """
         self.aligned = aligned
