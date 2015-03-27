@@ -5,6 +5,7 @@ transformer components, mainly used for miscellaneous preprocessing (scaling,
 normalization, sigmoid nonlinearity, etc.).
 
 """
+import collections
 import itertools
 import logging
 import operator
@@ -13,10 +14,10 @@ import gensim
 from gensim.interfaces import TransformedCorpus
 from gensim.similarities import Similarity
 import numpy
-#from safire.utils.transcorp import dimension
-from safire.data.filters.basefilter import BaseFilter
+import scipy.sparse
 import safire.datasets.dataset
 from safire.utils import gensim2ndarray, IndexedTransformedCorpus
+from safire.utils.matutils import sum_gensim_columns
 import safire.utils.transcorp
 
 from sklearn.preprocessing import StandardScaler
@@ -365,4 +366,100 @@ class SimilarityTransformer(gensim.interfaces.TransformationABC):
     def _apply(self, corpus, chunksize=None):
 
         return safire.utils.transcorp.smart_apply_transcorp(self, corpus)
+
+
+class ItemAggregationTransform(gensim.interfaces.TransformationABC):
+    """The ItemAggregationTransform combines items that map to the same source
+    document through the input pipeline's ``id2doc`` mapping.
+
+    The specific method of combining items belonging to the same source document
+    is chosen at initialization/subclassed (TBD), by default the aggregator sums
+    the individual items by column. Combining a set of items is handled by its
+    ``__getitem__()`` method.
+
+    During iteration, the aggregator buffers **consecutive** items that map to
+    the same source document. Once the buffer is full, it applies the method of
+    aggregation and yields the resulting item.
+
+    .. note::
+
+        This does *not* guarantee that there will be one item per source
+        document -- the aggregator combines runs of *consecutive* items from the
+        same source doc, so if the input corpus is interleaved, there will be
+        multiple items for the same source document. This strategy is chosen to
+        make the transformation work without reading the entire input pipeline.
+
+    The transformer again has its own corpus, the DocAggregatedCorpus, as it
+    alters iteration behavior.
+
+    """
+    def __init__(self):
+        pass
+
+    def _apply(self, corpus, chunksize=None):
+        return ItemAggregationCorpus(self, corpus, chunksize=chunksize)
+
+    def __getitem__(self, itembuffer):
+        """In the default implementation, sums the supplied item buffer
+        column-wise."""
+        if isinstance(itembuffer, numpy.ndarray):
+            return numpy.sum(itembuffer, axis=0)
+        elif isinstance(itembuffer, scipy.sparse.csr_matrix):
+            logging.critical('Support for aggregating scipy sparse matrices not'
+                             ' implemented yet.')
+            raise NotImplementedError()
+        else:
+            # List of gensim sparse vectors?
+            # List of lists of gensim sparse vectors?
+            return sum_gensim_columns(itembuffer)
+
+
+class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
+    """This TransformedCorpus block aggregates items that come from the same
+    source document. See :class:`ItemAggregationTransform` for a descriptiont
+    of how the corpus behaves.
+
+    This is a utility class that should not be initialized outside the _apply()
+    method of ItemAggregationTransform."""
+    def __init__(self, obj, corpus, chunksize=None):
+        # Chunksize is ignored.
+        self.obj = obj
+        self.corpus = corpus
+
+        self.orig_id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
+        self.orig_doc2id = safire.utils.transcorp.get_id2doc_obj(self.corpus)
+
+        self.doc2id = collections.defaultdict(set)
+        self.id2doc = collections.defaultdict(str)
+
+    def __iter__(self):
+        itembuffer = []
+        output_iid = 0
+
+        current_docname = None
+        for iid, item in enumerate(self.corpus):
+            docname = self.orig_id2doc[iid]
+            if docname == current_docname:
+                itembuffer.append(item)
+            else:
+                if current_docname is None:
+                    current_docname = docname
+                    itembuffer.append(item)
+                else:
+                    self.doc2id[current_docname].add(output_iid)
+                    self.id2doc[output_iid] = current_docname
+                    yield self.obj[itembuffer]
+                    output_iid += 1
+                    current_docname = docname
+                    itembuffer = [item]
+
+        # Last set of items
+        self.doc2id[current_docname].add(output_iid)
+        self.id2doc[output_iid] = current_docname
+        yield self.obj[itembuffer]
+
+
+
+
+
 

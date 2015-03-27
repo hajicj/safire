@@ -7,10 +7,39 @@ from safire.data.layouts import clean_data_root, init_data_root
 from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.serializer import Serializer
 from safire.data.sharded_corpus import ShardedCorpus
+from safire.utils import IndexedTransformedCorpus
+from safire.utils.transcorp import id2doc_to_doc2id
 
 __author__ = 'hajicj'
 
 import unittest
+
+
+class SafireMockCorpus(gensim.interfaces.CorpusABC):
+    """Use this class to simulate a safire pipeline.
+    """
+    def __init__(self, data, dim, id2doc):
+        if len(id2doc.keys()) != len(data):
+            raise ValueError('Supplied id2doc length {0} does not match '
+                             'supplied data length {1}'
+                             ''.format(len(id2doc), len(data)))
+        self.data = data
+        self.dim = dim
+        self.id2doc = id2doc
+        self.doc2id = id2doc_to_doc2id(self.id2doc)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __iter__(self):
+        for item in self.data:
+            yield item
+
+    def __getitem__(self, item):
+        if isinstance(item, list):
+            return [self.data[i] for i in item]
+        else:
+            return self.data[item]
 
 
 class SafireTestCase(unittest.TestCase):

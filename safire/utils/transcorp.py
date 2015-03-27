@@ -128,6 +128,27 @@ def doc2id(corpus, docname):
     return obj[docname]
 
 
+def id2doc_to_doc2id(id2doc):
+    """Creates a reverse doc2id mapping from the supplied id2doc mapping.
+    Returns the default for doc2id maps, ``collections.defaultdict(set)``.
+    """
+    doc2id = collections.defaultdict(set)
+    for iid, doc in id2doc.items():
+        doc2id[doc].add(iid)
+    return doc2id
+
+
+def doc2id_to_id2doc(doc2id):
+    """Creates a reverse id2doc mapping from the supplied doc2id mapping.
+    Returns the default for id2doc maps, ``collections.defaultdict(str)``.
+    """
+    id2doc = collections.defaultdict(str)
+    for doc, iids in doc2id.items():
+        for iid in iids:
+            id2doc[iid] = doc
+    return id2doc
+
+
 def bottom_corpus(pipeline):
     """Jumps through a stack of TransformedCorpus or Dataset
     objects all the way to the bottom corpus."""
