@@ -16,12 +16,17 @@ import numpy
 import time
 import operator
 import theano
+import webbrowser
+from safire.data.composite_corpus import CompositeCorpus
 from safire.data.document_filter import DocumentFilterTransform
 from safire.data.filters.frequency_filters import zero_length_filter
 from safire.data.loaders import IndexLoader
 from safire.data.word2vec_transformer import Word2VecTransformer
 from safire.datasets.word2vec_transformer import \
     Word2VecSamplingDatasetTransformer
+from safire.introspection.interfaces import IntrospectionTransformer
+from safire.introspection.writers import HtmlVocabularyWriter, HtmlSimpleWriter, \
+    HtmlStructuredFlattenedWriter, HtmlImageWriter, HtmlSimilarImagesWriter
 from safire.learning.interfaces import SafireTransformer, \
     MultimodalClampedSamplerModelHandle
 from safire.learning.learners import BaseSGDLearner
@@ -560,14 +565,20 @@ class TestPipeline(SafireTestCase):
         # - run transformation to similarity space
 
         # Building the text pipeline.
-        text_pipeline = VTextCorpus(self.vtlist, input_root=self.data_root,
-                                    tokens=True,
-                                    **vtcorp_settings)
-        text_pipeline.dry_run()
+        pre_w2v_text_pipeline = VTextCorpus(self.vtlist,
+                                            input_root=self.data_root,
+                                            tokens=True,
+                                            **vtcorp_settings)
+        pre_w2v_text_pipeline.dry_run()
+        # Serialize text.
+        prew2v_t_serializer = Serializer(pre_w2v_text_pipeline, ShardedCorpus,
+                                  self.loader.pipeline_serialization_target(
+                                      '.pre_w2v.tcorp'))
+        s_prew2v_t_pipeline = prew2v_t_serializer[pre_w2v_text_pipeline]
 
         word2vec = Word2VecTransformer(self.edict_pkl_fname,
-                                       get_id2word_obj(text_pipeline))
-        text_pipeline = word2vec[text_pipeline]
+                                       get_id2word_obj(pre_w2v_text_pipeline))
+        text_pipeline = word2vec[pre_w2v_text_pipeline]
 
         # Add empty document filtering.
         word2vec_miss_filter = DocumentFilterTransform(zero_length_filter)
@@ -673,26 +684,50 @@ class TestPipeline(SafireTestCase):
         print '-- querying similarity index --'
         query_results = [qres for qres in retrieval_pipeline[:10]]
 
+        # Introspection of results: combine retrieval_pipeline (multi-image
+        # writer?) and the token pipeline
+        intro_combined_corpus = CompositeCorpus((s_prew2v_t_pipeline,
+                                                 retrieval_pipeline),
+                                                aligned=False)
+        intro_flatten = FlattenComposite(intro_combined_corpus,
+                                         t2i_indexes, structured=True)
+        intro_flattened_pipeline = intro_flatten[intro_combined_corpus]
+        twriter = HtmlVocabularyWriter(root=self.loader.root,
+                                       top_k=30,
+                                       min_freq=0.001)
+        iwriter = HtmlSimilarImagesWriter(
+            root=os.path.join(self.loader.root, self.loader.layout.img_dir),
+            image_id2doc=get_id2doc_obj(image_pipeline))
+        composite_writer = HtmlStructuredFlattenedWriter(root=self.loader.root,
+                                                         writers=(twriter,
+                                                                  iwriter))
+        introspection = IntrospectionTransformer(intro_flattened_pipeline,
+                                                 writer=composite_writer)
+        introspected_pipeline = introspection[intro_flattened_pipeline]
+        idocs = [idoc for idoc in introspected_pipeline[:10]]
+        iid2intro = introspected_pipeline.obj.iid2introspection_filename
+        filenames = [iid2intro[iid] for iid in sorted(iid2intro.keys())]
+        for f in filenames:
+            self.assertTrue(os.path.isfile(f))
+        webbrowser.open(filenames[0])
+
         print '-- mapping query results to images --'
         img_id2doc = get_id2doc_obj(image_pipeline)
         query_results_docs = []
         for qres in query_results:
             query_results_docs.append([(img_id2doc[iid], sim)
                                        for iid, sim in qres])
-        sorted_qurey_results_docs = [sorted(qres_d, key=operator.itemgetter(1),
+        sorted_query_results_docs = [sorted(qres_d, key=operator.itemgetter(1),
                                             reverse=True)
                                      for qres_d in query_results_docs]
 
-        print '\n'.join(['{0}'.format(d) for d in sorted_qurey_results_docs])
+        print '\n'.join(['{0}'.format(d) for d in sorted_query_results_docs])
 
         print '-- testing visualization --'
         img_root = os.path.join(self.loader.root,
                                 self.loader.layout.img_dir)
-        import _imaging
-        if not hasattr(_imaging, 'jpeg_decoder'):
-            print '_imaging module loaded, no jpeg decoder.'
         image = Image.open(os.path.join(img_root,
-                                        sorted_qurey_results_docs[0][0][0]))
+                                        sorted_query_results_docs[0][0][0]))
         #image.show()
         print 'Image: {0}'.format(image)
 

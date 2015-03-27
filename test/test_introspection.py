@@ -1,6 +1,7 @@
 import os
 from PIL import Image
 import webbrowser
+from safire.data.composite_corpus import CompositeCorpus
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.data.vtextcorpus import VTextCorpus
 from safire.data.serializer import Serializer
@@ -65,7 +66,8 @@ class TestIntrospection(SafireTestCase):
 
         vtlist = os.path.join(self.loader.root, self.loader.layout.vtlist)
         vtcorp = VTextCorpus(vtlist, input_root=self.loader.root,
-                             token_filter=PositionalTagTokenFilter(['N', 'A', 'V'], 0),
+                             token_filter=PositionalTagTokenFilter(['N', 'A'],
+                                                                   0),
                              filter_capital=True)
         vtcorp.dry_run()
 
@@ -81,8 +83,8 @@ class TestIntrospection(SafireTestCase):
         icorp = iserializer[self.icorp]
         idata = Dataset(icorp, ensure_dense=True)
 
-        mmdata = CompositeDataset((tdata, idata), names=('txt', 'img'),
-                                  aligned=False)
+        mmdata = CompositeCorpus((tdata, idata), names=('txt', 'img'),
+                                 aligned=False)
 
         t2i_file = os.path.join(self.loader.root,
                                 self.loader.layout.textdoc2imdoc)
@@ -90,7 +92,7 @@ class TestIntrospection(SafireTestCase):
 
         flatten = FlattenComposite(mmdata, indexes=t2i_indexes, structured=True)
         mm_pipeline = flatten[mmdata]
-        # mm_results = [mm_vect for mm_vect in mm_pipeline]
+        mm_results = [mm_vect for mm_vect in mm_pipeline]
 
         twriter = HtmlVocabularyWriter(root=self.loader.root,
                                        top_k=30,
@@ -104,10 +106,27 @@ class TestIntrospection(SafireTestCase):
         introspection = IntrospectionTransformer(mm_pipeline,
                                                  writer=composite_writer)
         introspected_pipeline = introspection[mm_pipeline]
-        filenames = [fname_vect for fname_vect in introspected_pipeline]
-        for fname_vect in filenames:
-            self.assertTrue(os.path.isfile(fname_vect[0]))
-        webbrowser.open(filenames[0][0])
+        mm_results_after_introspection = [mm_vect
+                                          for mm_vect in introspected_pipeline]
+
+        # Introspection doesn't change the data
+        for mm, imm in zip(mm_results, mm_results_after_introspection):
+            self.assertEqual(type(mm), type(imm))
+            self.assertEqual(len(mm), len(imm))
+            for mm_item, imm_item in zip(mm, imm):
+                self.assertEqual(mm_item.all(), imm_item.all())
+
+        # Files are all created
+        # ...this level of indirection should be wrapped in a function.
+        iid2introspection = introspected_pipeline.obj.iid2introspection_filename
+        filenames = [iid2introspection[iid]
+                     for iid in sorted(iid2introspection.keys())]
+        print filenames
+        for fname in filenames:
+            self.assertTrue(os.path.isfile(fname))
+
+        # Let's see what's going on
+        webbrowser.open(filenames[0])
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()

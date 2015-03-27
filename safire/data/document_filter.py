@@ -182,7 +182,7 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
 
                         # Building the filtered doc <=> id mapping
                         self.doc2id[docname].add(self.n_passed)
-                        self.id2doc[self.n_passed] = persistent_docid
+                        self.id2doc[self.n_passed] = docname #persistent_docid
 
                         self.n_passed += 1
                         yield transformed
@@ -212,7 +212,7 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
 
                     # Building the filtered doc <=> id mapping
                     self.doc2id[docname].add(self.n_passed)
-                    self.id2doc[self.n_passed] = persistent_docid
+                    self.id2doc[self.n_passed] = docname # persistent_docid
 
                     self.n_passed += 1
                     yield transformed

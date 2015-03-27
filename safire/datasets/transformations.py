@@ -135,8 +135,8 @@ class FlattenComposite(TransformationABC):
             docnames associated with each of the composite data sources.
         """
         id2doc = collections.defaultdict(tuple)
-        src_id2docs = [safire.utils.transcorp.get_id2doc_obj(d)
-                       for d in composite.data]
+        src_id2docs = [safire.utils.transcorp.get_id2doc_obj(c)
+                       for c in composite.corpus]
         for iid, idx in enumerate(indexes):
                 id2doc[iid] = tuple(src_id2doc[i]
                                     for src_id2doc, i
@@ -200,7 +200,7 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
         """
         self.obj = flatten
         self.indexes = flatten.indexes
-        self.corpus = corpus
+        self.corpus = corpus  # A composite corpus
 
         self.dim = self.derive_dimension(self.corpus)
         self.n_in = self.dim
@@ -239,7 +239,7 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
             logging.debug('Indexes: {0}, by dataset: {1}'
                           ''.format(indexes, idxs_by_dataset))
             retrieved = []
-            for dataset, idxs in zip(self.corpus.data, idxs_by_dataset):
+            for dataset, idxs in zip(self.corpus.corpus, idxs_by_dataset):
                 logging.debug(' Retrieving: dataset {0}, '
                               'idxs {1}'.format(dataset, idxs))
 
@@ -258,7 +258,7 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
                           ''.format([r.shape for r in retrieved]))
             output = self.item2flat(retrieved, nostack=self.structured)
 
-        print '__getitem__ output: {0}'.format(output)
+        #print '__getitem__ output: {0}'.format(output)
         return output
 
     def derive_dimension(self, composite):

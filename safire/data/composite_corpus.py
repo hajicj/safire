@@ -67,30 +67,34 @@ class CompositeCorpus(IndexedTransformedCorpus):
         self.corpus = corpora
         self.obj = None  # No obj so far, waiting to implement ZipPipelines.
 
+        derived_dim = self.derive_dimension(corpora)
         if dim is None:
             dim = self.derive_dimension(corpora)
+        else:
+            if dim != derived_dim:
+                logging.warn('Supplied dimension {0} inconsistent with '
+                             'dimension {1} derived from given corpora. '
+                             'Using supplied dimension (and hoping you know '
+                             'what you are doing).'
+                             ''.format(dim, derived_dim))
         self.dim = dim
-
-        #super(CompositeCorpus, self).__init__(corpora)
-        # The composite dataset doesn't care if input or output are dense or
-        # not...
 
         if self.aligned:
             for d in corpora:
                 if len(d) != self.length:
-                    raise ValueError('All composite dataset components must '
+                    raise ValueError('All composite corpus components must '
                                      'have the same length. (Lengths: '
-                                     '{0}) Are you sure the CompositeDataset'
+                                     '{0}) Are you sure the CompositeCorpus'
                                      'should be aligned?'
                                      ''.format(tuple((len(d) for d in corpora)))
                     )
 
         if names:
             if len(names) != len(corpora):
-                raise ValueError('Dataset names too many or too few'
+                raise ValueError('Corpus names too many or too few'
                                  ' ({0}) for {1} component'
-                                 ' datasets.'.format(len(names),
-                                                     len(corpora)))
+                                 ' corpora.'.format(len(names),
+                                                    len(corpora)))
         else:
             names = []
         self.names = names
@@ -131,3 +135,7 @@ class CompositeCorpus(IndexedTransformedCorpus):
     @staticmethod
     def derive_dimension(corpora):
         return tuple(safire.utils.transcorp.dimension(d) for d in corpora)
+
+
+# Flattening a CompositeCorpus: same as flattening a CompositeDataset, as the
+# CompositeCorpus already guarantees a dimension.

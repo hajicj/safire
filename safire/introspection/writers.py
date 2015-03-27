@@ -7,11 +7,12 @@ import codecs
 from gensim.utils import is_corpus
 import numpy
 import operator
+from safire.data.composite_corpus import CompositeCorpus
 from safire.datasets.dataset import CompositeDataset
 from safire.datasets.transformations import FlattenedDatasetCorpus
 from safire.introspection import html_utils
 from safire.utils.transcorp import get_id2doc_obj, get_id2word_obj, \
-    find_type_in_pipeline
+    find_type_in_pipeline, log_corpus_stack
 
 __author__ = "Jan Hajic jr."
 
@@ -122,11 +123,6 @@ class HtmlSimpleWriter(WriterABC):
         body = self.get_html_body(iid, value, corpus)
         footer = self.get_html_footer()
 
-        print u'Document:\n'
-        print header
-        print body
-        print footer
-
         output = header + u'\n\n' + body + u'\n\n' + footer
         output_handle.write(output + u'\n')
 
@@ -233,8 +229,15 @@ class HtmlStructuredFlattenedWriter(HtmlSimpleWriter):
         heading = html_utils.with_tag(heading_text, 'h1')
         elements.append(heading)
 
-        composite = find_type_in_pipeline(corpus, CompositeDataset)
-        sources = composite.data
+        composite = find_type_in_pipeline(corpus, CompositeCorpus)
+        if composite is None:
+            composite = find_type_in_pipeline(corpus, CompositeDataset)
+        if composite is None:
+            raise ValueError('Cannot find composite corpus in supplied '
+                             'pipeline!\nPipeline:\n{0}'
+                             ''.format(log_corpus_stack(corpus)))
+
+        sources = composite.corpus
         values = [self.writers[i].generate_value(individual_iids[i],
                                                  values[i],
                                                  sources[i])
@@ -249,6 +252,56 @@ class HtmlStructuredFlattenedWriter(HtmlSimpleWriter):
         return text
 
 
+class HtmlSimilarImagesWriter(HtmlSimpleWriter):
+    """This writer works on SimilarityTransformer output. It shows the retrieved
+    images and their similarities.
+    """
+    def __init__(self, root, image_id2doc, n_rows=1, **kwargs):
+        """
+        :param root: The root folder relative to which do id2doc values describe
+            files. In this writer, this should be the *image* folder, as the
+            generate_value method will be working with image ``iid``s that fell
+            out of the retrieval pipeline.
+
+        :param image_id2doc: This has to be supplied, because the id2doc mapping
+            from the ``corpus`` passed to ``generate_value()`` is the
+            *retrieval* pipeline, where the id2doc is derived from the *text*
+            inputs.
+
+        :param n_rows:
+        :param kwargs:
+        :return:
+        """
+        super(HtmlSimilarImagesWriter, self).__init__(root, **kwargs)
+        self.image_id2doc = image_id2doc
+        self.n_rows = n_rows  # TODO: So far ignored...
+
+    def generate_value(self, iid, value, corpus):
+        """
+
+        :param iid: This will be the iid of the input text.
+
+        :param value:
+        :param corpus:
+        :return:
+        """
+        id2doc = self.image_id2doc
+        image_urls = []
+        similarities = []
+        print 'Passed value: {0}'.format(value)
+        for iid, similarity in value[0]:  # One-document gensim "copora"?
+            docname = id2doc[iid]
+            image_fname = os.path.join(self.root, docname)
+            image_urls.append(html_utils.as_local_url(image_fname))
+            similarities.append(similarity)
+
+        image_cells = [html_utils.as_table([[html_utils.as_image(url)], [sim]])
+                       for url, sim in zip(image_urls, similarities)]
+        image_tags_table_row = [image_cells]
+        output = html_utils.as_table(image_tags_table_row)
+        return output
+
+
 class HtmlImageWriter(HtmlSimpleWriter):
     """This writer interprets the value as an image and instead of writing
     the value itself, will use the ``iid`` and id2doc mapping available through
@@ -261,7 +314,17 @@ class HtmlImageWriter(HtmlSimpleWriter):
         need to supply the image directory in the writer ``root`` init arg.
     """
     def generate_value(self, iid, value, corpus):
-        docname = str(get_id2doc_obj(corpus)[iid])
+        # print '\n--------- new generate_value call -------------\n'
+        # print 'Corpus: {0}'.format(log_corpus_stack(corpus))
+        # print 'iid: {0}'.format(iid)
+        id2doc = get_id2doc_obj(corpus)
+        ### DEBUG
+        firstkey = id2doc.keys()[0]
+        # print 'id2doc "first" member: {0} -> {1}/{2}'.format(firstkey,
+        #                                                      type(id2doc[firstkey]),
+        #                                                      id2doc[firstkey])
+        docname = id2doc[iid]
+        # print 'Docname: {0}'.format(docname)
         image_abspath = os.path.join(self.root, docname)
         image_url = html_utils.as_local_url(image_abspath)
         text = html_utils.as_image(image_url)
@@ -338,6 +401,3 @@ class HtmlVocabularyWriter(HtmlSimpleWriter):
         wf_pairs_table = html_utils.as_table(wf_pairs_texts)
         return wf_pairs_table
 
-
-class HtmlSimilarImagesWriter(HtmlSimpleWriter):
-    pass

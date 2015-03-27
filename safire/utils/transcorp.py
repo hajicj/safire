@@ -91,8 +91,10 @@ def get_id2word_obj(corpus):
 
 
 def get_id2doc_obj(corpus):
-    #print 'Calling get_id2doc_obj on corpus type: {0}'.format(type(corpus))
     if hasattr(corpus, 'id2doc'):
+        # ### DEBUG
+        #print 'Returning id2doc member (type: {0}) in corpus {1}\n  stack: {2}' \
+        #      ''.format(type(corpus.id2doc), corpus, log_corpus_stack(corpus))
         return corpus.id2doc
     elif isinstance(corpus, TransformedCorpus):
         return get_id2doc_obj(corpus.corpus)
@@ -234,7 +236,7 @@ def get_composite_source(pipeline, name):
                         ''.format(name, type(name)))
     if isinstance(pipeline, safire.datasets.dataset.CompositeDataset):
         return pipeline[name]
-    if isinstance(pipeline, safire.datasets.dataset.CompositeCorpus):
+    if isinstance(pipeline, safire.data.composite_corpus.CompositeCorpus):
         return pipeline[name]
     else:
         if isinstance(pipeline, TransformedCorpus):
@@ -824,7 +826,7 @@ def docnames2indexes(data, docnames):
     :returns: A list of indices into the individual components of the ``data``
         composite dataset.
     """
-    doc2ids = [get_doc2id_obj(d) for d in data.data]
+    doc2ids = [get_doc2id_obj(c) for c in data.corpus]
     # Problem: returned doc2id object in DocumentFilterCorpus retains the
     # original IDs, not the new ones. We need to convert these IDs
     #print 'Doc2ids:\n  {0}'.format(u'  \n'.join([str(type(d)) for d in doc2ids]))
