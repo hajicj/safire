@@ -436,8 +436,10 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
         itembuffer = []
         output_iid = 0
 
+        # current_docname is the docname we are currently aggregating items for.
         current_docname = None
         for iid, item in enumerate(self.corpus):
+            # docname is the document name for the current item.
             docname = self.orig_id2doc[iid]
             if docname == current_docname:
                 itembuffer.append(item)
@@ -446,6 +448,7 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
                     current_docname = docname
                     itembuffer.append(item)
                 else:
+                    # These mappings are created for the output item
                     self.doc2id[current_docname].add(output_iid)
                     self.id2doc[output_iid] = current_docname
                     yield self.obj[itembuffer]

@@ -32,6 +32,7 @@ mock_corpus = SafireMockCorpus(data=data, dim=dim, id2doc=id2doc)
 
 
 class TestItemAggregation(SafireTestCase):
+
     def setUp(self):
         self.data = mock_corpus
         self.aggregator = ItemAggregationTransform()
@@ -47,9 +48,6 @@ class TestItemAggregation(SafireTestCase):
                       self.agg_corpus.id2doc)
         agg_id2doc = get_id2doc_obj(self.agg_corpus)
         self.assertEqual(len(agg_id2doc), n_docs)
-        agg_doc2id = get_doc2id_obj(self.agg_corpus)
-        for iid in xrange(n_docs):
-            self.assertEqual(len(agg_doc2id[iid]), doclengths[iid])
 
 
 if __name__ == '__main__':
