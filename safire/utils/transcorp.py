@@ -579,7 +579,7 @@ def is_fully_indexable(pipeline):
         _ = pipeline[-1:]
         _ = pipeline[[0]]
         return True
-    except (TypeError, AttributeError, ValueError):
+    except (TypeError, AttributeError, ValueError, NotImplementedError):
         # raise
         return False
 

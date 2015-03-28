@@ -43,7 +43,7 @@ from safire.data.sharded_corpus import ShardedCorpus
 from safire.datasets.dataset import Dataset, CompositeDataset, \
     CastPipelineAsDataset
 from safire.utils.transformers import LeCunnVarianceScalingTransform, \
-    GeneralFunctionTransform, SimilarityTransformer
+    GeneralFunctionTransform, SimilarityTransformer, ItemAggregationTransform
 from safire.data import VTextCorpus, FrequencyBasedTransformer
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from test.safire_test_case import SafireTestCase
@@ -670,6 +670,10 @@ class TestPipeline(SafireTestCase):
         similarity_transformer = SimilarityTransformer(index=index)
         retrieval_pipeline = similarity_transformer[t2i_pipeline]
 
+        print '-- building aggregation transformer by source doc --'
+        aggregator = ItemAggregationTransform()
+        retrieval_pipeline = aggregator[retrieval_pipeline]
+
         print '-- resetting vtcorp input --'
         reset_vtcorp_input(retrieval_pipeline, self.vtlist)
 
@@ -682,11 +686,15 @@ class TestPipeline(SafireTestCase):
         print '       First image: {0}'.format(sampled_images[0])
 
         print '-- querying similarity index --'
-        query_results = [qres for qres in retrieval_pipeline[:10]]
+        query_results = [qres for qres in retrieval_pipeline]
 
         # Introspection of results: combine retrieval_pipeline (multi-image
         # writer?) and the token pipeline
-        intro_combined_corpus = CompositeCorpus((s_prew2v_t_pipeline,
+        doc_text_pipeline = VTextCorpus(self.vtlist,
+                                        input_root=self.data_root,
+                                        tokens=False,
+                                        **vtcorp_settings)
+        intro_combined_corpus = CompositeCorpus((doc_text_pipeline,
                                                  retrieval_pipeline),
                                                 aligned=False)
         intro_flatten = FlattenComposite(intro_combined_corpus,

@@ -389,6 +389,9 @@ class ItemAggregationTransform(gensim.interfaces.TransformationABC):
         multiple items for the same source document. This strategy is chosen to
         make the transformation work without reading the entire input pipeline.
 
+        However, note that this breaks down when CompositeCorpus outputs are
+        being aggregated (and indexes are used for flattening)!
+
     The transformer again has its own corpus, the DocAggregatedCorpus, as it
     alters iteration behavior.
 
@@ -402,6 +405,9 @@ class ItemAggregationTransform(gensim.interfaces.TransformationABC):
     def __getitem__(self, itembuffer):
         """In the default implementation, sums the supplied item buffer
         column-wise."""
+        if isinstance(itembuffer, gensim.interfaces.CorpusABC):
+            return self._apply(itembuffer)
+
         if isinstance(itembuffer, numpy.ndarray):
             return numpy.sum(itembuffer, axis=0)
         elif isinstance(itembuffer, scipy.sparse.csr_matrix):
@@ -410,8 +416,11 @@ class ItemAggregationTransform(gensim.interfaces.TransformationABC):
             raise NotImplementedError()
         else:
             # List of gensim sparse vectors?
+            if safire.utils.is_gensim_batch(itembuffer):
             # List of lists of gensim sparse vectors?
-            return sum_gensim_columns(itembuffer)
+                return sum_gensim_columns(itembuffer)
+            elif safire.utils.is_list_of_gensim_batches(itembuffer):
+                return sum_gensim_columns(list(itertools.chain(*itembuffer)))
 
 
 class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
@@ -428,6 +437,33 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
 
         self.orig_id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
         self.orig_doc2id = safire.utils.transcorp.get_id2doc_obj(self.corpus)
+
+        # Compute length: it's NOT the number of distinct keys, as the
+        # aggregator combines only items from consecutive items with the same
+        # source document.
+        #
+        # In the same cycle, we can pre-compute which original iids will match
+        # to which new iid, thus enabling __getitem__ operation.
+        self.length = 0
+        self.orig2new_iid = collections.defaultdict(int)
+        self.new2orig_iid = collections.defaultdict(set)
+        prev_doc = None
+        for orig_iid, doc in sorted(self.orig_id2doc.items(),
+                                    key=operator.itemgetter(0)):
+            # If breaking a run of consecutive original IIDs that map to the
+            # same source document: add 1 to length, as we will be outputting
+            # the combination of buffer items at that point.
+            self.orig2new_iid[orig_iid] = self.length
+            self.new2orig_iid[self.length].add(orig_iid)
+            if doc != prev_doc and prev_doc is not None:
+                self.length += 1
+            prev_doc = doc
+        # Imagine a corpus with items from only one source document.
+        # After iterating through it, self.length will never have been
+        # incremented. (The new <--> orig iid mappings will use 0 as the new
+        # iid for all original items, which is correct.) However, the total
+        # length of the aggregated corpus will be 1.
+        self.length += 1
 
         self.doc2id = collections.defaultdict(set)
         self.id2doc = collections.defaultdict(str)
@@ -461,6 +497,41 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
         self.id2doc[output_iid] = current_docname
         yield self.obj[itembuffer]
 
+    def __getitem__(self, item):
+        # How to support indexing?
+        # - Precompute which original item IDs are
+        #   mapped to which aggregated item IDs? Then, if the underlying corpus
+        #   is indexable, combine the requested original IDs.
+        if isinstance(item, int):
+            itembuffer = self.iid2items(item)
+            return self.obj[itembuffer]
+        elif isinstance(item, slice):
+            # Have to take care of formatting..? gensim vs. numpy vs. scipy
+            raise NotImplementedError()
+        elif isinstance(item, list):
+            # Have to take care of formatting..? gensim vs. numpy vs. scipy
+            raise NotImplementedError()
+
+        raise NotImplementedError()
+
+    def __len__(self):
+        return self.length
+
+    def iid2items(self, new_iid):
+        """Returns the set of input corpus items that correspond to the given
+        new iid.
+        """
+        orig_iids = sorted(self.new2orig_iid[new_iid])
+        if len(orig_iids) == 0:
+            return []
+        items = self.corpus[orig_iids[0]:orig_iids[-1]]
+        return items
+
+class IndividualCoordinatesTransform(gensim.interfaces.TransformationABC):
+    """Transforms an item into multiple items.
+    """
+    def __init__(self):
+        raise NotImplementedError()
 
 
 
