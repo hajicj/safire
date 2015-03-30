@@ -564,6 +564,17 @@ class TestPipeline(SafireTestCase):
                                             tokens=True,
                                             **vtcorp_settings)
         pre_w2v_text_pipeline.dry_run()
+
+        # TODO: Derive tfidf weights.
+        doc_text_pipeline = VTextCorpus(self.vtlist,
+                                        input_root=self.data_root,
+                                        tokens=False,
+                                        **vtcorp_settings)
+        tfidf = TfidfModel[doc_text_pipeline]
+        tfidf_pipeline = tfidf[doc_text_pipeline]
+
+        # TODO: Downsample document based on tfidf weights.
+        # TfIdf weights are global for each vocabulary member.
         # Serialize text.
         # prew2v_t_serializer = Serializer(pre_w2v_text_pipeline, ShardedCorpus,
         #                           self.loader.pipeline_serialization_target(
@@ -582,8 +593,6 @@ class TestPipeline(SafireTestCase):
         ttanh = GeneralFunctionTransform(numpy.tanh, multiplicative_coef=0.4)
         text_pipeline = ttanh[text_pipeline]
 
-        # TODO: Derive tfidf weights.
-        # TODO: Downsample document based on tfidf weights.
 
         # Serialize text.
         t_serializer = Serializer(text_pipeline, ShardedCorpus,
@@ -697,11 +706,8 @@ class TestPipeline(SafireTestCase):
 
         print '-- building introspection pipeline --'
         # Introspection of results: combine retrieval_pipeline (multi-image
-        # writer?) and the token pipeline
-        doc_text_pipeline = VTextCorpus(self.vtlist,
-                                        input_root=self.data_root,
-                                        tokens=False,
-                                        **vtcorp_settings)
+        # writer?) and the document pipeline
+
         # The introspection composite corpus is aligned - there's a source
         # document for each text.
         # print 'Doc text pipeline, first three:\n{0}' \
