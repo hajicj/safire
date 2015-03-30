@@ -591,15 +591,21 @@ class VTextCorpus(TextCorpus):
             raise ValueError('__getitem__ calls not supported when retrieving'
                              'tokens as documents.')
         if isinstance(item, slice):
-            return [self[i] for i in xrange(item.start, item.stop, 1)]
+            print 'Slice: {0}, indices: {1}'.format(item, item.indices(len(self)))
+            return [self[i] for i in xrange(*item.indices(len(self)))]
         if isinstance(item, list):
             return [self[i] for i in item]
         if isinstance(item, int):
             if not self.precompute_vtlist:
                 raise TypeError('Doesn\'t support indexing without precomputing'
                                 'the vtlist.')
-            with self._get_doc_handle(self.vtlist[item]) as vthandle:
-                document, _ = self.parse_document_and_sentences(vthandle)
+            try:
+                with self._get_doc_handle(self.vtlist[item]) as vthandle:
+                    document, _ = self.parse_document_and_sentences(vthandle)
+            except IndexError:
+                logging.critical('Asking for vtlist item {0}, vtlist length is'
+                                 ' only {1}.'.format(item, len(self.vtlist)))
+                raise
             self.n_processed += 1
             self.n_words_processed += len(document)
 

@@ -2,6 +2,7 @@
 This module contains classes that ...
 """
 import logging
+import copy
 import safire.utils.transcorp
 from safire.utils import IndexedTransformedCorpus
 
@@ -135,6 +136,25 @@ class CompositeCorpus(IndexedTransformedCorpus):
     @staticmethod
     def derive_dimension(corpora):
         return tuple(safire.utils.transcorp.dimension(d) for d in corpora)
+
+    def as_composite_dim(self, idx):
+        """Formats the given index as the composite dimension. Suppose self.dim
+        is ``{10, (10, 20), 50)``, then ``as_composite_dim(4)`` will return
+        ``(4, (4, 4), 4)``.
+
+        Used as a utility function when creating indexes for flattening an
+        aligned CompositeCorpus.
+
+        :param idx: An integer.
+        """
+        output = []
+        for component in self.corpus:
+            if isinstance(component, CompositeCorpus):
+                output.append(component.as_composite_dim(idx))
+            else:
+                output.append(idx)
+        return tuple(output)
+
 
 
 # Flattening a CompositeCorpus: same as flattening a CompositeDataset, as the

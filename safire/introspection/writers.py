@@ -288,7 +288,7 @@ class HtmlSimilarImagesWriter(HtmlSimpleWriter):
         id2doc = self.image_id2doc
         image_urls = []
         similarities = []
-        print 'Passed value: {0}'.format(value)
+        #print 'Passed value: {0}'.format(value)
         for iid, similarity in value[0]:  # One-document gensim "copora"?
             docname = id2doc[iid]
             image_fname = os.path.join(self.root, docname)
@@ -343,6 +343,7 @@ class HtmlVocabularyWriter(HtmlSimpleWriter):
         vocabulary = get_id2word_obj(corpus)
         # Different types = different treatment
         freqs = {}
+        #print '-- Incoming value: {0}'.format(value)
         if isinstance(value, numpy.ndarray):
             if len(value.shape) != 2:
                 raise ValueError('Can currently handle only 2-dimensional '

@@ -6,6 +6,7 @@ from gensim.utils import is_corpus
 import itertools
 import numpy
 from safire.datasets.dataset import CompositeDataset
+from safire.data.composite_corpus import CompositeCorpus
 
 from safire.utils import IndexedTransformedCorpus
 from safire.utils import flatten_composite_item
@@ -97,6 +98,9 @@ class FlattenComposite(TransformationABC):
 
         Future: incorporate a ``precompute`` and/or ``preserialize`` flag."""
         self.composite = composite
+        if self.composite.aligned and indexes is None:
+            indexes = [composite.as_composite_dim(i)
+                       for i in xrange(len(composite))]
         self.indexes = indexes
         self.structured = structured
 
@@ -236,6 +240,7 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
                 # Single item retrieved
                 indexes = [indexes]
                 idxs_by_dataset = map(list, zip(*indexes))
+            # print 'Flattening with indexes {0}'.format(idxs_by_dataset)
             logging.debug('Indexes: {0}, by dataset: {1}'
                           ''.format(indexes, idxs_by_dataset))
             retrieved = []
@@ -245,20 +250,24 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
 
                 # Depends here on ability of SwapoutCorpus serialized by
                 # ShardedCorpus to deliver numpy ndarrays from lists of indices.
-                partial_list = dataset[idxs]
+                partial = dataset[idxs]
                 # print 'Partial list for dataset {0}, idxs {1}:' \
                 #       ''.format(dataset, idxs)
                 # print partial_list
-                partial = numpy.array(partial_list)
+                if isinstance(partial[0], numpy.ndarray):
+                    partial = numpy.array(partial)
+
                 # print 'Partial shape: {0}'.format(partial.shape)
                 retrieved.append(partial)
 
             # Here depends on availability of ``shape`` instance attribute
-            logging.debug('Retrieved shapes: {0}'
-                          ''.format([r.shape for r in retrieved]))
+            #logging.debug('Retrieved shapes: {0}'
+            #              ''.format([r.shape for r in retrieved]))
             output = self.item2flat(retrieved, nostack=self.structured)
 
-        #print '__getitem__ output: {0}'.format(output)
+        # Problem: flattening is outputting
+
+        # print 'flattening __getitem__ output: {0}'.format(output)
         return output
 
     def derive_dimension(self, composite):
@@ -288,9 +297,7 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
         >>> FlattenedDatasetCorpus.item2flat(item)
 
         """
-        # print 'Item: {0}'.format(item)
         output = list(flatten_composite_item(item))
-        # print 'Flattened: {0}'.format(flattened)
         if not nostack:
             output = numpy.hstack(output)
         # print 'item2flat output: {0}'.format(output)

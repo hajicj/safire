@@ -139,7 +139,7 @@ class EnumeratedTransformedCorpus(IndexedTransformedCorpus):
                                          # corpora that will only get length
                                          # once iterated over.
             output = [self.obj[(i, self.corpus[i])]
-                      for i in item.indices(slice_limit)]
+                      for i in xrange(*item.indices(slice_limit))]
             return output
 
         elif isinstance(item, int):

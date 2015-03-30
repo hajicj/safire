@@ -434,6 +434,7 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
         # Chunksize is ignored.
         self.obj = obj
         self.corpus = corpus
+        self.dim = safire.utils.transcorp.dimension(corpus)
 
         self.orig_id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
         self.orig_doc2id = safire.utils.transcorp.get_id2doc_obj(self.corpus)
@@ -502,17 +503,27 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
         # - Precompute which original item IDs are
         #   mapped to which aggregated item IDs? Then, if the underlying corpus
         #   is indexable, combine the requested original IDs.
+        # print 'Total input iids for source iids {0}: {1}\n{2}' \
+        #       ''.format(item,
+        #                 len(self.iid2source_iids(item)),
+        #                 self.iid2source_iids(item))
         if isinstance(item, int):
             itembuffer = self.iid2items(item)
-            return self.obj[itembuffer]
         elif isinstance(item, slice):
-            # Have to take care of formatting..? gensim vs. numpy vs. scipy
-            raise NotImplementedError()
+            itembuffer = [self[i] for i in xrange(*item.indices(len(self)))]
+            return itembuffer  # Return without aggregation - already aggregated
         elif isinstance(item, list):
-            # Have to take care of formatting..? gensim vs. numpy vs. scipy
+            itembuffer = [self[i] for i in item]
+            return itembuffer  # Return without aggregateion - already aggregated
+        else:
+            logging.critical('Cannot aggregate batch over indices of type {0}'
+                             ''.format(type(item)))
             raise NotImplementedError()
-
-        raise NotImplementedError()
+        logging.debug('Returning itembuffer from request {0}:\n' \
+                      'Indices: {1}\nValue: {2}'.format(item,
+                                                        self.iid2source_iids(item),
+                                                        itembuffer))
+        return self.obj[itembuffer]
 
     def __len__(self):
         return self.length
@@ -526,6 +537,27 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
             return []
         items = self.corpus[orig_iids[0]:orig_iids[-1]]
         return items
+
+    def iid2source_iids(self, new_iid):
+        """Returns the list of source corpus iids for the given iid. Can also
+        work with a slice or list.
+        """
+        if isinstance(new_iid, int):
+            orig_iids = sorted(self.new2orig_iid[new_iid])
+        elif isinstance(new_iid, list):
+            orig_iids = list(itertools.chain(*[self.new2orig_iid[i]
+                                               for i in new_iid]))
+        elif isinstance(new_iid, slice):
+            orig_iids = list(itertools.chain(
+                *[self.new2orig_iid[i]
+                  for i in xrange(*new_iid.indices(len(self)))]
+            ))
+        else:
+            raise TypeError('Can only find new IIDs for an integer, list or '
+                            'slice request, not for request of type {0}'
+                            ''.format(type(new_iid)))
+        return orig_iids
+
 
 class IndividualCoordinatesTransform(gensim.interfaces.TransformationABC):
     """Transforms an item into multiple items.

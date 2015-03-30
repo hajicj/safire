@@ -410,13 +410,7 @@ def keymap2dict(keymap_dict):
 def log_corpus_stack(corpus):
     """Reports the types of corpora and transformations of a given
     corpus stack. Can deal with CompositeDataset pipelines."""
-    if isinstance(corpus, TransformedCorpus):
-        r = 'Type: {0} with obj {1}'.format(type(corpus), type(corpus.obj))
-        return '\n'.join([r, log_corpus_stack(corpus.corpus)])
-    elif isinstance(corpus, safire.datasets.dataset.TransformedDataset):
-        r = 'Type: %s with obj %s' % (type(corpus), type(corpus.obj))
-        return '\n'.join([r, log_corpus_stack(corpus.data)])
-    elif isinstance(corpus, safire.datasets.dataset.CompositeDataset)\
+    if isinstance(corpus, safire.datasets.dataset.CompositeDataset)\
             or isinstance(corpus, safire.data.composite_corpus.CompositeCorpus):
         r = 'Type: {0} with the following datasets: {1}'.format(
             type(corpus),
@@ -426,6 +420,12 @@ def log_corpus_stack(corpus):
         combined_logs = '------component-------\n' + \
                         '------component-------\n'.join(individual_logs)
         return '\n'.join([r, combined_logs])
+    elif isinstance(corpus, TransformedCorpus):
+        r = 'Type: {0} with obj {1}'.format(type(corpus), type(corpus.obj))
+        return '\n'.join([r, log_corpus_stack(corpus.corpus)])
+    elif isinstance(corpus, safire.datasets.dataset.TransformedDataset):
+        r = 'Type: %s with obj %s' % (type(corpus), type(corpus.obj))
+        return '\n'.join([r, log_corpus_stack(corpus.data)])
     elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
         r = 'Type: {0}, passing through DatasetABC to underlying corpus {1}' \
             ''.format(type(corpus), type(corpus.corpus))
@@ -580,7 +580,7 @@ def is_fully_indexable(pipeline):
         _ = pipeline[[0]]
         return True
     except (TypeError, AttributeError, ValueError, NotImplementedError):
-        # raise
+        #raise
         return False
 
 

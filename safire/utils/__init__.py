@@ -21,6 +21,7 @@ from itertools import chain
 from collections import deque
 
 from gensim.matutils import full2sparse, sparse2full, corpus2dense
+import itertools
 
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
@@ -878,6 +879,29 @@ def is_list_of_gensim_batches(data, strict=False):
         if not is_gensim_batch(item, strict=strict):
             return False
     return True
+
+
+def compact_list_of_gensim_batches(data, strict_verify=False):
+    """Combines a list of gensim batches into a single gensim batch.
+
+    >>> data = [[[(0, 1), (1, 1), (2, 4)]], [[(1, 1), (3, 2), (5, 1)]]]
+    >>> is_list_of_gensim_batches(data)
+    True
+    >>> compact_list_of_gensim_batches(data)
+    [[(0, 1), (1, 1), (2, 4)], [(1, 1), (3, 2), (5, 1)]]
+
+    :param data: A list of gensim batches.
+
+    :param strict_verify: Set to True if you want a strict verification that the
+        input is a gensim batch.
+
+    :return: A gensim batch
+    """
+    if not is_list_of_gensim_batches(data, strict=strict_verify):
+        raise ValueError('Input is not a list of gensim batches. Input:\n{0}'
+                         ''.format(data))
+    batch = list(itertools.chain(*data))
+    return batch
 
 
 # Parsing some elementary data files

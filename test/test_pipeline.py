@@ -54,7 +54,7 @@ import unittest
 
 # Pipeline settings. These will be migrated to some Config class (thin wrapper
 # around YAML?)
-vtcorp_settings = {'token_filter': PositionalTagTokenFilter(['N', 'A', 'V'], 0),
+vtcorp_settings = {'token_filter': PositionalTagTokenFilter(['N', 'A'], 0),
                    'pfilter': 0.2,
                    'pfilter_full_freqs': True,
                    'filter_capital': True,
@@ -69,6 +69,7 @@ tanh = 0.5
 serialization_vtname = 'serialized.vt.shcorp'
 serialization_iname = 'serialized.i.shcorp'
 
+n_items_requested = 2
 
 ##############################################################################
 
@@ -549,21 +550,14 @@ class TestPipeline(SafireTestCase):
         * DenoisingAutoencoder training,
         * clamped sampling from joint model,
         * conversion of image pipeline to similarity index,
-        * querying image index with text queries converted by trained pipeline.
+        * querying image index with text queries converted by trained pipeline,
+        * combining the token queries,
+        * building an introspection pipeline that shows extracted tokens and
+          retrieved images and their similarities
 
         This scenario does NOT test further processing of similarity query
         results, it only collects those queries.
         """
-        # - build image pipeline
-        # - build text pipeline
-        # - combine image and text pipelines (with pre- and post-serialization,
-        #   clearing the pre-serialization data)
-        # - train multimodal model
-        # - create t2i transformation pipeline based on multimodal model
-        # - create image index
-        # - add SimilarityTransformer block on top of t2i pipeline
-        # - run transformation to similarity space
-
         # Building the text pipeline.
         pre_w2v_text_pipeline = VTextCorpus(self.vtlist,
                                             input_root=self.data_root,
@@ -571,10 +565,10 @@ class TestPipeline(SafireTestCase):
                                             **vtcorp_settings)
         pre_w2v_text_pipeline.dry_run()
         # Serialize text.
-        prew2v_t_serializer = Serializer(pre_w2v_text_pipeline, ShardedCorpus,
-                                  self.loader.pipeline_serialization_target(
-                                      '.pre_w2v.tcorp'))
-        s_prew2v_t_pipeline = prew2v_t_serializer[pre_w2v_text_pipeline]
+        # prew2v_t_serializer = Serializer(pre_w2v_text_pipeline, ShardedCorpus,
+        #                           self.loader.pipeline_serialization_target(
+        #                               '.pre_w2v.tcorp'))
+        # s_prew2v_t_pipeline = prew2v_t_serializer[pre_w2v_text_pipeline]
 
         word2vec = Word2VecTransformer(self.edict_pkl_fname,
                                        get_id2word_obj(pre_w2v_text_pipeline))
@@ -584,8 +578,12 @@ class TestPipeline(SafireTestCase):
         word2vec_miss_filter = DocumentFilterTransform(zero_length_filter)
         text_pipeline = word2vec_miss_filter[text_pipeline]
 
+        # Squish to (-1, 1) activation range.
         ttanh = GeneralFunctionTransform(numpy.tanh, multiplicative_coef=0.4)
         text_pipeline = ttanh[text_pipeline]
+
+        # TODO: Derive tfidf weights.
+        # TODO: Downsample document based on tfidf weights.
 
         # Serialize text.
         t_serializer = Serializer(text_pipeline, ShardedCorpus,
@@ -604,12 +602,13 @@ class TestPipeline(SafireTestCase):
         image_pipeline = itanh[image_pipeline]
 
         # Serialize images.
-        i_serializer = Serializer(image_pipeline,ShardedCorpus,
+        i_serializer = Serializer(image_pipeline, ShardedCorpus,
                                   self.loader.pipeline_serialization_target(
                                       'icorp'))
         image_pipeline = i_serializer[image_pipeline]
 
         # Flatten dataset
+        print '-- flattening dataset --'
         idata = Dataset(image_pipeline)
         tdata = Dataset(text_pipeline)
         mmdata = CompositeDataset((tdata, idata), names=('txt', 'img'),
@@ -621,12 +620,14 @@ class TestPipeline(SafireTestCase):
         mm_pipeline = flatten[mmdata]
 
         # Serialize
+        print '-- serializing multimodal data --'
         mm_serializer = Serializer(mm_pipeline, ShardedCorpus,
                                    self.loader.pipeline_serialization_target(
                                        'mmcorp'))
         mm_pipeline = mm_serializer[mm_pipeline]
 
         # Train model
+        print '-- training model --'
         dataset = Dataset(mm_pipeline)
         self.model_handle = DenoisingAutoencoder.setup(
             dataset,
@@ -636,7 +637,7 @@ class TestPipeline(SafireTestCase):
             reconstruction='mse',
             heavy_debug=False)
 
-        self.learner = BaseSGDLearner(20, 400, validation_frequency=10,
+        self.learner = BaseSGDLearner(5, 400, validation_frequency=4,
                                       plot_transformation=False)
 
         sftrans = SafireTransformer(self.model_handle,
@@ -679,27 +680,48 @@ class TestPipeline(SafireTestCase):
 
         print '-- retrieving sampled images --'
         start = time.clock()
-        sampled_images = [img for img in t2i_pipeline[:10]]
+        sampled_images = [img for img in t2i_pipeline[:n_items_requested]]
         end = time.clock()
         print '       Done: {0} images in {1} s'.format(len(sampled_images),
                                                         end - start)
         print '       First image: {0}'.format(sampled_images[0])
 
         print '-- querying similarity index --'
-        query_results = [qres for qres in retrieval_pipeline]
+        start = time.clock()
+        query_results = [qres
+                         for qres in retrieval_pipeline[:n_items_requested]]
+        end = time.clock()
+        print '       Done: {0} images in {1} s'.format(len(sampled_images),
+                                                        end - start)
+        # print '       First image: {0}'.format(sampled_images[0])
 
+        print '-- building introspection pipeline --'
         # Introspection of results: combine retrieval_pipeline (multi-image
         # writer?) and the token pipeline
         doc_text_pipeline = VTextCorpus(self.vtlist,
                                         input_root=self.data_root,
                                         tokens=False,
                                         **vtcorp_settings)
+        # The introspection composite corpus is aligned - there's a source
+        # document for each text.
+        # print 'Doc text pipeline, first three:\n{0}' \
+        #       ''.format(doc_text_pipeline[:n_items_requested])
+        # print 'Retrieval pipeline, first three:\n{0}' \
+        #       ''.format(retrieval_pipeline[:n_items_requested])
+
         intro_combined_corpus = CompositeCorpus((doc_text_pipeline,
                                                  retrieval_pipeline),
-                                                aligned=False)
+                                                aligned=True)
+        # print 'Composite corpus for introspection:\n{0}' \
+        #       ''.format(log_corpus_stack(intro_combined_corpus))
         intro_flatten = FlattenComposite(intro_combined_corpus,
-                                         t2i_indexes, structured=True)
+                                         structured=True)
         intro_flattened_pipeline = intro_flatten[intro_combined_corpus]
+
+        # intro_pipeline_items = intro_flattened_pipeline[:n_items_requested]
+        # print 'Intro pipeline items:\n{0}'.format(intro_pipeline_items)
+        # print 'Intro pipeline item 0:\n{0}'.format(intro_pipeline_items[0])
+
         twriter = HtmlVocabularyWriter(root=self.loader.root,
                                        top_k=30,
                                        min_freq=0.001)
@@ -712,12 +734,12 @@ class TestPipeline(SafireTestCase):
         introspection = IntrospectionTransformer(intro_flattened_pipeline,
                                                  writer=composite_writer)
         introspected_pipeline = introspection[intro_flattened_pipeline]
-        idocs = [idoc for idoc in introspected_pipeline[:10]]
+        # idocs = [idoc for idoc in introspected_pipeline[:n_items_requested]]
         iid2intro = introspected_pipeline.obj.iid2introspection_filename
         filenames = [iid2intro[iid] for iid in sorted(iid2intro.keys())]
         for f in filenames:
             self.assertTrue(os.path.isfile(f))
-        webbrowser.open(filenames[0])
+        # webbrowser.open(filenames[0])
 
         print '-- mapping query results to images --'
         img_id2doc = get_id2doc_obj(image_pipeline)
@@ -736,7 +758,7 @@ class TestPipeline(SafireTestCase):
                                 self.loader.layout.img_dir)
         image = Image.open(os.path.join(img_root,
                                         sorted_query_results_docs[0][0][0]))
-        #image.show()
+        # image.show()
         print 'Image: {0}'.format(image)
 
         self.assertTrue(len(sampled_images) == len(query_results))
