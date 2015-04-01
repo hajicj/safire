@@ -559,13 +559,80 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
         return orig_iids
 
 
-class IndividualCoordinatesTransform(gensim.interfaces.TransformationABC):
-    """Transforms an item into multiple items.
+class SplitDocPerFeatureTransform(gensim.interfaces.TransformationABC):
+    """Transforms an item into multiple items so that each output item is
+    a vector with only one non-zero entry and there is one such vector for
+    each non-zero entry in the input vector.
     """
     def __init__(self):
-        raise NotImplementedError()
+        pass
+
+    def _apply(self, corpus, chunksize=None):
+        return SplitDocPerFeatureCorpus(self, corpus, chunksize=chunksize)
 
 
+class SplitDocPerFeatureCorpus(gensim.interfaces.TransformedCorpus):
+    def __init__(self, obj, corpus, chunksize=None):
+        if not safire.utils.transcorp.is_fully_indexable(corpus):
+            logging.warn('Initializing splitter corpus without a fully'
+                         ' indexable input corpus, __getitem__ may not work.'
+                         ' (Input corpus type: {0})'.format(type(corpus)))
+        self.corpus = corpus
+        self.obj = obj
+        self.chunksize = chunksize
+
+        # Initialize old to new iid mapping.
+        self.new2orig_iids = collections.defaultdict(set)
+        self.orig2new_iids = collections.defaultdict(int)
+
+        # Use id2doc/doc2id mapping from the input corpus to precompute this
+        # corpus' doc2id/id2doc map. (Assumes input corpus has been fully
+        # iterated over.)
+        orig_id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
+        orig_doc2id = safire.utils.transcorp.get_doc2id_obj(self.corpus)
+        for doc, iids in orig_doc2id.items():
+            pass
+
+    def __iter__(self):
+        for item in self.corpus:
+            # Gensim corpora
+            if isinstance(item, list):
+                if safire.utils.is_gensim_vector(item):
+                    for entry in item:
+                        yield [entry]
+                elif safire.utils.is_gensim_batch(item):
+                    for row in item:
+                        for entry in row:
+                            yield [entry]
+                elif safire.utils.is_list_of_gensim_batches(item):
+                    raise TypeError('Got list of gensim batches, expected'
+                                    ' at most a gensim batch.')
+                else:
+                    raise TypeError('Got list, but with unrecognizable content'
+                                    ' type. Item: {0}'.format(item))
+            # Dense corpora. Note that this transformation is very inefficient
+            # for dense corpora.
+            elif isinstance(item, numpy.ndarray):
+                if len(item.shape) >= 2:
+                    for row in item:
+                        output = numpy.zeros(row.shape)
+                        for idx, entry in enumerate(row):
+                            output[idx] = entry
+                            yield output
+                            output[idx] = 0.0
+                else:
+                    # Yield by coordinate, idividual items
+                    output = numpy.zeros(item.shape)
+                    for idx, entry in enumerate(row):
+                        output[idx] = entry
+                        yield output
+                        output[idx] = 0.0
+            else:
+                raise TypeError('Unsupported corpus item type: {0}'
+                                ''.format(type(item)))
 
 
+    def __getitem__(self, item):
+        if isinstance(item, int):
+            pass
 

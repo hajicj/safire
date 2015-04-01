@@ -801,6 +801,26 @@ def gensim2ndarray(corpus, dim, num_docs=None, dtype=numpy.float32):
 
 # Checks list of gensim sparse vectors vs. list of lists of gensim sparse
 # vectors
+def is_gensim_vector(data, strict=False):
+    """Checks whether the given data is a gensim sparse vector."""
+    if not isinstance(data, list):
+        return False
+    if not len(data) > 0:
+        return True
+    if strict:
+        for d in data:
+            if not (isinstance(d, tuple) and len(d) == 2):
+                return False
+            if not isinstance(d[0], int):
+                return False
+            if not (isinstance(d[1], int) or isinstance(d[1], float)):
+                return False
+    else:
+        if not isinstance(data[0], tuple):
+            return False
+    return True
+
+
 def is_gensim_batch(data, strict=False):
     """Checks whether the given data is a gensim batch (list of gensim sparse
     vectors).
@@ -902,6 +922,31 @@ def compact_list_of_gensim_batches(data, strict_verify=False):
                          ''.format(data))
     batch = list(itertools.chain(*data))
     return batch
+
+
+def gensim_batch_nth_member(data, n):
+    """Returns the n-th element in a gensim batch.
+
+    >>> data = [[(0, 1), (1, 1), (2, 4)], [(1, 1), (3, 2), (5, 1)]]
+    >>> gensim_batch_nth_member(data, 3)
+    (1, 1)
+
+    If ``n`` is larger than available data, will raise an IndexError, just as
+    a list.
+    """
+    remaining = n
+    total = 0
+    for row in data:
+        rlen = len(row)
+        total += rlen
+        if rlen > remaining:
+            return row[remaining]
+        else:
+            remaining -= rlen
+    if n > 0:
+        raise IndexError('Too high index specified: {0}, total: {1}'
+                         ''.format(n, total))
+    raise ValueError('Wrong input (negative?): {0}'.format(n))
 
 
 # Parsing some elementary data files

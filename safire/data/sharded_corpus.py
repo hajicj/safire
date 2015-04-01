@@ -498,9 +498,16 @@ class ShardedCorpus(IndexedCorpus):
             # defines some output dimension; if it doesn't, relegate guessing
             # to the corpus that is being transformed. This may easily fail!
             try:
-                return self._guess_n_features(corpus.obj)
+                logging.debug('Guessing n_features from transformed corpus: {0}'
+                              ''.format([type(corpus),
+                                         type(corpus.obj),
+                                         type(corpus.corpus)]))
+                n_features = self._guess_n_features(corpus.obj)
             except TypeError:
                 return self._guess_n_features(corpus.corpus)
+            if n_features is None:  # Gensim serialization will *not*
+                                            # raise the TypeError.
+                n_features = self._guess_n_features(corpus.corpus)
         else:
             if not self.dim:
                 if self.gensim_serialization:
@@ -523,6 +530,7 @@ class ShardedCorpus(IndexedCorpus):
                          'feature count from corpus ({1}). Coercing to dimension'
                          ' given by argument.'.format(self.dim, n_features))
 
+        logging.debug('Guessed n_features: {0}'.format(n_features))
         return n_features
 
     def __len__(self):

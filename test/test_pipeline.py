@@ -570,8 +570,14 @@ class TestPipeline(SafireTestCase):
                                         input_root=self.data_root,
                                         tokens=False,
                                         **vtcorp_settings)
-        tfidf = TfidfModel[doc_text_pipeline]
+        tfidf = TfidfModel(doc_text_pipeline)
         tfidf_pipeline = tfidf[doc_text_pipeline]
+        tfidf_serializer = Serializer(tfidf_pipeline,
+                                      ShardedCorpus,
+                                      self.loader.pipeline_serialization_target('.tfidf'),
+                                      gensim_serialization=True,
+                                      gensim_retrieval=True)
+        tfidf_pipeline = tfidf_serializer[tfidf_pipeline]
 
         # TODO: Downsample document based on tfidf weights.
         # TfIdf weights are global for each vocabulary member.
@@ -715,7 +721,7 @@ class TestPipeline(SafireTestCase):
         # print 'Retrieval pipeline, first three:\n{0}' \
         #       ''.format(retrieval_pipeline[:n_items_requested])
 
-        intro_combined_corpus = CompositeCorpus((doc_text_pipeline,
+        intro_combined_corpus = CompositeCorpus((tfidf_pipeline,
                                                  retrieval_pipeline),
                                                 aligned=True)
         # print 'Composite corpus for introspection:\n{0}' \
