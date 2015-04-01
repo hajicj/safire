@@ -621,7 +621,7 @@ def ensure_serialization(pipeline, force=False, serializer_class=ShardedCorpus,
     return pipeline
 
 
-def dry_run(pipeline):
+def dry_run(pipeline, max=None):
     """Iterates over the pipeline, but doesn't store any results. (
 
     This is useful just for testing; anytime else, you would be better off just
@@ -631,8 +631,13 @@ def dry_run(pipeline):
     vocabularies...
 
     :param pipeline: The pipeline over which to iterate.
+
+    :param max: Iterate over at most this many items. (Useful for taking just
+        samples, for example for introspection.)
     """
-    for p in pipeline:
+    for i, p in enumerate(pipeline):
+        if max and i > max:
+            break
         pass
 
 

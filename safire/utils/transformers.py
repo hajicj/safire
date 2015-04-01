@@ -563,6 +563,11 @@ class SplitDocPerFeatureTransform(gensim.interfaces.TransformationABC):
     """Transforms an item into multiple items so that each output item is
     a vector with only one non-zero entry and there is one such vector for
     each non-zero entry in the input vector.
+
+    Note that this does *not* in any way reflect the value at the given
+    coordinate, so passing a corpus through this transformer is not equivalent
+    to converting for example a document to tokens in case there is a token
+    with frequency higher than 1 in the document.
     """
     def __init__(self):
         pass
@@ -582,28 +587,46 @@ class SplitDocPerFeatureCorpus(gensim.interfaces.TransformedCorpus):
         self.chunksize = chunksize
 
         # Initialize old to new iid mapping.
-        self.new2orig_iids = collections.defaultdict(set)
-        self.orig2new_iids = collections.defaultdict(int)
+        self.new2orig_iids = collections.defaultdict(int)
+        self.orig2new_iids = collections.defaultdict(set)
 
-        # Use id2doc/doc2id mapping from the input corpus to precompute this
-        # corpus' doc2id/id2doc map. (Assumes input corpus has been fully
-        # iterated over.)
-        orig_id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
-        orig_doc2id = safire.utils.transcorp.get_doc2id_obj(self.corpus)
-        for doc, iids in orig_doc2id.items():
-            pass
+        self.id2doc = collections.defaultdict(str)
+        self.doc2id = collections.defaultdict(set)
+
+        # Can we precompute the id2doc/doc2id mapping? No: the iids depend on
+        # the size of the input vector.
+
+        self.orig_id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
+        self.orig_doc2id = safire.utils.transcorp.get_doc2id_obj(self.corpus)
 
     def __iter__(self):
+        current_iid = 0
+        orig_iid = 0
         for item in self.corpus:
             # Gensim corpora
             if isinstance(item, list):
                 if safire.utils.is_gensim_vector(item):
+                    current_doc = self.orig_id2doc[orig_iid]
                     for entry in item:
+                        self.new2orig_iids[current_iid] = orig_iid
+                        self.orig2new_iids[orig_iid].add(current_iid)
+                        self.id2doc[current_iid] = current_doc
+                        self.doc2id[current_doc].add(current_iid)
                         yield [entry]
+                        current_iid += 1
+                    orig_iid += 1
+                # Shouldn't happen..?
                 elif safire.utils.is_gensim_batch(item):
                     for row in item:
+                        current_doc = self.orig_id2doc[orig_iid]
                         for entry in row:
+                            self.new2orig_iids[current_iid] = orig_iid
+                            self.orig2new_iids[orig_iid].add(current_iid)
+                            self.id2doc[current_iid] = current_doc
+                            self.doc2id[current_doc].add(current_iid)
                             yield [entry]
+                            current_iid += 1
+                        orig_iid += 1
                 elif safire.utils.is_list_of_gensim_batches(item):
                     raise TypeError('Got list of gensim batches, expected'
                                     ' at most a gensim batch.')
@@ -615,24 +638,45 @@ class SplitDocPerFeatureCorpus(gensim.interfaces.TransformedCorpus):
             elif isinstance(item, numpy.ndarray):
                 if len(item.shape) >= 2:
                     for row in item:
+                        current_doc = self.orig_id2doc[orig_iid]
                         output = numpy.zeros(row.shape)
                         for idx, entry in enumerate(row):
                             output[idx] = entry
+                            self.new2orig_iids[current_iid] = orig_iid
+                            self.orig2new_iids[orig_iid].add(current_iid)
+                            self.id2doc[current_iid] = current_doc
+                            self.doc2id[current_doc].add(current_iid)
                             yield output
+                            current_iid += 1
+                            orig_iid += 1
                             output[idx] = 0.0
                 else:
                     # Yield by coordinate, idividual items
                     output = numpy.zeros(item.shape)
+                    current_doc = self.orig_id2doc[orig_iid]
                     for idx, entry in enumerate(row):
                         output[idx] = entry
+                        self.new2orig_iids[current_iid] = orig_iid
+                        self.orig2new_iids[orig_iid].add(current_iid)
+                        self.id2doc[current_iid] = current_doc
+                        self.doc2id[current_doc].add(current_iid)
                         yield output
+                        current_iid += 1
+                        orig_iid += 1
                         output[idx] = 0.0
             else:
                 raise TypeError('Unsupported corpus item type: {0}'
                                 ''.format(type(item)))
+        self.length = current_iid
 
-
-    def __getitem__(self, item):
-        if isinstance(item, int):
+    def __getitem__(self, key):
+        # Problem with __getitem__
+        if isinstance(key, slice):
             pass
+
+        if isinstance(key, int):
+            pass
+
+    def __len__(self):
+        return self.length
 

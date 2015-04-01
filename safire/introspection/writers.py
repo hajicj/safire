@@ -99,13 +99,13 @@ class HtmlSimpleWriter(WriterABC):
     the html code that corresponds to the content of the introspected item.
     """
 
-    def __init__(self, root, **kwargs):
+    def __init__(self, root, prefix='', **kwargs):
         super(HtmlSimpleWriter, self).__init__(root, **kwargs)
+        self.prefix = prefix
 
-    @staticmethod
-    def iid_to_filename(iid):
+    def iid_to_filename(self, iid):
         """Implements the naming scheme."""
-        return 'introspection.{0}.html'.format(iid)
+        return '{0}.introspection.{0}.html'.format(self.prefix, iid)
 
     def generate_filename(self, iid):
         """Generates the absolute filename under which to save the introspection
@@ -169,7 +169,7 @@ class HtmlSimpleWriter(WriterABC):
         elements.append(html_utils.with_tag(heading, 'h1'))
 
         # Paste content.
-        value_content = self.generate_value(value)
+        value_content = self.generate_value(iid, value, corpus)
         elements.append(value_content)
 
         links_table = self.generate_next_and_prev_links(iid)

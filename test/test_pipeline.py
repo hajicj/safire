@@ -564,20 +564,68 @@ class TestPipeline(SafireTestCase):
                                             tokens=True,
                                             **vtcorp_settings)
         pre_w2v_text_pipeline.dry_run()
+        pre_w2v_serializer = Serializer(pre_w2v_text_pipeline,
+                                        ShardedCorpus,
+                                        self.loader.pipeline_serialization_target('.prew2v'),
+                                        gensim_serialization=True,
+                                        gensim_retrieval=True)
+        pre_w2v_text_pipeline = pre_w2v_serializer[pre_w2v_text_pipeline]
 
         # TODO: Derive tfidf weights.
         doc_text_pipeline = VTextCorpus(self.vtlist,
                                         input_root=self.data_root,
                                         tokens=False,
                                         **vtcorp_settings)
-        tfidf = TfidfModel(doc_text_pipeline)
-        tfidf_pipeline = tfidf[doc_text_pipeline]
-        tfidf_serializer = Serializer(tfidf_pipeline,
+        tfidf = TfidfModel(doc_text_pipeline, normalize=False)
+        tfidf_doc_pipeline = tfidf[doc_text_pipeline]
+        tfidf_serializer = Serializer(tfidf_doc_pipeline,
                                       ShardedCorpus,
                                       self.loader.pipeline_serialization_target('.tfidf'),
                                       gensim_serialization=True,
                                       gensim_retrieval=True)
-        tfidf_pipeline = tfidf_serializer[tfidf_pipeline]
+        tfidf_doc_pipeline = tfidf_serializer[tfidf_doc_pipeline]
+
+        tfidf_token_pipeline = tfidf[pre_w2v_text_pipeline]
+        tfidf_serializer = Serializer(tfidf_token_pipeline,
+                                      ShardedCorpus,
+                                      self.loader.pipeline_serialization_target('.tfidf_tok'),
+                                      gensim_serialization=True,
+                                      gensim_retrieval=True)
+        tfidf_token_pipeline = tfidf_serializer[tfidf_token_pipeline]
+        tfidf_writer = HtmlVocabularyWriter(root=self.loader.root,
+                                            top_k=100,
+                                            min_freq=0.001)
+        tfidf_introspection = IntrospectionTransformer(tfidf_doc_pipeline,
+                                                       writer=tfidf_writer)
+        tfidf_intro_pipeline = tfidf_introspection[tfidf_doc_pipeline]
+        _ = [idoc for idoc in tfidf_intro_pipeline[:n_items_requested]]
+        iid2intro = tfidf_intro_pipeline.obj.iid2introspection_filename
+        filenames = [iid2intro[iid] for iid in sorted(iid2intro.keys())]
+        #webbrowser.open(filenames[0])
+
+        tfidf_vs_plain_pipeline = CompositeCorpus((tfidf_doc_pipeline,
+                                                   doc_text_pipeline),
+                                                  aligned=True)
+        tfidf_vs_plain_flatten = FlattenComposite(tfidf_vs_plain_pipeline,
+                                                  structured=True)
+        tfidf_vs_plain_flattened = tfidf_vs_plain_flatten[tfidf_vs_plain_pipeline]
+        tfidf_vs_plain_writer = HtmlStructuredFlattenedWriter(
+            root=self.loader.root,
+            writers=(tfidf_writer,
+                     tfidf_writer))
+        tfidf_vs_plain_intro = IntrospectionTransformer(
+            tfidf_vs_plain_flattened,
+            writer=tfidf_vs_plain_writer)
+        tf_vs_plain_intro_pipeline = tfidf_vs_plain_intro[tfidf_vs_plain_flattened]
+        _ = [idoc for idoc in tf_vs_plain_intro_pipeline[:n_items_requested]]
+        iid2intro = tf_vs_plain_intro_pipeline.obj.iid2introspection_filename
+        filenames = [iid2intro[iid] for iid in sorted(iid2intro.keys())]
+        webbrowser.open(filenames[0])
+
+        tfidf_tokens = tfidf_token_pipeline[:5]
+        nontfidf_tokens = pre_w2v_text_pipeline[:5]
+        print 'Non-tfidf token pipeline outputs: {0}'.format(nontfidf_tokens)
+        print 'TfIdf token pipeline outputs: {0}'.format(tfidf_tokens)
 
         # TODO: Downsample document based on tfidf weights.
         # TfIdf weights are global for each vocabulary member.
@@ -721,7 +769,7 @@ class TestPipeline(SafireTestCase):
         # print 'Retrieval pipeline, first three:\n{0}' \
         #       ''.format(retrieval_pipeline[:n_items_requested])
 
-        intro_combined_corpus = CompositeCorpus((tfidf_pipeline,
+        intro_combined_corpus = CompositeCorpus((tfidf_doc_pipeline,
                                                  retrieval_pipeline),
                                                 aligned=True)
         # print 'Composite corpus for introspection:\n{0}' \
@@ -746,7 +794,7 @@ class TestPipeline(SafireTestCase):
         introspection = IntrospectionTransformer(intro_flattened_pipeline,
                                                  writer=composite_writer)
         introspected_pipeline = introspection[intro_flattened_pipeline]
-        # idocs = [idoc for idoc in introspected_pipeline[:n_items_requested]]
+        _ = [idoc for idoc in introspected_pipeline[:n_items_requested]]
         iid2intro = introspected_pipeline.obj.iid2introspection_filename
         filenames = [iid2intro[iid] for iid in sorted(iid2intro.keys())]
         for f in filenames:

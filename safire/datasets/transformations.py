@@ -104,7 +104,7 @@ class FlattenComposite(TransformationABC):
         self.indexes = indexes
         self.structured = structured
 
-        if self.indexes is not None:
+        if self.indexes is not None and not composite.aligned:
             if not safire.utils.transcorp.is_fully_indexable(composite):
                 raise TypeError('Not all data sources are indexable, cannot'
                                 ' perform flattening with indexes.')
