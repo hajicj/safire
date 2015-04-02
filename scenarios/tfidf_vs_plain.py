@@ -13,11 +13,12 @@ nothing is serialized; the artifact produced by this scenario is just the
 introspection files.
 """
 import argparse
+import copy
 import logging
 import time
 import os
 import webbrowser
-from gensim.models import TfidfModel
+from safire.utils.transformers import TfidfModel
 from safire.data import VTextCorpus
 from safire.data.composite_corpus import CompositeCorpus
 from safire.data.loaders import MultimodalShardedDatasetLoader
@@ -58,9 +59,14 @@ def main(args):
     tfidf = TfidfModel(vtcorp, **tfidf_settings)
     tfidf_pipeline = tfidf[vtcorp]
 
+    logging.info('Build normalized tfidf.')
+    tfidf_n = copy.deepcopy(tfidf)
+    tfidf_n.normalize = True
+    tfidf_n_pipeline = tfidf_n[vtcorp]
+
     logging.info('Create composite (aligned).')
-    composite = CompositeCorpus((vtcorp, tfidf_pipeline),
-                                names=('vtcorp', 'tfidf'),
+    composite = CompositeCorpus((vtcorp, tfidf_pipeline, tfidf_n_pipeline),
+                                names=('vtcorp', 'tfidf', 'tfidf_n'),
                                 aligned=True)
 
     logging.info('Flatten (structured, composite is aligned).')
@@ -74,6 +80,7 @@ def main(args):
                                          min_freq=0.001)
     composite_writer = HtmlStructuredFlattenedWriter(root=loader.root,
                                                      writers=(simple_writer,
+                                                              simple_writer,
                                                               simple_writer))
     logging.info('Create introspection.')
     introspection = IntrospectionTransformer(flattened,
@@ -90,7 +97,7 @@ def main(args):
 
     _end_time = time.clock()
     logging.info('Exiting tfidf_vs_plain.py. Total time: {0} s'
-                 ''.format(_start_time - _end_time))
+                 ''.format(_end_time - _start_time))
 
 
 def build_argument_parser():

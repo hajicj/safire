@@ -228,9 +228,9 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
 
         :return: numpy.ndarray
         """
-        if self.indexes is None:
+        if self.indexes is None or self.corpus.aligned:
             retrieved = self.corpus[item]
-            output = self.item2flat(retrieved)
+            output = self.item2flat(retrieved, nostack=self.structured)
         else:
             # Possibly inefficient
             indexes = self.indexes[item]
@@ -251,9 +251,8 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
                 # Depends here on ability of SwapoutCorpus serialized by
                 # ShardedCorpus to deliver numpy ndarrays from lists of indices.
                 partial = dataset[idxs]
-                # print 'Partial list for dataset {0}, idxs {1}:' \
-                #       ''.format(dataset, idxs)
-                # print partial_list
+                logging.debug('Partial for dataset {0}, idxs {1}: {2}'
+                              ''.format(dataset, idxs, partial))
                 if isinstance(partial[0], numpy.ndarray):
                     partial = numpy.array(partial)
 

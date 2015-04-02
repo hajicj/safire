@@ -105,7 +105,10 @@ class HtmlSimpleWriter(WriterABC):
 
     def iid_to_filename(self, iid):
         """Implements the naming scheme."""
-        return '{0}.introspection.{0}.html'.format(self.prefix, iid)
+        output = 'introspection.{0}.html'.format(iid)
+        if self.prefix:
+            output = self.prefix + '.' + output
+        return output
 
     def generate_filename(self, iid):
         """Generates the absolute filename under which to save the introspection

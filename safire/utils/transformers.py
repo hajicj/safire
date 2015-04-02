@@ -240,6 +240,14 @@ class LeCunnVarianceScalingTransform(gensim.interfaces.TransformationABC):
         return out
 
 
+class TfidfModel(gensim.models.TfidfModel):
+    """Overrides _apply to provide IndexedTransformedCorpus, if possible."""
+    def _apply(self, corpus, chunksize=None):
+        return safire.utils.transcorp.smart_apply_transcorp(self,
+                                                            corpus,
+                                                            chunksize=chunksize)
+
+
 class StandardScalingTransformer(gensim.interfaces.TransformationABC):
     """Scales data to zero mean and unit variance."""
     def __init__(self, corpus, with_mean=True, with_variance=True,

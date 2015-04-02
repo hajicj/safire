@@ -591,7 +591,7 @@ class VTextCorpus(TextCorpus):
             raise ValueError('__getitem__ calls not supported when retrieving'
                              'tokens as documents.')
         if isinstance(item, slice):
-            print 'Slice: {0}, indices: {1}'.format(item, item.indices(len(self)))
+            # print 'Slice: {0}, indices: {1}'.format(item, item.indices(len(self)))
             return [self[i] for i in xrange(*item.indices(len(self)))]
         if isinstance(item, list):
             return [self[i] for i in item]

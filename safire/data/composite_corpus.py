@@ -67,6 +67,7 @@ class CompositeCorpus(IndexedTransformedCorpus):
 
         self.corpus = corpora
         self.obj = None  # No obj so far, waiting to implement ZipPipelines.
+        self.chunksize = None
 
         derived_dim = self.derive_dimension(corpora)
         if dim is None:
@@ -153,7 +154,10 @@ class CompositeCorpus(IndexedTransformedCorpus):
                 output.append(component.as_composite_dim(idx))
             else:
                 output.append(idx)
-        return tuple(output)
+        if len(output) == 1:
+            return output[0]
+        else:
+            return tuple(output)
 
 
 

@@ -1003,12 +1003,12 @@ class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):
 
     def __getitem__(self, item):
 
-        # logging.debug('Accessing item: {0}'.format(item))
+        logging.debug('  ITrCorpAccessing item: {0}'.format(item))
 
         retrieved = self.corpus[item]
-        # logging.debug('Retrieved: {0}'.format(retrieved))
+        logging.debug('  ITrCorp Retrieved: {0}'.format(retrieved))
 
         output = self.obj[retrieved]
-        # logging.debug('Output: {0}'.format(output))
+        logging.debug('  ITrCorp Output: {0}'.format(output))
 
         return output
