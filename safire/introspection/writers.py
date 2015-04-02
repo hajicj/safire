@@ -171,12 +171,12 @@ class HtmlSimpleWriter(WriterABC):
                   u''.format(iid, absolute_docname)
         elements.append(html_utils.with_tag(heading, 'h1'))
 
+        links_table = self.generate_next_and_prev_links(iid)
+        elements.append(html_utils.with_tag(links_table, 'div'))
+
         # Paste content.
         value_content = self.generate_value(iid, value, corpus)
         elements.append(value_content)
-
-        links_table = self.generate_next_and_prev_links(iid)
-        elements.append(html_utils.with_tag(links_table, 'div'))
 
         # Combine elements into a single string and wrap in a <body> tag.
         text = u'\n'.join(elements)
@@ -232,6 +232,31 @@ class HtmlStructuredFlattenedWriter(HtmlSimpleWriter):
         heading = html_utils.with_tag(heading_text, 'h1')
         elements.append(heading)
 
+        links_table = self.generate_next_and_prev_links(iid)
+        elements.append(links_table)
+
+        # composite = find_type_in_pipeline(corpus, CompositeCorpus)
+        # if composite is None:
+        #     composite = find_type_in_pipeline(corpus, CompositeDataset)
+        # if composite is None:
+        #     raise ValueError('Cannot find composite corpus in supplied '
+        #                      'pipeline!\nPipeline:\n{0}'
+        #                      ''.format(log_corpus_stack(corpus)))
+        #
+        # sources = composite.corpus
+        # values_out = [self.writers[i].generate_value(individual_iids[i],
+        #                                              values[i],
+        #                                              sources[i])
+        #               for i in xrange(len(values))]
+        # combined_values = html_utils.as_table([values_out])
+        combined_values = self.generate_value(iid, values, corpus)
+        elements.append(combined_values)
+
+        text = u'\n'.join(elements)
+        return text
+
+    def generate_value(self, iid, value, corpus):
+
         composite = find_type_in_pipeline(corpus, CompositeCorpus)
         if composite is None:
             composite = find_type_in_pipeline(corpus, CompositeDataset)
@@ -241,18 +266,13 @@ class HtmlStructuredFlattenedWriter(HtmlSimpleWriter):
                              ''.format(log_corpus_stack(corpus)))
 
         sources = composite.corpus
+        individual_iids = corpus.obj.indexes[iid]
         values = [self.writers[i].generate_value(individual_iids[i],
-                                                 values[i],
+                                                 value[i],
                                                  sources[i])
-                  for i in xrange(len(values))]
+                  for i in xrange(len(value))]
         combined_values = html_utils.as_table([values])
-        elements.append(combined_values)
-
-        links_table = self.generate_next_and_prev_links(iid)
-        elements.append(links_table)
-
-        text = u'\n'.join(elements)
-        return text
+        return combined_values
 
 
 class HtmlSimilarImagesWriter(HtmlSimpleWriter):

@@ -12,7 +12,7 @@ from safire.introspection.interfaces import IntrospectionTransformer
 from safire.introspection.writers import HtmlSimpleWriter, HtmlStructuredFlattenedWriter, \
     HtmlImageWriter, HtmlVocabularyWriter
 from safire.utils.transcorp import get_id2word_obj, \
-    compute_docname_flatten_mapping, log_corpus_stack
+    compute_docname_flatten_mapping, log_corpus_stack, dry_run
 
 __author__ = 'Jan Hajic jr'
 
@@ -53,13 +53,15 @@ class TestIntrospection(SafireTestCase):
             root=os.path.join(self.data_root,
                               self.loader.layout.introspection_dir))
         introspected_vtcorp = transformer[self.vtcorp]
-        filenames = [fname_vect for fname_vect in introspected_vtcorp]
+        dry_run(introspected_vtcorp)
+        iid2intro = introspected_vtcorp.obj.iid2introspection_filename
+        filenames = [iid2intro[k] for k in sorted(iid2intro.keys())]
         # Note that each fname is a list, as the introspection transformer
         # outputs *vectors of length 0*
         print 'Filenames: {0}'.format(filenames)
 
-        for fname_vect in filenames:
-            self.assertTrue(os.path.isfile(fname_vect[0]))
+        for fname in filenames:
+            self.assertTrue(os.path.isfile(fname))
         webbrowser.open(filenames[0][0])
 
     def test_composite_introspection(self):
