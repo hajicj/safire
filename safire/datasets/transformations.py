@@ -106,8 +106,15 @@ class FlattenComposite(TransformationABC):
 
         if self.indexes is not None and not composite.aligned:
             if not safire.utils.transcorp.is_fully_indexable(composite):
-                raise TypeError('Not all data sources are indexable, cannot'
-                                ' perform flattening with indexes.')
+                for corp in composite.corpus:
+                    if not safire.utils.transcorp.is_fully_indexable(corp):
+                        raise TypeError('Not all data sources are indexable,'
+                                        ' cannot perform flattening with '
+                                        'indexes. Problem in corpus:\n{0}'
+                                        ''.format(safire.utils.transcorp.log_corpus_stack(corp)))
+                raise TypeError('Supplied CompositeCorpus itself is not fully '
+                                'indexable (sources are OK). Corpus stack:\n{0}'
+                                ''.format(safire.utils.transcorp.log_corpus_stack(composite)))
             # Build id2doc mapping. Will contain tuples, based on self.indexes.
             self.id2doc = self.build_composite_id2doc(composite, indexes)
             # What about doc2id? A list of all IDs where the document is
@@ -138,9 +145,15 @@ class FlattenComposite(TransformationABC):
         :return: An id2doc dictionary that returns for each ID the tuple of
             docnames associated with each of the composite data sources.
         """
+        # logging.debug('Building composite id2doc for composite:\n{0}'
+        #              ''.format(safire.utils.transcorp.log_corpus_stack(composite)))
         id2doc = collections.defaultdict(tuple)
-        src_id2docs = [safire.utils.transcorp.get_id2doc_obj(c)
-                       for c in composite.corpus]
+        src_id2docs = []
+        for c in composite.corpus:
+            logging.debug('Getting id2doc object from corpus:\n{0}'
+                          ''.format(safire.utils.transcorp.log_corpus_stack(c)))
+            i2d = safire.utils.transcorp.get_id2doc_obj(c)
+            src_id2docs.append(i2d)
         for iid, idx in enumerate(indexes):
                 id2doc[iid] = tuple(src_id2doc[i]
                                     for src_id2doc, i

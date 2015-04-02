@@ -19,6 +19,8 @@ import time
 import os
 import webbrowser
 from safire.data.imagenetcorpus import ImagenetCorpus
+from safire.data.serializer import Serializer
+from safire.data.sharded_corpus import ShardedCorpus
 from safire.utils.transformers import TfidfModel
 from safire.data import VTextCorpus
 from safire.data.composite_corpus import CompositeCorpus
@@ -27,8 +29,8 @@ from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.datasets.transformations import FlattenComposite
 from safire.introspection.interfaces import IntrospectionTransformer
 from safire.introspection.writers import HtmlVocabularyWriter, \
-    HtmlStructuredFlattenedWriter
-from safire.utils.transcorp import dry_run
+    HtmlStructuredFlattenedWriter, HtmlImageWriter
+from safire.utils.transcorp import dry_run, compute_docname_flatten_mapping
 
 __author__ = 'Jan Hajic jr.'
 
@@ -66,19 +68,14 @@ def main(args):
     tfidf_n.normalize = True
     tfidf_n_pipeline = tfidf_n[vtcorp]
 
-    logging.info('Build icorp.')
-    image_file = os.path.join(loader.root,
-                              loader.layout.image_vectors)
-    icorp = ImagenetCorpus(image_file, **icorp_settings)
+    logging.info('Create t_composite (aligned).')
+    t_composite = CompositeCorpus((vtcorp, tfidf_pipeline, tfidf_n_pipeline),
+                                  names=('vtcorp', 'tfidf', 'tfidf_n'),
+                                  aligned=True)
 
-    logging.info('Create composite (aligned).')
-    composite = CompositeCorpus((vtcorp, tfidf_pipeline, tfidf_n_pipeline),
-                                names=('vtcorp', 'tfidf', 'tfidf_n'),
-                                aligned=True)
-
-    logging.info('Flatten (structured, composite is aligned).')
-    flatten = FlattenComposite(composite, structured=True)
-    flattened = flatten[composite]
+    logging.info('Flatten (structured, t_composite is aligned).')
+    flatten = FlattenComposite(t_composite, structured=True)
+    flattened = flatten[t_composite]
 
     logging.info('Create writers.')
     simple_writer = HtmlVocabularyWriter(root=loader.root,
@@ -89,9 +86,41 @@ def main(args):
                                                      writers=(simple_writer,
                                                               simple_writer,
                                                               simple_writer))
+
+    logging.info('Build icorp.')
+    image_file = os.path.join(loader.root,
+                              loader.layout.image_vectors)
+    icorp = ImagenetCorpus(image_file, **icorp_settings)
+    i_ser_target = loader.pipeline_serialization_target('.img.mm_tfidf_vs_plain')
+    i_serializer = Serializer(icorp, ShardedCorpus, i_ser_target)
+    icorp_serialized = i_serializer[icorp]
+
+    logging.info('Get indices.')
+    # Auxiliary mmdata corpus used to compute t2i (never iterated over?)
+    aux_mmdata = CompositeCorpus((vtcorp, icorp_serialized), aligned=False)
+    t2i_file = os.path.join(loader.root,
+                            loader.layout.textdoc2imdoc)
+    t2i_indexes = compute_docname_flatten_mapping(aux_mmdata, t2i_file)
+
+    logging.info('Combine icorp with text corpora.')
+    mm_composite = CompositeCorpus((t_composite, icorp_serialized),
+                                   names=('text', 'img'),
+                                   aligned=False)
+    mm_flatten = FlattenComposite(mm_composite,
+                                  indexes=t2i_indexes,
+                                  structured=True)
+    mm_flattened = mm_flatten[mm_composite]
+
+    logging.info('Create mm_composite writers.')
+    img_writer = HtmlImageWriter(root=os.path.join(loader.root,
+                                                   loader.layout.img_dir))
+    mm_writer = HtmlStructuredFlattenedWriter(root=loader.root,
+                                              writers=(composite_writer,
+                                                       img_writer))
+
     logging.info('Create introspection.')
-    introspection = IntrospectionTransformer(flattened,
-                                             writer=composite_writer)
+    introspection = IntrospectionTransformer(mm_flattened,
+                                             writer=mm_writer)
     intro_pipeline = introspection[flattened]
 
     logging.info('Dry-run introspection, to generate files.')

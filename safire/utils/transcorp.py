@@ -97,6 +97,7 @@ def get_id2doc_obj(corpus):
         #      ''.format(type(corpus.id2doc), corpus, log_corpus_stack(corpus))
         return corpus.id2doc
     elif isinstance(corpus, TransformedCorpus):
+        # Problem with recursive CompositeCorpus...
         return get_id2doc_obj(corpus.corpus)
     elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
         return get_id2doc_obj(corpus.data)
