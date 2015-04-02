@@ -213,7 +213,7 @@ def as_local_url(path):
     'file://localhost/blah'
     """
     if not os.path.exists(path):
-        logging.warn('Creating link to nonexistent file: {0}'.format(path))
+        logging.debug('Creating link to nonexistent file: {0}'.format(path))
 
     return url_separator.join([url_local_prefix, path])
 
