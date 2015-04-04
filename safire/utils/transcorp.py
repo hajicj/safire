@@ -97,7 +97,7 @@ def get_id2doc_obj(corpus):
         #      ''.format(type(corpus.id2doc), corpus, log_corpus_stack(corpus))
         return corpus.id2doc
     elif isinstance(corpus, TransformedCorpus):
-        # Problem with recursive CompositeCorpus...
+        # Problem with CompositeCorpus...
         return get_id2doc_obj(corpus.corpus)
     elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
         return get_id2doc_obj(corpus.data)
@@ -572,7 +572,11 @@ def is_fully_indexable(pipeline):
     Checks only duck typing.
     """
     if len(pipeline) == 0:
-        raise ValueError('Cannot inspect empty pipeline!')
+        logging.warn('Cannot inspect empty pipeline!\n{0}'
+                     ''.format(log_corpus_stack(pipeline)))
+        #raise ValueError('Cannot inspect empty pipeline!\n{0}'
+        #                 ''.format(log_corpus_stack(pipeline)))
+        return False
     try:
         _ = pipeline[0]
         _ = pipeline[0:1]

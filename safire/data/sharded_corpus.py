@@ -175,7 +175,7 @@ class ShardedCorpus(IndexedCorpus):
         self.current_offset = None   # The index into the dataset which
                                      # corresponds to index 0 of current shard
 
-        logging.info('ShardedCorpus args: {0}'.format('\n'.join(
+        logging.debug('ShardedCorpus args: {0}'.format('\n'.join(
             ['{0}: {1}'.format(k, v) for k, v in self.__dict__.items()]
         )))
 
@@ -208,7 +208,7 @@ class ShardedCorpus(IndexedCorpus):
         if proposed_dim != self.dim:
             if self.dim is None:
                 logging.info('Deriving dataset dimension from corpus: '
-                             '%d'.format(proposed_dim))
+                             '{0}'.format(proposed_dim))
             else:
                 if proposed_dim <= 0:
                     logging.warn('Dataset dimension derived from input corpus '
@@ -255,7 +255,7 @@ class ShardedCorpus(IndexedCorpus):
                     current_shard[i][:] = doc[:]
             else:
                 for i, doc in enumerate(doc_chunk):
-                    logging.debug('Converting from gensim corpus: {0}'.format(doc))
+                    #logging.debug('Converting from gensim corpus: {0}'.format(doc))
                     doc = dict(doc)
                     current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
 

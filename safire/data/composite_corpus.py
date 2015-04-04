@@ -129,9 +129,9 @@ class CompositeCorpus(IndexedTransformedCorpus):
 
     def __len__(self):
         # Ugly hack - returns a structure instead of a number... doesn't work
-        # with test_p and devel_p, though, so I disabled it temporarily.
-        #if not self.aligned:
-        #    return tuple([len(d) for d in self.data])
+        # with test_p and devel_p, though, so I disabled it for now.
+        # if not self.aligned:
+        #     return tuple([len(d) for d in self.data])
         return self.length
 
     @staticmethod
@@ -160,6 +160,7 @@ class CompositeCorpus(IndexedTransformedCorpus):
             return tuple(output)
 
 
-
+# There's a problem with id2doc.
+#
 # Flattening a CompositeCorpus: same as flattening a CompositeDataset, as the
 # CompositeCorpus already guarantees a dimension.

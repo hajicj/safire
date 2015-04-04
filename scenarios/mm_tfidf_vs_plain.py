@@ -46,6 +46,7 @@ tfidf_settings = {'normalize': False}
 icorp_settings = {'dim': 4096,
                   'delimiter': ';'}
 
+image_serialization_settings = {'overwrite': True}
 
 def main(args):
     logging.info('Executing tfidf_vs_plain.py...')
@@ -75,7 +76,7 @@ def main(args):
 
     logging.info('Flatten (structured, t_composite is aligned).')
     flatten = FlattenComposite(t_composite, structured=True)
-    flattened = flatten[t_composite]
+    t_flattened = flatten[t_composite]
 
     logging.info('Create writers.')
     simple_writer = HtmlVocabularyWriter(root=loader.root,
@@ -92,19 +93,22 @@ def main(args):
                               loader.layout.image_vectors)
     icorp = ImagenetCorpus(image_file, **icorp_settings)
     i_ser_target = loader.pipeline_serialization_target('.img.mm_tfidf_vs_plain')
-    i_serializer = Serializer(icorp, ShardedCorpus, i_ser_target)
+    i_serializer = Serializer(icorp, ShardedCorpus, i_ser_target,
+                              **image_serialization_settings)
     icorp_serialized = i_serializer[icorp]
 
     logging.info('Get indices.')
     # Auxiliary mmdata corpus used to compute t2i (never iterated over?)
-    aux_mmdata = CompositeCorpus((vtcorp, icorp_serialized), aligned=False)
+    aux_mmdata = CompositeCorpus((vtcorp, icorp_serialized),
+                                 names=('txt', 'img'), aligned=False)
     t2i_file = os.path.join(loader.root,
                             loader.layout.textdoc2imdoc)
     t2i_indexes = compute_docname_flatten_mapping(aux_mmdata, t2i_file)
+    logging.info('  Indices total: {0}'.format(len(t2i_indexes)))
 
     logging.info('Combine icorp with text corpora.')
-    mm_composite = CompositeCorpus((t_composite, icorp_serialized),
-                                   names=('text', 'img'),
+    mm_composite = CompositeCorpus((t_flattened, icorp_serialized),
+                                   names=('txt', 'img'),
                                    aligned=False)
     mm_flatten = FlattenComposite(mm_composite,
                                   indexes=t2i_indexes,
@@ -121,7 +125,7 @@ def main(args):
     logging.info('Create introspection.')
     introspection = IntrospectionTransformer(mm_flattened,
                                              writer=mm_writer)
-    intro_pipeline = introspection[flattened]
+    intro_pipeline = introspection[mm_flattened]
 
     logging.info('Dry-run introspection, to generate files.')
     dry_run(intro_pipeline)

@@ -36,7 +36,7 @@ class WriterABC(object):
         :param root: The root directory to which the introspection files should
             be written.
         """
-        self.root = root
+        self.root = os.path.abspath(root)
 
     def run(self, iid, value, corpus):
         """Writes to a file and returns the filename.
@@ -235,20 +235,6 @@ class HtmlStructuredFlattenedWriter(HtmlSimpleWriter):
         links_table = self.generate_next_and_prev_links(iid)
         elements.append(links_table)
 
-        # composite = find_type_in_pipeline(corpus, CompositeCorpus)
-        # if composite is None:
-        #     composite = find_type_in_pipeline(corpus, CompositeDataset)
-        # if composite is None:
-        #     raise ValueError('Cannot find composite corpus in supplied '
-        #                      'pipeline!\nPipeline:\n{0}'
-        #                      ''.format(log_corpus_stack(corpus)))
-        #
-        # sources = composite.corpus
-        # values_out = [self.writers[i].generate_value(individual_iids[i],
-        #                                              values[i],
-        #                                              sources[i])
-        #               for i in xrange(len(values))]
-        # combined_values = html_utils.as_table([values_out])
         combined_values = self.generate_value(iid, values, corpus)
         elements.append(combined_values)
 
@@ -257,6 +243,7 @@ class HtmlStructuredFlattenedWriter(HtmlSimpleWriter):
 
     def generate_value(self, iid, value, corpus):
 
+        logging.debug('FlWriter.generate_value({0}, {1}, {2})'.format(iid, value, corpus))
         composite = find_type_in_pipeline(corpus, CompositeCorpus)
         if composite is None:
             composite = find_type_in_pipeline(corpus, CompositeDataset)

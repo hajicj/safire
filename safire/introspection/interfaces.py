@@ -57,6 +57,7 @@ class IntrospectionTransformer(TransformationABC):
 
         :return:
         """
+        logging.debug('IntroTrans.__getitem__({0})'.format(item))
         if isinstance(item, CorpusABC) or isinstance(item, DatasetABC):
             return self._apply(item)
 

@@ -1004,6 +1004,12 @@ class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):
     def __getitem__(self, item):
 
         logging.debug('  ITrCorpAccessing item: {0}'.format(item))
+        if isinstance(item, list):
+            logging.debug('  ...processing as list.')
+            return [self[i] for i in item]
+        if isinstance(item, slice):
+            logging.debug('  ...processing as slice.')
+            return [self[i] for i in xrange(*item.indices(len(self)))]
 
         retrieved = self.corpus[item]
         logging.debug('  ITrCorp Retrieved: {0}'.format(retrieved))

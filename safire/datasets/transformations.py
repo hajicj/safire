@@ -279,7 +279,7 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
 
         # Problem: flattening is outputting
 
-        # print 'flattening __getitem__ output: {0}'.format(output)
+        logging.debug('flattening __getitem__ output: {0}'.format(output))
         return output
 
     def derive_dimension(self, composite):
