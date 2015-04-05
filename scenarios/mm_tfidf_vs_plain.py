@@ -128,7 +128,7 @@ def main(args):
     intro_pipeline = introspection[mm_flattened]
 
     logging.info('Dry-run introspection, to generate files.')
-    dry_run(intro_pipeline)
+    dry_run(intro_pipeline, max=100)
     iid2intro = intro_pipeline.obj.iid2introspection_filename
     firstfile = iid2intro[sorted(iid2intro.keys())[0]]
 
