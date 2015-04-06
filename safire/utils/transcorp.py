@@ -259,6 +259,8 @@ def get_composite_source(pipeline, name):
     if isinstance(pipeline, safire.datasets.dataset.CompositeDataset):
         return pipeline[name]
     if isinstance(pipeline, safire.data.composite_corpus.CompositeCorpus):
+        # print 'Returning source: {0}, with dimension {1}' \
+        #       ''.format(pipeline[name], dimension(pipeline[name]))
         return pipeline[name]
     else:
         if isinstance(pipeline, TransformedCorpus):

@@ -620,7 +620,7 @@ class TestPipeline(SafireTestCase):
         _ = [idoc for idoc in tf_vs_plain_intro_pipeline[:n_items_requested]]
         iid2intro = tf_vs_plain_intro_pipeline.obj.iid2introspection_filename
         filenames = [iid2intro[iid] for iid in sorted(iid2intro.keys())]
-        webbrowser.open(filenames[0])
+        #webbrowser.open(filenames[0])
 
         tfidf_tokens = tfidf_token_pipeline[:5]
         nontfidf_tokens = pre_w2v_text_pipeline[:5]

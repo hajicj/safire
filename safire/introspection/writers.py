@@ -11,6 +11,7 @@ from safire.data.composite_corpus import CompositeCorpus
 from safire.datasets.dataset import CompositeDataset
 from safire.datasets.transformations import FlattenedDatasetCorpus
 from safire.introspection import html_utils
+from safire.utils import is_gensim_batch
 from safire.utils.transcorp import get_id2doc_obj, get_id2word_obj, \
     find_type_in_pipeline, log_corpus_stack
 
@@ -299,7 +300,13 @@ class HtmlSimilarImagesWriter(HtmlSimpleWriter):
         image_urls = []
         similarities = []
         #print 'Passed value: {0}'.format(value)
-        for iid, similarity in value[0]:  # One-document gensim "copora"?
+        if is_gensim_batch(value):
+            if len(value) == 1:
+                value = value[0]
+            else:
+                raise ValueError('Cannot deal with gensim batches of length'
+                                 ' more than 1.')
+        for iid, similarity in value:  # One-document gensim "copora"?
             docname = id2doc[iid]
             image_fname = os.path.join(self.root, docname)
             image_urls.append(html_utils.as_local_url(image_fname))

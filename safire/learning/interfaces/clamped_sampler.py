@@ -106,6 +106,8 @@ class MultimodalClampedSampler(object):
         # Input shape has to have the same number of rows as the input.
         inputs = numpy.zeros((len(text_features), self.model.n_in),
                              dtype=theano.config.floatX)
+        #logging.info('Initialized inputs shape: {0}, text_features shape: {1}'
+        #             ''.format(inputs.shape, text_features.shape))
         inputs[:, :self.dim_text] = text_features
 
         # Assumes the image init features have the right shape.
