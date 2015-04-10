@@ -67,7 +67,7 @@ image_serialization_settings = {'overwrite': True}
 
 
 def main(args):
-    logging.info('Executing tfidf_vs_plain.py...')
+    logging.info(b'Executing tfidf_vs_plain.py...')
     _start_time = time.clock()
 
     loader = MultimodalShardedDatasetLoader(root=args.root,
