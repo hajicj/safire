@@ -35,11 +35,11 @@ We have some options of resolving these dependencies:
 How to write a configuration
 ============================
 
-Safire pipelines can be configured in plain old *.ini format, with a few
+Safire pipelines can be configured in plain old *.ini format, with some
 safire-specific extras. We'll illustrate on a toy example::
 
     [_info]
-    name=toy_example
+    name='toy_example'
 
     [_builder]
     save=False
@@ -47,7 +47,7 @@ safire-specific extras. We'll illustrate on a toy example::
 
     [foo]
     _class=safire.Foo
-    _label=foo_1234
+    _label='foo_1234'
     some_property=True
     link=bar
 
@@ -69,16 +69,33 @@ special value defines the class of the objject, the section name is the name
 of the initialized instance of that class and all values that do not start
 with an underscore are used as initialization arguments.
 
+Note that the values are used *literally* as Python code. This means that all
+strings must be quoted.
+
 Generally, **everything that doesn't start with an underscore translates
 literally to Python code**.
 
-This also
-implies that you need to input objects **in the order in which they are needed**
-as the configuration parser and builder don't have the capability to determine
-the dependencies between the objects automatically.
+Dependencies
+------------
 
-There is a set of defined special sections that the ConfigBuilder interprets
-differently. These all have names that start with an underscore.
+The configuration parser and builder don't have the capability to determine
+the dependencies between the objects automatically. An alternative is specifying
+the objects on which a transformer depends in a ``_dependencies`` value::
+
+    [baz]
+    _class=safire.Baz
+    _dependencies=foo,bar
+    inputs_1=foo
+    inputs_2=bar
+
+In the future, we will add a Python parser to resolve the dependencies from the
+object init args themselves.
+
+There is also a set of defined special sections that the ConfigBuilder
+interprets differently. These all have names that start with an underscore.
+Objects corresponding to these sections (most often the ``_loader`` object)
+are always initialized before the non-special sections, so you do *not* have
+to explicitly mark dependencies on them.
 
 Assembling pipelines
 --------------------
@@ -88,9 +105,9 @@ a pipeline, these are only the building blocks. To assemble a pipeline, we need
 to apply the blocks. To this end, there's the special ``[_assembly]`` section::
 
     [_assembly]
-    _#1=`bar`
-    _#2=`foo[#1]`
-    _#3=`foo[#2]`
+    _1_=bar
+    _2_=foo[_1_]
+    _3_=foo[_2_]
 
 which will result in the following action::
 
@@ -108,13 +125,13 @@ a ``loader`` section::
 
     [_loader]
     _class=safire.data.loaders.MultimodalShardedDatasetLoader
-    root=PATH/TO/YOUR/ROOT
-    name=YOUR_NAME
+    root='PATH/TO/YOUR/ROOT'
+    name='YOUR_NAME'
 
 Then, it's possible to define a systematic savename for example as::
 
     [_builder]
-    savename=`loader.get_pipeline_name(info.name)`
+    savename=loader.get_pipeline_name(info.name)
 
 
 Referring to pipeline components in config
@@ -141,38 +158,39 @@ A full example
 
     [_loader]
     _class=safire.data.loaders.MultimodalShardedDatasetLoader
-    root=/var/data/safire
-    name=safire-notabloid
+    root='/var/data/safire'
+    name='safire-notabloid'
 
     [_builder]
     save=True
     save_every=False
-    savename=`loader.get_pipeline_name(info.name)`
+    savename=_loader.get_pipeline_name(info.name)
     log_blocks=True
     log_saving=True
 
     [_assembly]
-    _#1=`vtcorp`
-    _#2=`tfidf[#1]`
-    _#3=`serializer[#2]`
+    _1_=vtcorp
+    _2_=tfidf[_1_]
+    _3_=serializer[_2_]
 
     [_persistence]
-    _loader=`loader`
-    _#1=vtcorp
-    _#2=tfidf
-    _#3=tfidf.serialized
+    _loader=loader
+    _1_='vtcorp'
+    _2_='tfidf'
+    _3_='tfidf.serialized'
 
     [tokenfilter]
     _class=safire.data.filters.positionaltagfilter.PositionalTagTokenFilter
-    values=`['N', 'A', 'V']`
+    values=['N', 'A', 'V']
     t_position=0
 
     [vtcorp]
     _class=safire.data.vtextcorpus.VTextCorpus
-    _label=NAV.pf0.3.pff.fc
-    input_root=`loader.root`
-    vtlist=`os.path.join(loader.root, loader.layout.vtlist)`
-    token_filter=`tokenfilter`
+    _label='NAV.pf0.3.pff.fc'
+    _dependencies=_loader,tokenfilter
+    input_root=_loader.root
+    vtlist=os.path.join(_loader.root, _loader.layout.vtlist)
+    token_filter=tokenfilter
     pfilter=0.2
     pfilter_full_freqs=True
     filter_capital=True
@@ -180,15 +198,16 @@ A full example
 
     [tfidf]
     _class=gensim.models.TfidfModel
-    _label=tfidf
-    corpus=`#1`
+    _label='tfidf'
+    corpus=_1_
     normalize=True
 
     [serializer]
     _class=safire.data.serializer.Serializer
-    corpus=`#2`
-    serializer_class=`safire.data.sharded_corpus.ShardedCorpus`
-    fname=`loader.generate_serialization_target(''.join(vtcorp.label, tfidf.label))`
+    _dependencies=_loader,vtcorp,tfidf
+    corpus=_2_
+    serializer_class=safire.data.sharded_corpus.ShardedCorpus
+    fname=_loader.generate_serialization_target(''.join(vtcorp.label, tfidf.label))
     overwrite=False
 
 
@@ -205,22 +224,6 @@ This config would produce the following code::
     savename = loader.get_pipeline_name(info.name)
     pipeline.save(savename)
 
-
-The configuration builder
-=========================
-
-The workhorse of converting a config file into a pipeline is the
-:class:`ConfigBuilder`. The builder receives the output of configuration file
-parsing and outputs the pipeline object. This may take long: for example, the
-entire training of a neural network can be a part of pipeline initialization!
-
-The builder itself is bootstrapped from the ``builder`` section of the config
-file. If this section is not given, the default builder settings will be used.
-
-Building a pipeline comes in stages:
-
-* Create a list of requested objects and their dependencies,
-* Initialize the individual objects in the correct order.
 
 Persistence
 ===========
@@ -288,20 +291,20 @@ you can define a special ``[_persistence]`` section that defines the savename
 for each stage at which you wish to save the pipeline::
 
     [_persistence]
-    _#1=path/to/data/full_example.vtcorp.pln
-    _#2=path/to/data/full_example.tfidf.pln
-    _#3=path/to/data/full_example.serialized_tfidf.pln
+    _1_=path/to/data/full_example.vtcorp.pln
+    _2_=path/to/data/full_example.tfidf.pln
+    _3_=path/to/data/full_example.serialized_tfidf.pln
 
 If a ``_loader`` value is defined in ``_persistence``, the values are
 interpreted as labels for the loader's ``get_pipeline_name()`` method::
 
     [_persistence]
-    _loader=`loader`
-    _#1=vtcorp
-    _#2=tfidf
-    _#3=serialized_tfidf
+    loader=_loader
+    _1_=vtcorp
+    _2_=tfidf
+    _3_=serialized_tfidf
 
-Note that saving ``#3`` is redundant when the ``builder.save`` flag is set to
+Note that saving ``_3_`` is redundant when the ``builder.save`` flag is set to
 True; if the supplied names do not match, the pipeline is simply saved twice.
 
 Using saved pipelines in a configuration
@@ -326,28 +329,220 @@ accessible from the loaded block have been loaded. This implies that if you
 wish to re-run an experiment with different settings, you'll have to disable
 
 
+The configuration builder
+=========================
+
+The workhorse of converting a config file into a pipeline is the
+:class:`ConfigBuilder`. The builder receives the output of configuration file
+parsing and outputs the pipeline object. This may take long: for example, the
+entire training of a neural network can be a part of pipeline initialization!
+
+The builder itself is bootstrapped from the ``builder`` section of the config
+file. If this section is not given, the default builder settings will be used.
+
+Building a pipeline comes in stages:
+
+* Create a list of requested objects and their dependencies,
+* Initialize the individual objects in the correct order.
+
+
 """
 import copy
 import logging
 import collections
 import itertools
+import imp
+import gensim
+import os
 
 __author__ = "Jan Hajic jr."
+
+
+class Configuration(object):
+    """Plain Old Data class; the data structure that represents a configuration.
+    """
+    def __init__(self):
+        # Each object or special object is a dict with string keys and string
+        # values. The values will be interpreted as Python code.
+        self.objects = collections.OrderedDict()
+        self.special_objects = collections.OrderedDict()
+
+        self.expected_special_objects = ['_info',
+                                         '_builder',
+                                         '_loader',
+                                         '_assembly',
+                                         '_persistence']
+        self.required_special_objects = ['_info', '_builder', '_assembly']
+
+        for so in self.expected_special_objects:
+            setattr(self, so, None)
+
+    def add_object(self, name, obj):
+        """Adds the given object to itself under the given name. If the name
+        starts with an underscore, considers the object special.
+        """
+        if name.startswith('_'):
+            self.special_objects[name] = obj
+            if name in self.expected_special_objects:
+                setattr(self, name, obj)
+        else:
+            self.objects[name] = obj
+
+    def is_valid(self):
+        """Checks integrity of the given configuration."""
+        valid = True
+        missing_required_sections = []
+        for so in self.required_special_objects:
+            if getattr(self, so) is None:
+                valid = False
+                missing_required_sections.append(so)
+        return valid, missing_required_sections
+
+    def process_assembly_names(self):
+        """Modifies block names from their special identifiers
+        """
+
 
 class ConfigParser(object):
     """The ConfigParser reads the configuration file and provides an interface
     to the config values that the ConfigBuilder will use. It does *not*
     interpret the configuration file (that's the Builder's job).
     """
-    pass
+
+    def parse(self, file):
+        """Given a config file (handle), will build the Configuration object."""
+        conf = Configuration()
+
+        current_section = {}
+        current_section_name = ''
+        in_section = False
+        for line_no, line in enumerate(file):
+            line = line.strip()
+            # Comment
+            if line.startswith('#'):
+                continue
+
+            # Empty line
+            if line == '':
+                # ends section.
+                if in_section:
+                    conf.add_object(current_section_name, current_section)
+                    # Clear current section
+                    current_section = {}
+                    current_section_name = ''
+                    in_section = False
+                else:
+                    pass
+
+            # Section start
+            elif line.startswith('['):
+                if not line.endswith(']'):
+                    raise ValueError('On line {0} of configuration: missing'
+                                     ' closing bracket for section name.\n  '
+                                     'Line: {1}'.format(line_no, line))
+                if in_section:
+                    raise ValueError('On line {0} of configuration: starting'
+                                     ' a section within another section.\n  '
+                                     'Line: {1},\n  in section {2}'
+                                     ''.format(line_no, line, current_section_name))
+                in_section = True
+
+                section_name = line[1:-1]
+                if section_name in conf.objects:
+                    raise ValueError('On line {0} of configuration: section '
+                                     '{1} has already been defined.'
+                                     ''.format(line_no, section_name))
+                if section_name in conf.special_objects:
+                    raise ValueError('On line {0} of configuration: special '
+                                     'section {1} has already been defined.'
+                                     ''.format(line_no, section_name))
+                current_section_name = section_name
+
+            # Not a comment, not an empty line, not a section heading
+            else:
+                # key-value pair for current section
+                if in_section:
+                    if '=' not in line:
+                        raise ValueError('On line {0} of configuration: in '
+                                         'section, but not in key=value format'
+                                         ' - missing \'=\' character.\n  '
+                                         'Line: {1}'.format(line_no, line))
+                    key, value = line.split('=', 1)
+
+                    # Special keys handling
+                    if key == '_dependencies':
+                        value = value.split(',')
+                    if key == '_access_deps':
+                        values = {}
+                        for dep in value.split('|'):
+                            name, code = dep.split(':', 1)
+                        values[name] = code
+                        value = values
+
+                    current_section[key] = value
+                # junk
+                else:
+                    raise ValueError('On line {0} of configuration: not a '
+                                     'comment, empty line or heading, but not '
+                                     'within a section.\n  Line: {1}'
+                                     ''.format(line_no, line))
+
+        # Deal with last section
+        if in_section:
+            conf.add_object(current_section_name, current_section)
+
+        is_valid, missing_required_sections = conf.is_valid()
+        if not is_valid:
+            raise ValueError('Configuration loaded but is not valid. Missing'
+                             ' required sections: {0}'
+                             ''.format(', '.join(missing_required_sections)))
+
+        return conf
 
 
 class ConfigBuilder(object):
     """The ConfigBuilder takes a parsed config file and generates the actual
     Python code requested in the config.
     """
-    def __init__(self):
-        raise NotImplementedError()
+    def __init__(self, conf):
+        self.configuration = conf
+
+        self._info = self.dict2module(conf._info, '_info')
+        self._loader = self._execute_init(conf._loader, _info=self._info)
+
+        # Bootstrap its own settings
+        bootstrap_module = self.eval_dict(conf._builder,
+                                          _info=self._info,
+                                          _loader=self._loader)
+        for k, v in bootstrap_module.items():
+            setattr(self, k, v)
+
+        self._assembly = self.dict2module(conf._assembly,
+                                          '_assembly',
+                                          no_eval='all',
+                                          _info=self._info,
+                                          _loader=self._loader,
+                                          _builder=self)
+        self._persistence = self.dict2module(conf._persistence,
+                                             '_persistence',
+                                             no_eval='special',
+                                             _info=self._info,
+                                             _loader=self._loader,
+                                             _builder=self,
+                                             _assembly=self._assembly)
+
+        # IMPORTANT: a dictionary of all available objects. When a dependency
+        # is requested, it is taken from here.
+        self.objects = {'_info': self._info,
+                        '_loader': self._loader,
+                        '_builder': self,
+                        '_assembly': self._assembly,
+                        '_persistence': self._persistence}
+
+        # IMPORTANT: a graph of dependencies between configuration object.
+        # Works with object names, not the objects themselves.
+        self.deps_graph = self.build_dependency_graph(conf)
+        self.sorted_deps = self.sort_dependency_graph(self.deps_graph)
 
     def build_block_dependency_graph(self, assembly):
         """Builds a dependency graph of the pipeline blocks (the topology of the
@@ -358,11 +553,11 @@ class ConfigBuilder(object):
 
         # Initialize vortices
         for block in assembly:
-            graph[block] = {}
+            graph[block] = set()
 
         # Initialize edges. "Parent" is the tail end of the arrow, "child"
         # is the head end. Parent depends on child.
-        # Ex: _#2=foo[_#1]   ... #2 is parent, #1 is child (#2 depends on #1).
+        # Ex: _2_=foo[_1_]   ... #2 is parent, #1 is child (#2 depends on #1).
         for parent, child in itertools.product(assembly.keys(),
                                                assembly.keys()):
             if child in assembly[parent]:
@@ -391,30 +586,52 @@ class ConfigBuilder(object):
         """
         enriched_graph = copy.deepcopy(block_graph)
         for t in transformers:
-            enriched_graph[t] = {}
-            for key, value in t.items():
+            enriched_graph[t] = set()
+
+        # Add dependencies of transformers on blocks
+        for t in transformers:
+            for key, value in transformers[t].items():
                 for b in block_graph:
                     if b in value:
                         enriched_graph[t].add(b)
 
+        # Add dependencies of blocks on transformers
         for t in transformers:
             for a in assembly:  # All these should already have been added.
                 if t in assembly[a]:
                     # Initializing block A depends on having transformer T
                     enriched_graph[a].add(t)
+
+        # Add transformer-transformer dependencies
+        for t in transformers:
+            if '_dependencies' in transformers[t]:
+                dependencies = transformers[t]['_dependencies']
+                for d in dependencies:
+                    enriched_graph[t].add(d)
+
         return enriched_graph
+
+    def build_dependency_graph(self, configuration):
+        block_graph = self.build_block_dependency_graph(configuration._assembly)
+        block_and_obj_graph = \
+            self.add_transformer_dependencies(block_graph,
+                                              configuration.objects,
+                                              configuration._assembly)
+        return block_and_obj_graph
 
     @staticmethod
     def sort_dependency_graph(graph):
         """Reorders the vertices (blocks) in the block dependency graph in their
-        topological order.  Raises a ValueError if the graph is not acyclic.
+        topological order. Returns an OrderedDict.
 
-        >>> g = { '_#1': [], '_#2': [], '_#3': ['_#1', '_#2'], '_#4': ['_#3']}
-        >>> ConfigBuilder.sort_dependency_graph(g)
-        [{'_#1': []}, {'_#2': []}, {'_#3': ['_#1', '_#2']}, {'_#4': ['_#3']}]
+        Raises a ValueError if the graph is not acyclic.
 
+        >>> g = { 'C': ['A', 'B'], 'D': ['C'], 'A': [], 'B': []}
+        >>> sorted_g = ConfigBuilder.sort_dependency_graph(g)
+        >>> [name for name in sorted_g]
+        ['A', 'B', 'C', 'D']
         """
-        sorted_graph = []
+        sorted_graph_list = []
 
         unsorted_graph = copy.deepcopy(graph)
         # While vertices are left in the unsorted graph:
@@ -430,77 +647,329 @@ class ConfigBuilder(object):
                         can_remove = False
                         break
                 if can_remove:
-                    sorted_graph.append({vertex: graph[vertex]})
+                    sorted_graph_list.append({vertex: graph[vertex]})
                     del unsorted_graph[vertex]
                     break
 
+        sorted_graph = collections.OrderedDict()
+        for item in sorted_graph_list:
+            for key, value in item.items():
+                sorted_graph[key] = value
         return sorted_graph
 
-    def build(self, configuration):
+    def resolve_persistence(self):
+        """Categorizes the objects according to whether they will be loaded
+        directly, will be loaded as a dependency of something else, or will have
+        to be initialized."""
+        # Handle persistence:
+        #  - determine which objects should be loaded and which should be
+        #    initialized
+        #     --> needs loader to check for availability
+        able_to_load = set()
+        able_to_init = set()
+        for item in self.sorted_deps:
+            if self.can_load(item):
+                # Mark all objects that will be loaded.
+                able_to_load.add(item)
+            else:
+                # Mark all that will be initialized.
+                able_to_init.add(item)
 
-        # Determine block dependencies from the _assembly section. These
-        # dependencies represent the topology of the pipeline.
-        block_graph = self.build_block_dependency_graph(configuration._assembly)
+        # Prune load/init sets according to dependency graph.
+        will_load = set()
+        will_be_loaded = set()
+        to_resolve = copy.deepcopy(able_to_load)
+        while to_resolve:
+            current_obj = able_to_load.pop()
+            if current_obj not in to_resolve:
+                continue
+            else:
+                will_load.add(current_obj)
+            # Traverse all dependencies of current object and mark them as loaded
+            deps = copy.deepcopy(self.deps_graph[current_obj])
+            while deps:
+                current_dep = deps.pop()
+                del to_resolve[current_dep]
+                will_be_loaded.add(current_dep)
+                for d in self.deps_graph[current_dep]:
+                    deps.add(d)
+        # Whatever's left will be initialized, as it is unreachable from
+        # the load-able objects.
+        will_init = to_resolve
+        return will_load, will_be_loaded, will_init
 
-        # Add transformer dependencies, to set block/transformer interleaving
-        combined_graph = self.add_transformer_dependencies(block_graph,
-                                                        configuration._assembly,
-                                                        configuration.objects)
+    def is_block(self, name):
+        if hasattr(self._assembly, name):
+            return True
+        else:
+            return False
 
-        # Sort dependency graph
-        sorted_graph = self.sort_dependency_graph(combined_graph)
+    def can_load(self, item):
+        """Determines whether the given item can be loaded.
 
-        # At this point, we have the topology of initialization. The only thing
-        # NOT covered by the dependency graph are transformer-transformer
-        # dependencies. These cannot be determined automatically, as there is
-        # no convention for transformer names similar to block names in the
-        # _assembly section by which to differentiate references to transformers
-        # in other transformers' init code.
-        # Therefore, the order of initialization of individual transformers has
-        # to be defined by the order in which they are given in the
-        # configuration file. This is why an OrderedDict must be used when
-        # parsing them.
-        # To fully determine the order of initialization, we need to make sure
-        # that this ordering is respected in the dependency graph. To this end,
-        # we will check the topological sort output for inconsistencies with
-        # the transformer ordering from the config file.
+        If the ``loader`` key is defined for ``self._persistence``, will
+        interpret the values in _persistence as inputs for the loader's
+        ``get_pipeline_name`` method.
+        """
+        if not hasattr(self._persistence, item):
+            return False
+        else:
+            if hasattr(self._persistence, 'loader'):
+                fname = self._loader.pipeline_name(
+                                getattr(self._persistence, item))
+            else:
+                fname = getattr(self._persistence, item)
+            if os.path.isfile(fname):
+                return True
+            else:
+                return False
 
-        # Initialize loader.
-        loader = self.execute_init(configuration._loader)
-        if not hasattr(loader, 'generate_pipeline_name'):
-            raise TypeError('Loader of type {0} does not support generating'
-                            ' pipeline names.'.format(type(loader)))
+    def get_loading_filename(self, name):
+        if hasattr(self._persistence, 'loader'):
+            fname = self._loader.get_pipeline_name(name)
+        else:
+            fname = name
+        return fname
 
-        # Decide which objects have to be initialized and which should be
-        # loaded.
-        # The loading order should be determined from the assembly graph!
-        # Should be a BFS through the dependency DAG.
+    def get_dep_symbols(self, name):
+        """Just looks into the dependency graph. All symbols used in the
+        pipeline that is being built should be there."""
+        return self.deps_graph[name]
 
-        # Generate persistence codes: loading
-        #   - decision: generate if-statements for persistence, or look ahead
-        #     into the configuration, test availability and only generate the
-        #     code that will actually get executed?
-        #   --> second option looks better - determining what to load and what
-        #       to initialize sounds like something the builder should figure
-        #       out. Also, the builder should *not* be a templating machine.
-        #   --> However, this means pre-loading the Loader: make
-        #       it a special section. (Paths are a part of what the builder
-        #       needs to work with.)
-        #   --> Problem: the loader needs to be available for initialization,
-        #       too. Initialize the loader separately, using the _class
-        #       mechanism, and then pull it in?
-        # Should the loader be compulsory??
-        #
+    def is_dep_obj_accessible(self, name, symbol):
+        """Checks that the actual object named ``symbol`` can be accessed as a
+        dependency from the object called ``name``."""
+        conf = self.configuration.objects[name]
+        if '_access_deps' in conf:
+            if symbol in conf['_access_deps']:
+                return True
+        if self._uses_block(name, symbol):
+            return True
+        return False
 
-        # Assembly names should be generated by the parser.
-        # Generate object init codes (uses assembly names already)
-        obj_init_codes = [self.obj_init_code(obj)
-                          for obj in configuration.objects]
+    def _uses_block(self, name, blockname):
+        """Checks whether the object of the given ``name`` depends on the block
+        given with the given ``blockname``."""
+        if not hasattr(self._assembly, blockname):
+            # blockname does not refer to a block!
+            return False
+        if blockname in self.deps_graph[name]:
+            return True
+        else:
+            return False
 
-        # Resolve dependencies
+    def retrieve_dep_obj(self, name, obj, symbol):
+        """Retrieve the actual dependency object signified by ``symbol`` from
+        the ``obj`` with the ``name``."""
+        if not self.is_dep_obj_accessible(name, symbol):
+            return None
+        obj_conf = self.configuration.objects[name]
+        access_expr = obj_conf['_access_deps'][symbol]
+        dep_obj = eval(access_expr, globals(), locals={name: obj})
+        return dep_obj
 
-        # Generate block application codes
+    def build(self):
+        """This method does the heavy lifting: determining dependencies, dealing
+        with persistence, etc. It outputs the pipeline (last block...) according
+        to the configuration.
+        """
+        will_load, will_be_loaded, will_init = self.resolve_persistence()
 
+        logging.debug('Will load: {0}'.format(will_load))
+        logging.debug('Will be loaded transitively: {0}'.format(will_be_loaded))
+        logging.debug('Will initialize: {0}'.format(will_init))
+
+        # Loading:
+        #  - sort items to load according to the order in the sorted graph
+        load_queue = []
+        for item in self.sorted_deps:
+            if item in will_load:
+                load_queue.append(item)
+
+        for item in load_queue:
+            #  - load item (using loader, etc.)
+            fname = self.get_loading_filename(item)
+            obj = self._execute_load(fname)
+            #  - add item to object dict
+            self.objects[item] = obj
+
+            #  - traverse dependencies according to _access_deps. This time, it
+            #    means iterating over the actual objects, as they have been
+            #    loaded. Add each of these to the object dict.
+            obj_queue = [(item, obj)]
+            while obj_queue:
+                current_symbol, current_obj = obj_queue.pop()
+
+                # Add to objects dict.
+                self.objects[current_symbol] = current_obj
+
+                # Traverse dependency graph further
+                current_dep_symbols = self.get_dep_symbols(current_symbol)
+                current_dep_objs = {dep_symbol: self.retrieve_dep_obj(current_symbol,
+                                                                  current_obj,
+                                                                  dep_symbol)
+                                    for dep_symbol in current_dep_symbols
+                                    if self.is_dep_obj_accessible(current_symbol,
+                                                                  dep_symbol)}
+                obj_queue.extend(current_dep_objs.items())
+
+        # Verify that everything that should have been loaded has been loaded
+        for item in will_be_loaded:
+            if item not in self.objects:
+                logging.warn('Object {0} not found after it should have been'
+                             ' loaded. (Available objects: {1})'
+                             ''.format(item, self.objects.keys()))
+
+        # Initialize objects that weren't loaded.
+        for item in will_init:
+            if item in self.configuration.objects:
+                self.init_object(item,
+                                 self.configuration.objects[item],
+                                 **self.objects)
+            elif item in self.configuration._assembly:
+                self.init_block(item, **self.objects)
+
+        # At this point, all objects - blocks, transformers and others - should
+        # be ready. We return a dictionary of objects on which nothing depends.
+        reverse_deps = collections.defaultdict(set)
+        for obj_name in self.objects:
+            reverse_deps[obj_name] = set()
+            deps = self.deps_graph[obj_name]
+            for d in deps:
+                reverse_deps[d].add(obj_name)
+        output_objects = {obj_name: obj
+                          for obj_name, obj in self.objects.items()
+                          if len(reverse_deps[obj_name]) == 0}
+        return output_objects
+
+    @staticmethod
+    def eval_dict(dictionary, no_eval=None, **kwargs):
+        """Evaluates the dictionary values as Python code (using the ``eval()``
+        built-in) with the kwargs as the local scope. Returns a new dictionary
+        with the ``eval()``-uated values instead of the originals.
+
+        :param no_eval: If set to None, will eval all dict members. If set to
+            'special', will not eval special dict members (those that start
+            with ``_``). If set to 'nonspecial', will only eval special dict
+            members.
+        """
+        if no_eval is None:
+            return {k: eval(v, globals(), kwargs) for k, v in dictionary.items()}
+        elif no_eval == 'special':
+            output = {}
+            for k, v in dictionary.items():
+                if not k.startswith('_'):
+                    output[k] = eval(v, globals(), kwargs)
+                else:
+                    output[k] = v
+            return output
+        elif no_eval == 'nonspecial':
+            output = {}
+            for k, v in dictionary.items():
+                if k.startswith('_'):
+                    output[k] = eval(v, globals(), kwargs)
+                else:
+                    output[k] = v
+            return output
+
+    def init_object_or_block(self, name, conf_obj, **kwargs):
+        if name in self.configuration.objects:
+            self.init_object(name, conf_obj, **kwargs)
+        elif name in self.configuration._assembly:
+            self.init_block(name, **kwargs)
+
+    def init_object(self, name, conf_obj, **kwargs):
+        obj = self._execute_init(conf_obj, **kwargs)
+        self.objects[name] = obj
+
+    def init_block(self, name, **kwargs):
+        obj = eval(getattr(self._assembly, name), globals(), kwargs)
+        self.objects[name] = obj
+
+    def load_object(self, filename, name, conf_obj, **kwargs):
+        obj = self._execute_load(filename)
+        self.objects[name] = obj
+
+    @staticmethod
+    def _execute_init(obj, **kwargs):
+        """Initializes an object based on its configuration.
+
+        Use **kwargs to pass dependencies.
+        The kwargs are used as the ``locals`` scope when each non-special
+        key-value pair in the ``obj`` configuration dict is evaluated through
+        Python's ``eval()``.
+
+        If the configuration object doesn't have a _class special key, raises
+        a ValueError.
+
+        >>> obj = {'_class': 'safire.data.vtextcorpus.VTextCorpus', 'precompute_vtlist': 'False', 'pfilter': 'baz(4)'}
+        >>> def foo(x): return x + 1
+        >>> foo(4)
+        5
+        >>> vtcorp = ConfigBuilder._execute_init(obj, baz=foo)
+        >>> vtcorp.positional_filter_kwargs
+        {'k': 5}
+
+        """
+        if '_class' not in obj:
+            raise ValueError('Cannot execute __init__ when the class is not'
+                             ' given! (Passed obj: {0})'.format(obj))
+
+        cls_string = obj['_class']
+        modulename, classname = cls_string.rsplit('.', 1)
+        cls = getattr(__import__(modulename, fromlist=[classname]), classname)
+        init_args_as_kwargs = {k: eval(v, globals(), kwargs)
+                               for k, v in obj.items() if not k.startswith('_')}
+        initialized_object = cls(**init_args_as_kwargs)
+        return initialized_object
+
+    @staticmethod
+    def _execute_load(filename):
+        """Loads the object saved to the given file. Used when a pipeline block
+        or transformer is available according to the _persistence section."""
+        obj = gensim.utils.SaveLoad.load(filename)
+        return obj
+
+    @staticmethod
+    def dict2module(obj, name, no_eval=None, **kwargs):
+        """Converts a dictionary into a module with the given name.
+
+        The created module is **not** added to ``sys.modules``.
+
+        The module will have attributes corresponding to the keys in ``obj``.
+        Their values will be obtained through calling ``eval()`` on the
+        corresponding values in the ``obj``. The kwargs are used as the
+        ``locals`` scope when each non-special key-value pair in the ``obj``
+        configuration dict is evaluated through Python's ``eval()``.
+
+        Special keys (those that start with an underscore) get no special
+        treatment, they become attributes of the output module (including the
+        leading underscore).
+
+        >>> def foo(x): return x + 1
+        >>> obj = { '_special': 'True', 'nonspecial': 'False', 'size': 'baz(3)'}
+        >>> obj_name = 'example'
+        >>> m = ConfigBuilder.dict2module(obj, obj_name, baz=foo)
+        >>> m._special, m.nonspecial, m.size
+        (True, False, 4)
+        >>> n = ConfigBuilder.dict2module(obj, obj_name, no_eval='all',  baz=foo)
+        >>> n._special, n.nonspecial, n.size
+        ('True', 'False', 'baz(3)')
+        >>> o = ConfigBuilder.dict2module(obj, obj_name, no_eval='special',  baz=foo)
+        >>> o._special, o.nonspecial, o.size
+        ('True', False, 4)
+        >>> p = ConfigBuilder.dict2module(obj, obj_name, no_eval='nonspecial',  baz=foo)
+        >>> p._special, p.nonspecial, p.size
+        (True, 'False', 'baz(3)')
+        """
+        m = imp.new_module(name)
+        if no_eval == 'all':
+            attributes = obj
+        else:
+            attributes = ConfigBuilder.eval_dict(obj, no_eval, **kwargs)
+        for k, v in attributes.items():
+            setattr(m, k, v)
+        return m
 
 
 class ConfigRunner(object):
