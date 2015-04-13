@@ -669,40 +669,53 @@ class ConfigBuilder(object):
         #  - determine which objects should be loaded and which should be
         #    initialized
         #     --> needs loader to check for availability
-        able_to_load = set()
-        able_to_init = set()
+        able_to_load = []
+        able_to_init = []
         for item in self.sorted_deps:
             if self.can_load(item):
                 # Mark all objects that will be loaded.
-                able_to_load.add(item)
+                able_to_load.append(item)
             else:
                 # Mark all that will be initialized.
-                able_to_init.add(item)
+                able_to_init.append(item)
 
         # Prune load/init sets according to dependency graph.
         will_load = set()
         will_be_loaded = set()
-        to_resolve = self.sorted_deps.keys()
+        to_resolve = set(self.sorted_deps.keys())
         while to_resolve:
             # No more candidates for loading
             if len(able_to_load) == 0:
                 break
             current_obj = able_to_load.pop()
+            # print 'Resolving load/will be loaded for object {0}'.format(current_obj)
             if current_obj not in to_resolve:
+                # print '   ...has already been resolved, will not load.'
                 continue
             else:
+                # print '   ...will load.'
                 will_load.add(current_obj)
-            # Traverse all dependencies of current object and mark them as loaded
+                to_resolve.remove(current_obj)
+            # Traverse all dependencies of current object and mark them as
+            # "to be loaded"
             deps = copy.deepcopy(self.deps_graph[current_obj])
             while deps:
                 current_dep = deps.pop()
-                del to_resolve[current_dep]
+                if current_dep not in to_resolve:
+                    continue
+                to_resolve.remove(current_dep)
                 will_be_loaded.add(current_dep)
+                # Add to dependency BFS traversal queue
                 for d in self.deps_graph[current_dep]:
                     deps.add(d)
         # Whatever's left will be initialized, as it is unreachable from
         # the load-able objects.
         will_init = to_resolve
+
+        # print 'Will load: {0}'.format(will_load)
+        # print 'Will be loaded transitively: {0}'.format(will_be_loaded)
+        # print 'Will initialize: {0}'.format(will_init)
+
         return will_load, will_be_loaded, will_init
 
     def is_block(self, name):
@@ -788,8 +801,8 @@ class ConfigBuilder(object):
 
     def build(self):
         """This method does the heavy lifting: determining dependencies, dealing
-        with persistence, etc. It outputs the pipeline (last block...) according
-        to the configuration.
+        with persistence, etc. It outputs a dictionary of all objects (blocks
+        and non-blocks) that do not depend on anything.
         """
         will_load, will_be_loaded, will_init = self.resolve_persistence()
 
@@ -839,10 +852,14 @@ class ConfigBuilder(object):
                              ''.format(item, self.objects.keys()))
 
         # Initialize objects that weren't loaded.
-        for item in will_init:
+        # Note that the ordering needs to be computed.
+        to_init = [item for item in self.sorted_deps if item in will_init]
+        for item in to_init:
             if self.is_block(item):
+                print 'Initializing block: {0}'.format(item)
                 self.init_block(item, **self.objects)
             else:
+                print 'Initializing object: {0}'.format(item)
                 self.init_object(item,
                                  self.configuration.objects[item],
                                  **self.objects)
@@ -868,6 +885,7 @@ class ConfigBuilder(object):
             if obj_name == 'loader' and 'loader' not in self.objects:
                 continue
             fname = self.get_loading_filename(obj_label)
+            print 'Saving object {0} to file {1}'.format(obj_name, fname)
             self.objects[obj_name].save(fname)
 
     @staticmethod

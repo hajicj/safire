@@ -132,7 +132,6 @@ class TestConfig(SafireTestCase):
         self.assertEqual(len(will_init), 0)
 
 
-
 if __name__ == '__main__':
     suite = unittest.TestSuite()
     loader = unittest.TestLoader()
