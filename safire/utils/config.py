@@ -354,6 +354,8 @@ import itertools
 import imp
 import gensim
 import os
+import sys
+import pprint
 
 __author__ = "Jan Hajic jr."
 
@@ -470,7 +472,7 @@ class ConfigParser(object):
                     key, value = line.split('=', 1)
 
                     # Special keys handling
-                    if key == '_dependencies':
+                    if key in {'_dependencies', '_import'}:
                         value = value.split(',')
                     if key == '_access_deps':
                         values = {}
@@ -538,6 +540,8 @@ class ConfigBuilder(object):
                         '_builder': self,
                         '_assembly': self._assembly,
                         '_persistence': self._persistence}
+        self.exclude_from_build_output = {'_info', '_loader', '_builder',
+                                          '_assembly', '_persistence'}
 
         # IMPORTANT: a graph of dependencies between configuration object.
         # Works with object names, not the objects themselves.
@@ -678,8 +682,11 @@ class ConfigBuilder(object):
         # Prune load/init sets according to dependency graph.
         will_load = set()
         will_be_loaded = set()
-        to_resolve = copy.deepcopy(able_to_load)
+        to_resolve = self.sorted_deps.keys()
         while to_resolve:
+            # No more candidates for loading
+            if len(able_to_load) == 0:
+                break
             current_obj = able_to_load.pop()
             if current_obj not in to_resolve:
                 continue
@@ -699,6 +706,7 @@ class ConfigBuilder(object):
         return will_load, will_be_loaded, will_init
 
     def is_block(self, name):
+        """Checks whether the given ``name`` belongs to a block or not."""
         if hasattr(self._assembly, name):
             return True
         else:
@@ -725,8 +733,13 @@ class ConfigBuilder(object):
                 return False
 
     def get_loading_filename(self, name):
+        """For the given persistence label, generates a filename under which the
+        given persistent block should be available. The generated filename
+        depends on the presence of the ``loader`` attribute in the _persistence
+        section; if the loader is there, it will use the loader's
+        ``pipeline_name`` method."""
         if hasattr(self._persistence, 'loader'):
-            fname = self._loader.get_pipeline_name(name)
+            fname = self._persistence.loader.pipeline_name(name)
         else:
             fname = name
         return fname
@@ -739,12 +752,17 @@ class ConfigBuilder(object):
     def is_dep_obj_accessible(self, name, symbol):
         """Checks that the actual object named ``symbol`` can be accessed as a
         dependency from the object called ``name``."""
-        conf = self.configuration.objects[name]
-        if '_access_deps' in conf:
-            if symbol in conf['_access_deps']:
+        if self.is_block(name):
+            symbol_conf = getattr(self._assembly, name)
+            if symbol in symbol_conf:
                 return True
-        if self._uses_block(name, symbol):
-            return True
+        else:
+            conf = self.configuration.objects[name]
+            if '_access_deps' in conf:
+                if symbol in conf['_access_deps']:
+                    return True
+            if self._uses_block(name, symbol):
+                return True
         return False
 
     def _uses_block(self, name, blockname):
@@ -822,25 +840,35 @@ class ConfigBuilder(object):
 
         # Initialize objects that weren't loaded.
         for item in will_init:
-            if item in self.configuration.objects:
+            if self.is_block(item):
+                self.init_block(item, **self.objects)
+            else:
                 self.init_object(item,
                                  self.configuration.objects[item],
                                  **self.objects)
-            elif item in self.configuration._assembly:
-                self.init_block(item, **self.objects)
 
         # At this point, all objects - blocks, transformers and others - should
         # be ready. We return a dictionary of objects on which nothing depends.
         reverse_deps = collections.defaultdict(set)
         for obj_name in self.objects:
-            reverse_deps[obj_name] = set()
+            if obj_name not in reverse_deps:
+                reverse_deps[obj_name] = set()
             deps = self.deps_graph[obj_name]
             for d in deps:
                 reverse_deps[d].add(obj_name)
         output_objects = {obj_name: obj
                           for obj_name, obj in self.objects.items()
-                          if len(reverse_deps[obj_name]) == 0}
+                          if len(reverse_deps[obj_name]) == 0
+                            and obj_name not in self.exclude_from_build_output}
         return output_objects
+
+    def run_saving(self):
+        """Saves the built objects according to the persistence instruction."""
+        for obj_name, obj_label in self.configuration._persistence.items():
+            if obj_name == 'loader' and 'loader' not in self.objects:
+                continue
+            fname = self.get_loading_filename(obj_label)
+            self.objects[obj_name].save(fname)
 
     @staticmethod
     def eval_dict(dictionary, no_eval=None, **kwargs):
@@ -911,6 +939,16 @@ class ConfigBuilder(object):
         {'k': 5}
 
         """
+        #print 'Initializing object {0}'.format(pprint.pformat(obj))
+        current_locals = kwargs
+        # Pull in classes used during initialization. Only use them in local
+        # context, don't pollute sys.modules!
+        if '_import' in obj:
+            for imported in obj['_import']:
+                modulename, classname = imported.rsplit('.', 1)
+                cls = getattr(__import__(modulename, fromlist=[classname]), classname)
+                current_locals[classname] = cls
+
         if '_class' not in obj:
             raise ValueError('Cannot execute __init__ when the class is not'
                              ' given! (Passed obj: {0})'.format(obj))
@@ -918,10 +956,16 @@ class ConfigBuilder(object):
         cls_string = obj['_class']
         modulename, classname = cls_string.rsplit('.', 1)
         cls = getattr(__import__(modulename, fromlist=[classname]), classname)
-        init_args_as_kwargs = {k: eval(v, globals(), kwargs)
+        init_args_as_kwargs = {k: eval(v, globals(), current_locals)
                                for k, v in obj.items() if not k.startswith('_')}
         initialized_object = cls(**init_args_as_kwargs)
         return initialized_object
+
+    @staticmethod
+    def print_and_eval(source, globals, locals):
+        print 'Source: {0}'.format(pprint.pformat(source))
+        print 'Locals: {0}'.format(pprint.pformat(locals))
+        return eval(source, globals, locals)
 
     @staticmethod
     def _execute_load(filename):

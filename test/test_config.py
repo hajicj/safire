@@ -1,6 +1,7 @@
 import os
 import collections
 from safire.data.loaders import MultimodalShardedDatasetLoader
+from safire.data.serializer import SwapoutCorpus
 from safire.utils.config import ConfigParser, Configuration, ConfigBuilder
 
 __author__ = 'Jan Hajic jr'
@@ -84,6 +85,20 @@ class TestConfig(SafireTestCase):
         self.assertTrue(deps_graph['serializer'] == set(['_2_', 'tfidf', 'vtcorp']))
         self.assertTrue(deps_graph['_3_'] == set(['_2_', 'serializer']))
 
+        # Testing object accesibility checks
+        self.assertTrue(builder.is_dep_obj_accessible('vtcorp', 'tokenfilter'))
+        self.assertTrue(builder.is_dep_obj_accessible('_1_', 'vtcorp'))
+        self.assertTrue(builder.is_dep_obj_accessible('_2_', '_1_'))
+        self.assertTrue(builder.is_dep_obj_accessible('_2_', 'tfidf'))
+        self.assertFalse(builder.is_dep_obj_accessible('tokenfilter', 'vtcorp'))
+        self.assertFalse(builder.is_dep_obj_accessible('_1_', '_2_'))
+        self.assertFalse(builder.is_dep_obj_accessible('_3_', '_1_'))
+        self.assertFalse(builder.is_dep_obj_accessible('serializer', 'vtcorp'))
+
+        self.assertTrue(builder._uses_block('tfidf', '_1_'))
+        self.assertTrue(builder._uses_block('serializer', '_2_'))
+        self.assertFalse(builder._uses_block('_2_', 'serializer'))
+
         # Testing the dependency graph sort
         sorted_deps = builder.sorted_deps
         expected_sort_order = ['tokenfilter', 'vtcorp', '_1_', 'tfidf', '_2_',
@@ -93,10 +108,29 @@ class TestConfig(SafireTestCase):
 
         # Testing persistence resolution
         will_load, will_be_loaded, will_init = builder.resolve_persistence()
-        print will_load, will_be_loaded, will_init
         self.assertEqual(len(will_load), 0)
         self.assertEqual(len(will_be_loaded), 0)
         self.assertEqual(len(will_init), 7)
+
+        self.assertEqual(builder.get_loading_filename('vtcorp'),
+                         _loader.pipeline_name('vtcorp'))
+
+        # Testing the build itself
+        output_objects = builder.build()
+        self.assertTrue('_3_' in output_objects)
+        pipeline = output_objects['_3_']
+        self.assertIsInstance(pipeline, SwapoutCorpus)
+
+        # Save the outputs.
+        builder.run_saving()
+
+        # Re-test persistence resolution after build+save (i.e. when the files
+        # should *all* be available)
+        will_load, will_be_loaded, will_init = builder.resolve_persistence()
+        self.assertEqual(len(will_load), 1)
+        self.assertEqual(len(will_be_loaded), 6)
+        self.assertEqual(len(will_init), 0)
+
 
 
 if __name__ == '__main__':
