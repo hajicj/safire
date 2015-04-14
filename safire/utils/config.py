@@ -348,6 +348,7 @@ Building a pipeline comes in stages:
 
 """
 import copy
+import inspect
 import logging
 import collections
 import itertools
@@ -399,6 +400,13 @@ class Configuration(object):
                 valid = False
                 missing_required_sections.append(so)
         return valid, missing_required_sections
+
+    def get_available_names(self):
+        available = set(itertools.chain(self.objects,
+                                        self._assembly.keys()))
+        if 'loader' in self._assembly and not 'loader' in self.configuration.objects:
+            available.remove('loader')
+        return available
 
 
 class ConfigParser(object):
@@ -623,6 +631,26 @@ class ConfigBuilder(object):
                                               configuration.objects,
                                               configuration._assembly)
         return block_and_obj_graph
+
+    def autodetect_dependencies(self, conf_object):
+        """Attempts to detect all object dependencies that the given conf_object
+        will require. Returns a list of the detected object names.
+        Does not scan special attributes."""
+        available = self.configuration.get_available_names()
+
+        deps = set()
+        for k, v in conf_object.items():
+            if k.startswith('_'):
+                continue
+            code = compile(v, '<string>', 'eval')
+            members = dict(inspect.getmembers(code))
+            names = members['co_names']
+            for name in names:
+                if name in available:
+                    deps.add(name)
+        return deps
+
+
 
     @staticmethod
     def sort_dependency_graph(graph):

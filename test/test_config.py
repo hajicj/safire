@@ -158,6 +158,20 @@ class TestConfig(SafireTestCase):
         firstfile = iid2intro[sorted(iid2intro.keys())[0]]
         webbrowser.open(firstfile)
 
+    def test_autodetect_dependencies(self):
+
+        cparser = ConfigParser()
+        with open(self.complex_config_file) as config_handle:
+            conf = cparser.parse(config_handle)
+
+        builder = ConfigBuilder(conf)
+
+        for obj_name, obj in builder.configuration.objects.items():
+            deps = builder.deps_graph[obj_name]
+            autodeps = builder.autodetect_dependencies(obj)
+            self.assertEqual(deps, autodeps)
+
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
