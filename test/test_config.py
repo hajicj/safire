@@ -1,5 +1,6 @@
 import os
 import collections
+import webbrowser
 from gensim.interfaces import TransformedCorpus
 from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.serializer import SwapoutCorpus
@@ -152,7 +153,10 @@ class TestConfig(SafireTestCase):
         introspection = pipeline.obj
         self.assertIsInstance(introspection, IntrospectionTransformer)
 
-        dry_run(pipeline)
+        dry_run(pipeline, max=100)
+        iid2intro = introspection.iid2introspection_filename
+        firstfile = iid2intro[sorted(iid2intro.keys())[0]]
+        webbrowser.open(firstfile)
 
 
 if __name__ == '__main__':

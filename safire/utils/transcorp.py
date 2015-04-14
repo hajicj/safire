@@ -573,7 +573,7 @@ def is_fully_indexable(pipeline):
 
     Checks only duck typing.
     """
-    print 'Inspecting pipeline: {0}'.format(pipeline)
+    # print 'Inspecting pipeline: {0}'.format(pipeline)
     if len(pipeline) == 0:
         logging.warn('Cannot inspect empty pipeline!\n{0}'
                      ''.format(log_corpus_stack(pipeline)))
