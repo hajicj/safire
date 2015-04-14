@@ -400,10 +400,6 @@ class Configuration(object):
                 missing_required_sections.append(so)
         return valid, missing_required_sections
 
-    def process_assembly_names(self):
-        """Modifies block names from their special identifiers
-        """
-
 
 class ConfigParser(object):
     """The ConfigParser reads the configuration file and provides an interface
@@ -513,11 +509,16 @@ class ConfigBuilder(object):
         self._loader = self._execute_init(conf._loader, _info=self._info)
 
         # Bootstrap its own settings
-        bootstrap_module = self.eval_dict(conf._builder,
+        bootstrap_module = self.eval_dict(conf._builder, no_eval='special',
                                           _info=self._info,
                                           _loader=self._loader)
+        if '_import' not in bootstrap_module:
+            bootstrap_module['_import'] = []
         for k, v in bootstrap_module.items():
             setattr(self, k, v)
+
+        self.imports = dict([self._execute_import(import_name)
+                             for import_name in self._import])
 
         self._assembly = self.dict2module(conf._assembly,
                                           '_assembly',
@@ -636,7 +637,7 @@ class ConfigBuilder(object):
         ['A', 'B', 'C', 'D']
         """
         sorted_graph_list = []
-
+        # print 'Sorting dependency graph: {0}'.format(pprint.pformat(dict(graph)))
         unsorted_graph = copy.deepcopy(graph)
         # While vertices are left in the unsorted graph:
         #  - iterate throuh vertices
@@ -644,6 +645,7 @@ class ConfigBuilder(object):
         #  - add vertex to sorted graph
         #  - remove vertex from unsorted graph
         while unsorted_graph:
+            found_vertex_to_remove = False
             for vertex in unsorted_graph:
                 can_remove = True
                 for child in unsorted_graph[vertex]:
@@ -651,9 +653,17 @@ class ConfigBuilder(object):
                         can_remove = False
                         break
                 if can_remove:
+                    found_vertex_to_remove = True
                     sorted_graph_list.append({vertex: graph[vertex]})
                     del unsorted_graph[vertex]
                     break
+            if not found_vertex_to_remove:
+                raise ValueError('Dependency graph is probably cyclic: {0}\n'
+                                 'Sorted graph so far: {1}\n'
+                                 'Unsorted: {2}'
+                                 ''.format(pprint.pformat(dict(graph)),
+                                           pprint.pformat(sorted_graph_list),
+                                           pprint.pformat(dict(unsorted_graph))))
 
         sorted_graph = collections.OrderedDict()
         for item in sorted_graph_list:
@@ -712,9 +722,9 @@ class ConfigBuilder(object):
         # the load-able objects.
         will_init = to_resolve
 
-        # print 'Will load: {0}'.format(will_load)
-        # print 'Will be loaded transitively: {0}'.format(will_be_loaded)
-        # print 'Will initialize: {0}'.format(will_init)
+        print 'Will load: {0}'.format(will_load)
+        print 'Will be loaded transitively: {0}'.format(will_be_loaded)
+        print 'Will initialize: {0}'.format(will_init)
 
         return will_load, will_be_loaded, will_init
 
@@ -856,10 +866,10 @@ class ConfigBuilder(object):
         to_init = [item for item in self.sorted_deps if item in will_init]
         for item in to_init:
             if self.is_block(item):
-                print 'Initializing block: {0}'.format(item)
+                # print 'Initializing block: {0}'.format(item)
                 self.init_block(item, **self.objects)
             else:
-                print 'Initializing object: {0}'.format(item)
+                # print 'Initializing object: {0}'.format(item)
                 self.init_object(item,
                                  self.configuration.objects[item],
                                  **self.objects)
@@ -885,7 +895,7 @@ class ConfigBuilder(object):
             if obj_name == 'loader' and 'loader' not in self.objects:
                 continue
             fname = self.get_loading_filename(obj_label)
-            print 'Saving object {0} to file {1}'.format(obj_name, fname)
+            # print 'Saving object {0} to file {1}'.format(obj_name, fname)
             self.objects[obj_name].save(fname)
 
     @staticmethod
@@ -925,16 +935,33 @@ class ConfigBuilder(object):
             self.init_block(name, **kwargs)
 
     def init_object(self, name, conf_obj, **kwargs):
-        obj = self._execute_init(conf_obj, **kwargs)
+        locals_names = kwargs
+        locals_names.update(self.imports)
+        obj = self._execute_init(conf_obj, **locals_names)
         self.objects[name] = obj
 
     def init_block(self, name, **kwargs):
-        obj = eval(getattr(self._assembly, name), globals(), kwargs)
+        locals_names = kwargs
+        locals_names.update(self.imports)
+        obj = eval(getattr(self._assembly, name), globals(), locals_names)
         self.objects[name] = obj
 
     def load_object(self, filename, name, conf_obj, **kwargs):
         obj = self._execute_load(filename)
         self.objects[name] = obj
+
+    @staticmethod
+    def _execute_import(imported):
+        imported_name = imported
+        try:
+            imported_obj = __import__(imported)
+        # Importing something from a module
+        except ImportError:
+            modulename, classname = imported.rsplit('.', 1)
+            imported_obj = getattr(__import__(modulename, fromlist=[classname]),
+                                   classname)
+            imported_name = classname
+        return imported_name, imported_obj
 
     @staticmethod
     def _execute_init(obj, **kwargs):
@@ -957,15 +984,17 @@ class ConfigBuilder(object):
         {'k': 5}
 
         """
-        #print 'Initializing object {0}'.format(pprint.pformat(obj))
+        # print 'Initializing object {0}'.format(pprint.pformat(obj))
         current_locals = kwargs
         # Pull in classes used during initialization. Only use them in local
         # context, don't pollute sys.modules!
+        # print 'Executing init for object:\n{0}'.format(pprint.pformat(obj))
         if '_import' in obj:
             for imported in obj['_import']:
-                modulename, classname = imported.rsplit('.', 1)
-                cls = getattr(__import__(modulename, fromlist=[classname]), classname)
-                current_locals[classname] = cls
+                # Importing a module:
+                imported_name, imported_obj = ConfigBuilder._execute_import(
+                    imported)
+                current_locals[imported_name] = imported_obj
 
         if '_class' not in obj:
             raise ValueError('Cannot execute __init__ when the class is not'
@@ -976,14 +1005,15 @@ class ConfigBuilder(object):
         cls = getattr(__import__(modulename, fromlist=[classname]), classname)
         init_args_as_kwargs = {k: eval(v, globals(), current_locals)
                                for k, v in obj.items() if not k.startswith('_')}
+        #pprint.pprint((cls, init_args_as_kwargs))
         initialized_object = cls(**init_args_as_kwargs)
         return initialized_object
 
-    @staticmethod
-    def print_and_eval(source, globals, locals):
-        print 'Source: {0}'.format(pprint.pformat(source))
-        print 'Locals: {0}'.format(pprint.pformat(locals))
-        return eval(source, globals, locals)
+    # @staticmethod
+    # def print_and_eval(source, globals, locals):
+    #     print 'Source: {0}'.format(pprint.pformat(source))
+    #     print 'Locals: {0}'.format(pprint.pformat(locals))
+    #     return eval(source, globals, locals)
 
     @staticmethod
     def _execute_load(filename):

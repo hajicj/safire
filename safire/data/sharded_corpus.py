@@ -152,6 +152,7 @@ class ShardedCorpus(IndexedCorpus):
             any other gensim corpus. This **will** slow the corpus down.
 
         """
+        # print 'Initializing sharded corpus with prefix: {0}'.format(output_prefix)
         self.output_prefix = output_prefix
         self.shardsize = shardsize
 
@@ -191,6 +192,8 @@ class ShardedCorpus(IndexedCorpus):
         # Both methods of initialization initialize self.dim
         self.n_in = self.dim
         self.n_out = self.dim
+
+        # print 'Total length: {0}'.format(len(self))
 
     def init_shards(self, output_prefix, corpus, shardsize=4096,
                     dtype=_default_dtype):
@@ -240,6 +243,8 @@ class ShardedCorpus(IndexedCorpus):
                          ''.format(type(doc_chunk), len(doc_chunk)))
             logging.info('Chunk element type: {0}'.format(type(doc_chunk[0])))
             logging.debug('Chunk element: {0}'.format(doc_chunk[0]))
+            # if len(doc_chunk[0]) < 1000:
+            #     print 'Chunk: {0}'.format(doc_chunk)
 
             # No conversion necessary.
             if self.gensim_serialization:
@@ -563,6 +568,7 @@ class ShardedCorpus(IndexedCorpus):
         """Retrieves the given row of the dataset.
 
         Slice notation support added, list support for ints added."""
+        # print 'Requested offset: {0}'.format(offset)
         if isinstance(offset, list):
             # Handle all serialization & retrieval options.
             if self.gensim_serialization:
@@ -754,7 +760,7 @@ class ShardedCorpus(IndexedCorpus):
                     return s_result
                 else:
                     # cast as a generator
-                    return [gensim_vector for gensim_vector in s_result]
+                    return s_result
             else:
                 s_result = safire.utils.gensim2ndarray(s_result, dim=self.dim)
                 if self.sparse_retrieval:

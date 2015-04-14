@@ -241,11 +241,19 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
 
         :return: numpy.ndarray
         """
+        # print '...flattening item: {0}'.format(item)
         if self.indexes is None or self.corpus.aligned:
+            # print '...flattening from aligned'
             retrieved = self.corpus[item]
             output = self.item2flat(retrieved, nostack=self.structured)
         else:
+            if isinstance(item, list):
+                return [self[i] for i in item]
+            if isinstance(item, slice):
+                return [self[i] for i in xrange(*item.indices(len(self)))]
+
             # Possibly inefficient
+            # print 'Item: {0}'.format(item)
             indexes = self.indexes[item]
             try:
                 idxs_by_dataset = map(list, zip(*indexes))
@@ -280,6 +288,7 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
         # Problem: flattening is outputting
 
         logging.debug('flattening __getitem__ output: {0}'.format(output))
+        # print 'flattening __getitem__ output: {0}'.format(output)
         return output
 
     def derive_dimension(self, composite):
@@ -309,6 +318,7 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
         >>> FlattenedDatasetCorpus.item2flat(item)
 
         """
+        # print 'item2flat: item {0}, nostack {1}'.format(item, nostack)
         output = list(flatten_composite_item(item))
         if not nostack:
             output = numpy.hstack(output)

@@ -428,7 +428,7 @@ def iter_sample_fast(iterable, samplesize):
 
 
 def flatten_composite_item(item):
-    """Simply flattens a (recursive) tuple of ndarrays. Is a generator,
+    """Unrolls a (recursive) tuple of ndarrays. Is a generator,
     so you have to use ``list(flatten_composite_item(item))``.
 
     >>> x = numpy.array([1, 2, 3, 4])

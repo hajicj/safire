@@ -1,8 +1,11 @@
 import os
 import collections
+from gensim.interfaces import TransformedCorpus
 from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.serializer import SwapoutCorpus
+from safire.introspection.interfaces import IntrospectionTransformer
 from safire.utils.config import ConfigParser, Configuration, ConfigBuilder
+from safire.utils.transcorp import dry_run
 
 __author__ = 'Jan Hajic jr'
 
@@ -16,6 +19,7 @@ class TestConfig(SafireTestCase):
     def setUpClass(cls, clean_only=False, no_datasets=False):
         super(TestConfig, cls).setUpClass(clean_only, no_datasets)
         cls.config_file = os.path.join(cls.data_root, 'test_config.ini')
+        cls.complex_config_file = os.path.join(cls.data_root, 'test_complex_config.ini')
 
     def test_parser(self):
         parser = ConfigParser()
@@ -117,6 +121,7 @@ class TestConfig(SafireTestCase):
 
         # Testing the build itself
         output_objects = builder.build()
+        print output_objects
         self.assertTrue('_3_' in output_objects)
         pipeline = output_objects['_3_']
         self.assertIsInstance(pipeline, SwapoutCorpus)
@@ -130,6 +135,24 @@ class TestConfig(SafireTestCase):
         self.assertEqual(len(will_load), 1)
         self.assertEqual(len(will_be_loaded), 6)
         self.assertEqual(len(will_init), 0)
+
+    def test_builder_complex(self):
+        cparser = ConfigParser()
+        with open(self.complex_config_file) as config_handle:
+            conf = cparser.parse(config_handle)
+
+        builder = ConfigBuilder(conf)
+        self.assertIsInstance(builder, ConfigBuilder)
+
+        outputs = builder.build()
+        print outputs
+
+        pipeline = outputs['_12_']
+        self.assertIsInstance(pipeline, TransformedCorpus)
+        introspection = pipeline.obj
+        self.assertIsInstance(introspection, IntrospectionTransformer)
+
+        dry_run(pipeline)
 
 
 if __name__ == '__main__':
