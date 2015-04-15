@@ -244,7 +244,7 @@ class ShardedCorpus(IndexedCorpus):
             logging.info('Chunk element type: {0}'.format(type(doc_chunk[0])))
             logging.debug('Chunk element: {0}'.format(doc_chunk[0]))
             # if len(doc_chunk[0]) < 1000:
-            #     print 'Chunk: {0}'.format(doc_chunk)
+            #    print 'Chunk: {0}'.format(doc_chunk)
 
             # No conversion necessary.
             if self.gensim_serialization:

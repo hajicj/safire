@@ -220,7 +220,10 @@ class DatasetABC(safire.utils.IndexedTransformedCorpus):
         :returns: The number of batches the training data will be split into
             for the given ``batch_size``.
         """
-        return self._devel_doc_offset / batch_size
+        n_batches = self._devel_doc_offset / batch_size
+        #if not self._devel_doc_offset % batch_size == 0:
+        #    n_batches += 1
+        return n_batches
 
     def n_devel_batches(self, batch_size):
         """Determines how many batches of given size the training data will
@@ -232,7 +235,11 @@ class DatasetABC(safire.utils.IndexedTransformedCorpus):
         :returns: The number of batches the training data will be split into
             for the given ``batch_size``.
         """
-        return (self._test_doc_offset - self._devel_doc_offset) / batch_size
+        n_devel_docs = self._test_doc_offset - self._devel_doc_offset
+        n_batches = n_devel_docs / batch_size
+        #if not n_devel_docs % batch_size == 0:
+        #    n_batches += 1
+        return n_batches
 
     def n_test_batches(self, batch_size):
         """Determines how many batches of given size the training data will
@@ -244,7 +251,11 @@ class DatasetABC(safire.utils.IndexedTransformedCorpus):
         :returns: The number of batches the training data will be split into
             for the given ``batch_size``.
         """
-        return (len(self) - self._test_doc_offset) / batch_size
+        n_test_docs = len(self) - self._test_doc_offset
+        n_batches = n_test_docs / batch_size
+        #if not n_test_docs % batch_size == 0:
+        #    n_batches += 1
+        return n_batches
 
     def train_X_batch(self, b_index, b_size):
         """Slices a batch of ``train_X`` for given batch index and batch size.

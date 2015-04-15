@@ -404,7 +404,7 @@ class Configuration(object):
     def get_available_names(self):
         available = set(itertools.chain(self.objects,
                                         self._assembly.keys()))
-        if 'loader' in self._assembly and not 'loader' in self.configuration.objects:
+        if 'loader' in self._assembly and 'loader' not in self.objects:
             available.remove('loader')
         return available
 
@@ -857,6 +857,7 @@ class ConfigBuilder(object):
 
         for item in load_queue:
             #  - load item (using loader, etc.)
+            print 'Loading item: {0}'.format(item)
             fname = self.get_loading_filename(item)
             obj = self._execute_load(fname)
             #  - add item to object dict
@@ -1016,7 +1017,7 @@ class ConfigBuilder(object):
         current_locals = kwargs
         # Pull in classes used during initialization. Only use them in local
         # context, don't pollute sys.modules!
-        # print 'Executing init for object:\n{0}'.format(pprint.pformat(obj))
+        #print 'Executing init for object:\n{0}'.format(pprint.pformat(obj))
         if '_import' in obj:
             for imported in obj['_import']:
                 # Importing a module:
@@ -1024,24 +1025,22 @@ class ConfigBuilder(object):
                     imported)
                 current_locals[imported_name] = imported_obj
 
-        if '_class' not in obj:
-            raise ValueError('Cannot execute __init__ when the class is not'
+        if '_init' in obj:
+            init_expr = eval(obj['_init'], globals(), current_locals)
+        elif '_class' in obj:
+            cls_string = obj['_class']
+            modulename, classname = cls_string.rsplit('.', 1)
+            init_expr = getattr(__import__(modulename, fromlist=[classname]),
+                                classname)
+        else:
+            raise ValueError('Cannot initialize without _class or _init'
                              ' given! (Passed obj: {0})'.format(obj))
 
-        cls_string = obj['_class']
-        modulename, classname = cls_string.rsplit('.', 1)
-        cls = getattr(__import__(modulename, fromlist=[classname]), classname)
         init_args_as_kwargs = {k: eval(v, globals(), current_locals)
                                for k, v in obj.items() if not k.startswith('_')}
-        #pprint.pprint((cls, init_args_as_kwargs))
-        initialized_object = cls(**init_args_as_kwargs)
+        #pprint.pprint((init_expr, init_args_as_kwargs))
+        initialized_object = init_expr(**init_args_as_kwargs)
         return initialized_object
-
-    # @staticmethod
-    # def print_and_eval(source, globals, locals):
-    #     print 'Source: {0}'.format(pprint.pformat(source))
-    #     print 'Locals: {0}'.format(pprint.pformat(locals))
-    #     return eval(source, globals, locals)
 
     @staticmethod
     def _execute_load(filename):

@@ -212,6 +212,8 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
 
         :param structured: If set, will *not* merge the retrieved items into
             one. Useful for obtaining the indexing pairs as separate entities.
+            However, the only currently useful use-case is as the underlying
+            data for introspection by a HtmlStructuredFlattenedWriter.
 
         :return:
         """

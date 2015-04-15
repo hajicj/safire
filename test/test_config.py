@@ -21,6 +21,7 @@ class TestConfig(SafireTestCase):
         super(TestConfig, cls).setUpClass(clean_only, no_datasets)
         cls.config_file = os.path.join(cls.data_root, 'test_config.ini')
         cls.complex_config_file = os.path.join(cls.data_root, 'test_complex_config.ini')
+        cls.training_config_file = os.path.join(cls.data_root, 'test_training_config.ini')
 
     def test_parser(self):
         parser = ConfigParser()
@@ -87,7 +88,7 @@ class TestConfig(SafireTestCase):
         self.assertTrue(deps_graph['_1_'] == set(['vtcorp']))
         self.assertTrue(deps_graph['tfidf'] == set(['_1_']))
         self.assertTrue(deps_graph['_2_'] == set(['_1_', 'tfidf']))
-        self.assertTrue(deps_graph['serializer'] == set(['_2_', 'tfidf', 'vtcorp']))
+        self.assertTrue(deps_graph['serializer'] == set(['_2_']))
         self.assertTrue(deps_graph['_3_'] == set(['_2_', 'serializer']))
 
         # Testing object accesibility checks
@@ -158,6 +159,19 @@ class TestConfig(SafireTestCase):
         firstfile = iid2intro[sorted(iid2intro.keys())[0]]
         webbrowser.open(firstfile)
 
+    def test_builder_training(self):
+        cparser = ConfigParser()
+        with open(self.training_config_file) as config_handle:
+            conf = cparser.parse(config_handle)
+
+        builder = ConfigBuilder(conf)
+        self.assertIsInstance(builder, ConfigBuilder)
+
+        outputs = builder.build()
+
+        print outputs
+
+
     def test_autodetect_dependencies(self):
 
         cparser = ConfigParser()
@@ -170,6 +184,16 @@ class TestConfig(SafireTestCase):
             deps = builder.deps_graph[obj_name]
             autodeps = builder.autodetect_dependencies(obj)
             self.assertEqual(deps, autodeps)
+
+        with open(self.config_file) as config_handle:
+            conf2 = cparser.parse(config_handle)
+        builder2 = ConfigBuilder(conf2)
+        for obj_name, obj in builder2.configuration.objects.items():
+            deps = builder2.deps_graph[obj_name]
+            autodeps = builder2.autodetect_dependencies(obj)
+            self.assertEqual(deps, autodeps)
+
+
 
 
 
