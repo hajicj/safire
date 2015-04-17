@@ -1018,3 +1018,5 @@ class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):
         logging.debug('  ITrCorp Output: {0}'.format(output))
 
         return output
+
+# In

@@ -198,6 +198,10 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
             ``ValueError``. If set to ``False`` and resuming fails, will warn
             and train from scratch.
         """
+        if self.n_epochs == 0:
+            logging.warn('No training requested from learner: zero epochs!'
+                         ' Returning unmodified handle.')
+            return model_handle
 
         # Attempting to resume model training.
         resume_successful = False

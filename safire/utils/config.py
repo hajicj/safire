@@ -360,6 +360,46 @@ import pprint
 
 __author__ = "Jan Hajic jr."
 
+# Some utility functions.
+
+
+def names_in_code(code_string, eval=True):
+    """Returns a list of all names used in the given code.
+
+    If a list of code strings is given, will output all names in each of the
+    strings.
+
+    >>> names_in_code('a+b+c')
+    set(['a', 'c', 'b'])
+    >>> names_in_code('a=5;b=4', eval=False)
+    set(['a', 'b'])
+    >>> names_in_code(['safire.utils.transcorp', 'safire.data.vtextcorpus.VTextCorpus'])
+    set(['transcorp', 'VTextCorpus', 'utils', 'vtextcorpus', 'safire', 'data'])
+
+    :param code_string: A string of Python code. Has to be eval()-able
+        or exec()-able, depending on the ``eval`` flag.
+
+    :param eval: If True, will compile the ``code_string`` using ``eval`` mode.
+        If False, will compile using ``exec`` mode.
+
+    :return: The set of names in the code string.
+    """
+    if isinstance(code_string, list):
+        return set(itertools.chain(*[names_in_code(s, eval=eval) for s in code_string]))
+    if isinstance(code_string, dict):
+        return set(itertools.chain(*[names_in_code(s, eval=eval)
+                                     for s in code_string.values()]))
+
+    mode = 'eval'
+    if eval is False:
+         mode = 'exec'
+    code = compile(code_string, '<string>', mode)
+    members = dict(inspect.getmembers(code))
+    names = members['co_names']
+    return set(names)
+
+
+# Configuration classes.
 
 class Configuration(object):
     """Plain Old Data class; the data structure that represents a configuration.
@@ -573,7 +613,7 @@ class ConfigBuilder(object):
         # Ex: _2_=foo[_1_]   ... #2 is parent, #1 is child (#2 depends on #1).
         for parent, child in itertools.product(assembly.keys(),
                                                assembly.keys()):
-            if child in assembly[parent]:
+            if child in names_in_code(assembly[parent]):
                 graph[parent].add(child)
 
         return graph
@@ -604,14 +644,16 @@ class ConfigBuilder(object):
         # Add dependencies of transformers on blocks
         for t in transformers:
             for key, value in transformers[t].items():
+                #print 'Transformer {0}: key {1}, value {2}'.format(t, key, value)
+                names = names_in_code(value)
                 for b in block_graph:
-                    if b in value:
+                    if b in names:
                         enriched_graph[t].add(b)
 
         # Add dependencies of blocks on transformers
         for t in transformers:
             for a in assembly:  # All these should already have been added.
-                if t in assembly[a]:
+                if t in names_in_code(assembly[a]):
                     # Initializing block A depends on having transformer T
                     enriched_graph[a].add(t)
 
@@ -750,9 +792,10 @@ class ConfigBuilder(object):
         # the load-able objects.
         will_init = to_resolve
 
-        print 'Will load: {0}'.format(will_load)
-        print 'Will be loaded transitively: {0}'.format(will_be_loaded)
-        print 'Will initialize: {0}'.format(will_init)
+        print 'Working with configuration: {0}'.format(self._info.name)
+        print '  Will load: {0}'.format(will_load)
+        print '  Will be loaded transitively: {0}'.format(will_be_loaded)
+        print '  Will initialize: {0}'.format(will_init)
 
         return will_load, will_be_loaded, will_init
 
@@ -763,36 +806,36 @@ class ConfigBuilder(object):
         else:
             return False
 
-    def can_load(self, item):
+    def can_load(self, obj_name):
         """Determines whether the given item can be loaded.
 
         If the ``loader`` key is defined for ``self._persistence``, will
         interpret the values in _persistence as inputs for the loader's
         ``get_pipeline_name`` method.
         """
-        if not hasattr(self._persistence, item):
+        if not hasattr(self._persistence, obj_name):
             return False
         else:
             if hasattr(self._persistence, 'loader'):
                 fname = self._loader.pipeline_name(
-                                getattr(self._persistence, item))
+                                getattr(self._persistence, obj_name))
             else:
-                fname = getattr(self._persistence, item)
+                fname = getattr(self._persistence, obj_name)
             if os.path.isfile(fname):
                 return True
             else:
                 return False
 
-    def get_loading_filename(self, name):
+    def get_loading_filename(self, persistent_label):
         """For the given persistence label, generates a filename under which the
         given persistent block should be available. The generated filename
         depends on the presence of the ``loader`` attribute in the _persistence
         section; if the loader is there, it will use the loader's
         ``pipeline_name`` method."""
         if hasattr(self._persistence, 'loader'):
-            fname = self._persistence.loader.pipeline_name(name)
+            fname = self._persistence.loader.pipeline_name(persistent_label)
         else:
-            fname = name
+            fname = persistent_label
         return fname
 
     def get_dep_symbols(self, name):
@@ -858,7 +901,9 @@ class ConfigBuilder(object):
         for item in load_queue:
             #  - load item (using loader, etc.)
             print 'Loading item: {0}'.format(item)
-            fname = self.get_loading_filename(item)
+            persistent_label = getattr(self._persistence, item)
+            print '   Persistent label: {0}'.format(persistent_label)
+            fname = self.get_loading_filename(persistent_label)
             obj = self._execute_load(fname)
             #  - add item to object dict
             self.objects[item] = obj
@@ -966,6 +1011,7 @@ class ConfigBuilder(object):
     def init_object(self, name, conf_obj, **kwargs):
         locals_names = kwargs
         locals_names.update(self.imports)
+        #print 'Available locals: {0}'.format(pprint.pformat(locals_names))
         obj = self._execute_init(conf_obj, **locals_names)
         self.objects[name] = obj
 
@@ -982,14 +1028,30 @@ class ConfigBuilder(object):
     @staticmethod
     def _execute_import(imported):
         imported_name = imported
+        # print 'Importing: {0}'.format(imported)
         try:
             imported_obj = __import__(imported)
+            # The imported_obj is the root module (e.g. for
+            # safire.utils.transcorp, imported_obj is the safire module and
+            # utils.transcorp are respective attributes (that are also of type
+            # module)). We need to store with the given module the actual module
+            # name corresponding to that module, e.g. if imported was
+            # safire.utils.transcorp, we put just 'safire' in the names.
+            #  ... this has a problem with multiple 'safire...' imports, right?
+            imported_levels = imported.split('.')
+            imported_name = imported_levels[0]
+            # if len(imported_levels) > 1:
+            #     for import_level in imported_levels[1:]:
+            #         imported_obj = getattr(imported_obj, import_level)
+
         # Importing something from a module
         except ImportError:
             modulename, classname = imported.rsplit('.', 1)
             imported_obj = getattr(__import__(modulename, fromlist=[classname]),
                                    classname)
             imported_name = classname
+            # print '  Imported class: {0}'.format(imported_obj)
+        # print '    object: {0}'.format(imported_obj)
         return imported_name, imported_obj
 
     @staticmethod
@@ -1017,6 +1079,7 @@ class ConfigBuilder(object):
         current_locals = kwargs
         # Pull in classes used during initialization. Only use them in local
         # context, don't pollute sys.modules!
+        ### DEBUG
         #print 'Executing init for object:\n{0}'.format(pprint.pformat(obj))
         if '_import' in obj:
             for imported in obj['_import']:
@@ -1038,7 +1101,8 @@ class ConfigBuilder(object):
 
         init_args_as_kwargs = {k: eval(v, globals(), current_locals)
                                for k, v in obj.items() if not k.startswith('_')}
-        #pprint.pprint((init_expr, init_args_as_kwargs))
+        ### DEBUG
+        pprint.pprint((init_expr, init_args_as_kwargs))
         initialized_object = init_expr(**init_args_as_kwargs)
         return initialized_object
 

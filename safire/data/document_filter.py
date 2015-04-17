@@ -101,6 +101,8 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
     """
     def __init__(self, obj, corpus, chunksize=None, dense_throughput=False):
 
+        #print '\n\n   Initializing document filter corpus...\n\n'
+
         # Because of how specific this corpus is, doesn't allow usage outside of
         # _apply of DocumentFilterTransform (or a situation that mimics the
         #  _apply call).
@@ -150,7 +152,7 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
         well.
 
         Note that every time __iter__ is called, the corpus is re-set."""
-        logging.debug('\n   Starting document filter corpus iteration...\n')
+        #print '\n\n   Starting document filter corpus iteration...\n\n'
         self.reset()
         docid_iterator = iter(list(iter(self.persistent_id2doc)))
         # This causes a problem with a StopIteration when the underlying corpus
@@ -165,6 +167,7 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
             logging.debug('Using chunksize.')
             for chunk in gensim.utils.grouper(self.corpus, self.chunksize,
                                               as_numpy=self.dense_throughput):
+
                 for item in chunk:
                     persistent_docid = docid_iterator.next()
                     logging.debug('Filtering document with persistent ID {0}'
@@ -193,6 +196,7 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
             logging.debug('Not using chunksize.')
             logging.debug('Input corpus: {0}'.format(type(self.corpus)))
             for counter, doc in enumerate(self.corpus):
+                #print 'Inside iteration:\n\tid2doc {0}\n\tdoc2id {1}'.format(self.id2doc, self.doc2id)
                 persistent_docid = docid_iterator.next()
 
                 logging.debug('Counter: {0}'.format(counter))

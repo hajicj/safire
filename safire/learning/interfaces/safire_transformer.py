@@ -196,6 +196,7 @@ class SafireTransformer(TransformationABC):
             # if not is_corpus:  # If we got a single item: make a one-item
             #                    # corpus from it, to simplify code path.
             #     pass
+            #print 'bow: {0}'.format(bow)
             if isinstance(bow[0], tuple):  # If we get a single gensim-style
                 bow = [bow]                # vector, we convert it to a 1-doc
                 was_single_doc = True      # corpus (the handle needs a matrix).
@@ -216,13 +217,9 @@ class SafireTransformer(TransformationABC):
             out = dense_out
 
         else:
-            # This is a bad solution if we *want* dense output.
             #logging.debug('Dense_out: {0}'.format(dense_out))
             sparse_out = gensim.matutils.Dense2Corpus(dense_out,
-                                                      documents_columns=False)#,
-            #eps=self.eps) Param
-            # not available in gensim
-            # 0.10.1
+                                                      documents_columns=False)
 
             sparse_out = list(sparse_out)  # Runs through Dense2Corpus.__iter__
             out = sparse_out

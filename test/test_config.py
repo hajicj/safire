@@ -2,11 +2,14 @@ import os
 import collections
 import webbrowser
 from gensim.interfaces import TransformedCorpus
+import pprint
+from safire.data.layouts import init_data_root
+from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.serializer import SwapoutCorpus
 from safire.introspection.interfaces import IntrospectionTransformer
 from safire.utils.config import ConfigParser, Configuration, ConfigBuilder
-from safire.utils.transcorp import dry_run
+from safire.utils.transcorp import dry_run, bottom_corpus, log_corpus_stack
 
 __author__ = 'Jan Hajic jr'
 
@@ -22,6 +25,14 @@ class TestConfig(SafireTestCase):
         cls.config_file = os.path.join(cls.data_root, 'test_config.ini')
         cls.complex_config_file = os.path.join(cls.data_root, 'test_complex_config.ini')
         cls.training_config_file = os.path.join(cls.data_root, 'test_training_config.ini')
+        cls.retrieval_config_file = os.path.join(cls.data_root, 'test_retrieval_config.ini')
+        cls.t2i_config_file = os.path.join(cls.data_root, 'test_t2i_config.ini')
+
+    def setUp(self):
+        self.setUpClass(clean_only=False, no_datasets=False)
+
+    def tearDown(self):
+        init_data_root(self.data_root, overwrite=True)
 
     def test_parser(self):
         parser = ConfigParser()
@@ -157,7 +168,10 @@ class TestConfig(SafireTestCase):
         dry_run(pipeline, max=100)
         iid2intro = introspection.iid2introspection_filename
         firstfile = iid2intro[sorted(iid2intro.keys())[0]]
-        webbrowser.open(firstfile)
+        self.assertTrue(os.path.isfile(firstfile))
+        for filename in iid2intro.keys():
+            self.assertTrue(os.path.isfile(filename))
+        # webbrowser.open(firstfile)
 
     def test_builder_training(self):
         cparser = ConfigParser()
@@ -169,7 +183,46 @@ class TestConfig(SafireTestCase):
 
         outputs = builder.build()
 
-        print outputs
+        self.assertTrue('_4_' in outputs)
+        pipeline = outputs['_4_']
+        self.assertIsInstance(pipeline, SwapoutCorpus)
+        icorp = bottom_corpus(pipeline)
+        self.assertIsInstance(icorp, ImagenetCorpus)
+        self.assertEqual(len(pipeline), len(icorp))
+
+    def test_builder_retrieval(self):
+        cparser = ConfigParser()
+        with open(self.retrieval_config_file) as config_handle:
+            conf = cparser.parse(config_handle)
+
+        builder = ConfigBuilder(conf)
+        self.assertIsInstance(builder, ConfigBuilder)
+
+        outputs = builder.build()
+
+        self.assertTrue('_retrieved_' in outputs)
+        pipeline = outputs['_retrieved_']
+        print log_corpus_stack(pipeline)
+        retrieval_results = [x for x in pipeline]
+        pprint.pprint(retrieval_results)
+        self.assertEqual(len(retrieval_results), len(pipeline))
+
+    def test_builder_t2i(self):
+        cparser = ConfigParser()
+        with open(self.t2i_config_file) as config_handle:
+            conf = cparser.parse(config_handle)
+
+        builder = ConfigBuilder(conf)
+        self.assertIsInstance(builder, ConfigBuilder)
+
+        outputs = builder.build()
+
+        self.assertTrue('_aggregated_similarities_' in outputs)
+        pipeline = outputs['_aggregated_similarities_']
+        print log_corpus_stack(pipeline)
+        retrieval_results = [x for x in pipeline]
+        pprint.pprint(retrieval_results)
+        self.assertEqual(len(retrieval_results), len(pipeline))
 
 
     def test_autodetect_dependencies(self):
@@ -192,10 +245,6 @@ class TestConfig(SafireTestCase):
             deps = builder2.deps_graph[obj_name]
             autodeps = builder2.autodetect_dependencies(obj)
             self.assertEqual(deps, autodeps)
-
-
-
-
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()

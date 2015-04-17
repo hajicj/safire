@@ -260,7 +260,7 @@ class ShardedCorpus(IndexedCorpus):
                     current_shard[i][:] = doc[:]
             else:
                 for i, doc in enumerate(doc_chunk):
-                    #logging.debug('Converting from gensim corpus: {0}'.format(doc))
+                    logging.debug('Converting from gensim corpus: {0}'.format(doc))
                     doc = dict(doc)
                     current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
 
