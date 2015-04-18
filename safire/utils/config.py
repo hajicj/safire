@@ -692,8 +692,6 @@ class ConfigBuilder(object):
                     deps.add(name)
         return deps
 
-
-
     @staticmethod
     def sort_dependency_graph(graph):
         """Reorders the vertices (blocks) in the block dependency graph in their
@@ -936,7 +934,7 @@ class ConfigBuilder(object):
                              ''.format(item, self.objects.keys()))
 
         # Initialize objects that weren't loaded.
-        # Note that the ordering needs to be computed.
+        # Note that the ordering needs to be re-computed.
         to_init = [item for item in self.sorted_deps if item in will_init]
         for item in to_init:
             if self.is_block(item):
@@ -947,6 +945,11 @@ class ConfigBuilder(object):
                 self.init_object(item,
                                  self.configuration.objects[item],
                                  **self.objects)
+            if item in self.configuration._persistence:
+                label = self.configuration._persistence[item]
+                fname = self.get_loading_filename(label)
+                print 'Saving object {0} to fname {1}'.format(item, fname)
+                self.objects[item].save(fname)
 
         # At this point, all objects - blocks, transformers and others - should
         # be ready. We return a dictionary of objects on which nothing depends.
@@ -1002,16 +1005,24 @@ class ConfigBuilder(object):
                     output[k] = v
             return output
 
-    def init_object_or_block(self, name, conf_obj, **kwargs):
+    def init_object_or_block(self, name, conf_obj, save=True, **kwargs):
+        """Top-level initialization method: gets a name and the configuration
+        of an object and initializes the object. If ``save`` is set, will
+        also check ``_persistence`` whether the object should be saved and if
+        yes, will save it using the appropriate persistent label."""
         if name in self.configuration.objects:
             self.init_object(name, conf_obj, **kwargs)
         elif name in self.configuration._assembly:
             self.init_block(name, **kwargs)
+        if save and name in self.configuration._persistence:
+            label = self.configuration._persistence[name]
+            fname = self.get_loading_filename(label)
+            print 'Saving object {0} as {1}'.format(name, fname)
+            self.objects[name].save(fname)
 
     def init_object(self, name, conf_obj, **kwargs):
         locals_names = kwargs
         locals_names.update(self.imports)
-        #print 'Available locals: {0}'.format(pprint.pformat(locals_names))
         obj = self._execute_init(conf_obj, **locals_names)
         self.objects[name] = obj
 
@@ -1102,7 +1113,7 @@ class ConfigBuilder(object):
         init_args_as_kwargs = {k: eval(v, globals(), current_locals)
                                for k, v in obj.items() if not k.startswith('_')}
         ### DEBUG
-        pprint.pprint((init_expr, init_args_as_kwargs))
+        # pprint.pprint((init_expr, init_args_as_kwargs))
         initialized_object = init_expr(**init_args_as_kwargs)
         return initialized_object
 

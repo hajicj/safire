@@ -17,6 +17,7 @@ from gensim.corpora import TextCorpus
 from gensim.interfaces import TransformationABC, TransformedCorpus
 
 from safire.utils import total_size
+import safire.utils.transcorp
 
 __author__ = "Jan Hajic jr."
 
@@ -202,13 +203,13 @@ class Word2VecTransformer(TransformationABC):
         :type corpus: gensim.interfaces.CorpusABC
         :param corpus: The corpus to transform.
         """
-        if not isinstance(corpus, TextCorpus):
-            logging.warn('Word2VecTransformer applied on non-text' +
-                         ' corpus; returning TransformedCorpus.')
-
-            transformed_corpus = TransformedCorpus(self, corpus, chunksize)
-            return transformed_corpus
-
+        # if not isinstance(corpus, TextCorpus):
+        #     logging.warn('Word2VecTransformer applied on non-text' +
+        #                  ' corpus; returning TransformedCorpus.')
+        #
+        #     transformed_corpus = TransformedCorpus(self, corpus, chunksize)
+        #     return transformed_corpus
+        # transformed_corpus = TransformedCorpus(self, corpus, chunksize)
         transformed_corpus = TransformedCorpus(self, corpus, chunksize)
         return transformed_corpus
 

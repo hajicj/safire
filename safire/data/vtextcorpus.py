@@ -338,7 +338,7 @@ class VTextCorpus(TextCorpus):
                     if self.locked and token not in self.dictionary.token2id:
                         continue
                     self.doc2id[docid].add(total_yielded)
-                    logging.debug('Adding to id2doc[{0}]: {1}'.format(len(self.id2doc), docid))
+                    # print u'Adding token {2} to id2doc[{0}]: {1}'.format(len(self.id2doc), docid, token)
                     self.id2doc[len(self.id2doc)] = docid
                     total_yielded += 1
                     self.n_processed += 1
@@ -585,11 +585,11 @@ class VTextCorpus(TextCorpus):
 
         Does NOT support retrieving sentences or tokens."""
         if self.sentences:
-            raise ValueError('__getitem__ calls not supported when retrieving'
-                             'sentences as documents.')
+            raise TypeError('__getitem__ calls not supported when retrieving'
+                            ' sentences as documents.')
         if self.tokens:
-            raise ValueError('__getitem__ calls not supported when retrieving'
-                             'tokens as documents.')
+            raise TypeError('__getitem__ calls not supported when retrieving'
+                            ' tokens as documents.')
         if isinstance(item, slice):
             # print 'Slice: {0}, indices: {1}'.format(item, item.indices(len(self)))
             return [self[i] for i in xrange(*item.indices(len(self)))]
@@ -598,7 +598,7 @@ class VTextCorpus(TextCorpus):
         if isinstance(item, int):
             if not self.precompute_vtlist:
                 raise TypeError('Doesn\'t support indexing without precomputing'
-                                'the vtlist.')
+                                ' the vtlist.')
             try:
                 with self._get_doc_handle(self.vtlist[item]) as vthandle:
                     document, _ = self.parse_document_and_sentences(vthandle)

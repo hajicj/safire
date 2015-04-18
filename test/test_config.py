@@ -9,7 +9,8 @@ from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.serializer import SwapoutCorpus
 from safire.introspection.interfaces import IntrospectionTransformer
 from safire.utils.config import ConfigParser, Configuration, ConfigBuilder
-from safire.utils.transcorp import dry_run, bottom_corpus, log_corpus_stack
+from safire.utils.transcorp import dry_run, bottom_corpus, log_corpus_stack, \
+    get_id2doc_obj, get_doc2id_obj
 
 __author__ = 'Jan Hajic jr'
 
@@ -32,7 +33,7 @@ class TestConfig(SafireTestCase):
         self.setUpClass(clean_only=False, no_datasets=False)
 
     def tearDown(self):
-        init_data_root(self.data_root, overwrite=True)
+        init_data_root(self.data_root, overwrite=False)
 
     def test_parser(self):
         parser = ConfigParser()
@@ -221,9 +222,11 @@ class TestConfig(SafireTestCase):
         pipeline = outputs['_aggregated_similarities_']
         print log_corpus_stack(pipeline)
         retrieval_results = [x for x in pipeline]
+        print 'Retrieval results: length {0}'.format(len(retrieval_results))
+        pprint.pprint(get_id2doc_obj(pipeline))
+        pprint.pprint(get_doc2id_obj(pipeline))
         pprint.pprint(retrieval_results)
         self.assertEqual(len(retrieval_results), len(pipeline))
-
 
     def test_autodetect_dependencies(self):
 

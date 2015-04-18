@@ -196,7 +196,6 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
             logging.debug('Not using chunksize.')
             logging.debug('Input corpus: {0}'.format(type(self.corpus)))
             for counter, doc in enumerate(self.corpus):
-                #print 'Inside iteration:\n\tid2doc {0}\n\tdoc2id {1}'.format(self.id2doc, self.doc2id)
                 persistent_docid = docid_iterator.next()
 
                 logging.debug('Counter: {0}'.format(counter))
@@ -216,7 +215,7 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
 
                     # Building the filtered doc <=> id mapping
                     self.doc2id[docname].add(self.n_passed)
-                    self.id2doc[self.n_passed] = docname # persistent_docid
+                    self.id2doc[self.n_passed] = docname  # persistent_docid
 
                     self.n_passed += 1
                     yield transformed

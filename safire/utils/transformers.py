@@ -404,8 +404,8 @@ class ItemAggregationTransform(gensim.interfaces.TransformationABC):
     alters iteration behavior.
 
     """
-    def __init__(self):
-        pass
+    def __init__(self, average=False):
+        self.average = average
 
     def _apply(self, corpus, chunksize=None):
         return ItemAggregationCorpus(self, corpus, chunksize=chunksize)
@@ -416,19 +416,39 @@ class ItemAggregationTransform(gensim.interfaces.TransformationABC):
         if isinstance(itembuffer, gensim.interfaces.CorpusABC):
             return self._apply(itembuffer)
 
-        if isinstance(itembuffer, numpy.ndarray):
-            return numpy.sum(itembuffer, axis=0)
-        elif isinstance(itembuffer, scipy.sparse.csr_matrix):
+        return self.sum(itembuffer, average=self.average)
+
+    @staticmethod
+    def sum(aggregated_items, average=False):
+        """Performs a column-wise sum of the given set of items. If ``averaged``
+        is set to True, will also divide the result by the number of items in
+        the buffer."""
+        if isinstance(aggregated_items, numpy.ndarray):
+            total = numpy.sum(aggregated_items, axis=0)
+            if average:
+                return total / aggregated_items.shape[0]
+            else:
+                return total
+        elif isinstance(aggregated_items, scipy.sparse.csr_matrix):
             logging.critical('Support for aggregating scipy sparse matrices not'
                              ' implemented yet.')
             raise NotImplementedError()
         else:
             # List of gensim sparse vectors?
-            if safire.utils.is_gensim_batch(itembuffer):
-            # List of lists of gensim sparse vectors?
-                return sum_gensim_columns(itembuffer)
-            elif safire.utils.is_list_of_gensim_batches(itembuffer):
-                return sum_gensim_columns(list(itertools.chain(*itembuffer)))
+            if safire.utils.is_gensim_batch(aggregated_items):
+                # List of lists of gensim sparse vectors?
+                total = sum_gensim_columns(aggregated_items)
+            elif safire.utils.is_list_of_gensim_batches(aggregated_items):
+                # Dealing with list of gensim batches: flatten it by one level
+                flattened_items = list(itertools.chain(*aggregated_items))
+                total = sum_gensim_columns(flattened_items)
+            else:
+                raise ValueError('Cannot deal with the following input: {0}'
+                                 ''.format(aggregated_items))
+            if average:
+                length = float(len(aggregated_items))
+                total = [(key, value / length) for key, value in total]
+            return total
 
 
 class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
@@ -480,12 +500,23 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
     def __iter__(self):
         itembuffer = []
         output_iid = 0
+        # orig_id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
 
         # current_docname is the docname we are currently aggregating items for.
         current_docname = None
+
+        print 'Aggregator: starting iteration.'
         for iid, item in enumerate(self.corpus):
             # docname is the document name for the current item.
             docname = self.orig_id2doc[iid]
+            #print 'Processing item with docname: {0}'.format(docname)
+            __id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
+            #print 'Original id2doc: id {0}/len {1}, corpus id2doc: id {2}/len {3}'.format(id(orig_id2doc), len(orig_id2doc), id(__id2doc), len(__id2doc))
+            # If the underlying corpus is only being built, there are no
+            # original docnames to speak of and we'll need to look up the
+            # docname from the corpus, not from our snapshot into the corpus
+            # at initialization time. This is inefficient, because we have to
+            # look up the updated id2doc object each time.
             if docname == current_docname:
                 itembuffer.append(item)
             else:
@@ -496,6 +527,7 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
                     # These mappings are created for the output item
                     self.doc2id[current_docname].add(output_iid)
                     self.id2doc[output_iid] = current_docname
+                    # print 'Document {0}: Yielding itembuffer of length {1}'.format(current_docname, len(itembuffer))
                     yield self.obj[itembuffer]
                     output_iid += 1
                     current_docname = docname
@@ -504,12 +536,13 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
         # Last set of items
         self.doc2id[current_docname].add(output_iid)
         self.id2doc[output_iid] = current_docname
+        # print 'Document {0}: Yielding itembuffer of length {1}'.format(current_docname, len(itembuffer))
         yield self.obj[itembuffer]
 
     def __getitem__(self, item):
         # How to support indexing?
         # - Precompute which original item IDs are
-        #   mapped to which aggregated item IDs? Then, if the underlying corpus
+        #   mapped to which aggregated item IDs. Then, if the underlying corpus
         #   is indexable, combine the requested original IDs.
         # print 'Total input iids for source iids {0}: {1}\n{2}' \
         #       ''.format(item,
