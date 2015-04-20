@@ -178,10 +178,10 @@ class GeneralFunctionTransform(gensim.interfaces.TransformationABC):
         if is_corpus:
             return self._apply(bow, chunksize)
 
-        if len(bow) == 0:
-            logging.debug('Running empty doc through GeneralFunctionTransform.')
-        else:
-            logging.debug('-- GeneralFunctionTransform. doc length=%d --' % len(bow))
+        # if len(bow) == 0:
+        #     logging.debug('Running empty doc through GeneralFunctionTransform.')
+        # else:
+        #     logging.debug('-- GeneralFunctionTransform. doc length=%d --' % len(bow))
 
         oK = self.o_mul
         oC = self.o_add
@@ -481,6 +481,7 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
         self.doc2id = collections.defaultdict(set)
         self.id2doc = collections.defaultdict(str)
 
+        logging.debug('Aggregator pre-computing doc/id mappings from corpus {0}...'.format(safire.utils.transcorp.log_corpus_stack(corpus)))
         prev_doc = None
         for orig_iid, doc in sorted(self.orig_id2doc.items(),
                                     key=operator.itemgetter(0)):
@@ -503,6 +504,9 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
         self.id2doc[self.length] = prev_doc
         self.doc2id[prev_doc].add(self.length)
         self.length += 1
+
+        logging.debug('After pre-computing:\n\tLength: {0}\n\tdoc2id: {1}\n\t'
+                      'id2doc: {2}'.format(len(self), self.doc2id, self.id2doc))
 
     def __iter__(self):
         # Reset doc2id/id2doc mapping
@@ -573,14 +577,14 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
             logging.critical('Cannot aggregate batch over indices of type {0}'
                              ''.format(type(item)))
             raise NotImplementedError()
-        logging.debug('Returning itembuffer from request {0}:\n' \
-                      'Indices: {1}\nValue: {2}'.format(item,
-                                                        self.iid2source_iids(item),
-                                                        itembuffer))
+        # logging.debug('Returning itembuffer from request {0}:\n' \
+        #               'Indices: {1}\nValue: {2}'.format(item,
+        #                                                 self.iid2source_iids(item),
+        #                                                 itembuffer))
         return self.obj[itembuffer]
 
     def __len__(self):
-        return self.length
+        return len(self.id2doc)
 
     def iid2items(self, new_iid):
         """Returns the set of input corpus items that correspond to the given

@@ -264,18 +264,18 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
                 indexes = [indexes]
                 idxs_by_dataset = map(list, zip(*indexes))
             # print 'Flattening with indexes {0}'.format(idxs_by_dataset)
-            logging.debug('Indexes: {0}, by dataset: {1}'
-                          ''.format(indexes, idxs_by_dataset))
+            # logging.debug('Indexes: {0}, by dataset: {1}'
+            #              ''.format(indexes, idxs_by_dataset))
             retrieved = []
             for dataset, idxs in zip(self.corpus.corpus, idxs_by_dataset):
-                logging.debug(' Retrieving: dataset {0}, '
-                              'idxs {1}'.format(dataset, idxs))
+                # logging.debug(' Retrieving: dataset {0}, '
+                #               'idxs {1}'.format(dataset, idxs))
 
                 # Depends here on ability of SwapoutCorpus serialized by
                 # ShardedCorpus to deliver numpy ndarrays from lists of indices.
                 partial = dataset[idxs]
-                logging.debug('Partial for dataset {0}, idxs {1}: {2}'
-                              ''.format(dataset, idxs, partial))
+                # ('Partial for dataset {0}, idxs {1}: {2}'
+                #               ''.format(dataset, idxs, partial))
                 if isinstance(partial[0], numpy.ndarray):
                     partial = numpy.array(partial)
 
@@ -289,7 +289,7 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
 
         # Problem: flattening is outputting
 
-        logging.debug('flattening __getitem__ output: {0}'.format(output))
+        # logging.debug('flattening __getitem__ output: {0}'.format(output))
         # print 'flattening __getitem__ output: {0}'.format(output)
         return output
 

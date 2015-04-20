@@ -76,8 +76,7 @@ class WriterABC(object):
         full_filename = os.path.join(self.root, filename)
         return full_filename
 
-    @staticmethod
-    def iid_to_filename(iid):
+    def iid_to_filename(self, iid):
         """Converts an item ID into a filename, minus the absolute path (which
         is handled by the ``root`` init arg).
 

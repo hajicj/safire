@@ -83,7 +83,11 @@ class SwapoutCorpus(IndexedTransformedCorpus):
     The key idea is that this design will allow us to retain and backtrack
     through the applied transformations while making retrieval faster."""
     def __init__(self, swap, corpus):
-        if len(swap) != len(corpus):
+        if corpus is None:
+            logging.warn('Initializing SwapoutCorpus without a ``corpus``. Note'
+                         ' that pattern should only be used for the bottom'
+                         ' block of a pipeline.')
+        elif len(swap) != len(corpus):
             logging.warn('Swapout corpus: original and swap lengths do not '
                          'match! (original corpus {0}: {1}, swap corpus {2} '
                          ':{3}). Maybe reading serialized corpus from existing '

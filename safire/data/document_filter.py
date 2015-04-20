@@ -170,10 +170,10 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
 
                 for item in chunk:
                     persistent_docid = docid_iterator.next()
-                    logging.debug('Filtering document with persistent ID {0}'
-                                  ', docname {1}'
-                                  ''.format(persistent_docid,
-                                            self.persistent_id2doc[persistent_docid]))
+                    # logging.debug('Filtering document with persistent ID {0}'
+                    #               ', docname {1}'
+                    #               ''.format(persistent_docid,
+                    #                         self.persistent_id2doc[persistent_docid]))
 
                     transformed = self.obj[item]
                     if transformed:
@@ -198,13 +198,13 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
             for counter, doc in enumerate(self.corpus):
                 persistent_docid = docid_iterator.next()
 
-                logging.debug('Counter: {0}'.format(counter))
-                logging.debug('Filtering document with persistent ID {0}'
-                              ', docname {1}'
-                              ''.format(persistent_docid,
-                                        self.persistent_id2doc[persistent_docid]))
-                logging.debug('  Available doc2id: {0}'
-                              ''.format(self.persistent_doc2id[self.persistent_id2doc[persistent_docid]]))
+                # logging.debug('Counter: {0}'.format(counter))
+                # logging.debug('Filtering document with persistent ID {0}'
+                #               ', docname {1}'
+                #               ''.format(persistent_docid,
+                #                         self.persistent_id2doc[persistent_docid]))
+                # logging.debug('  Available doc2id: {0}'
+                #               ''.format(self.persistent_doc2id[self.persistent_id2doc[persistent_docid]]))
                 transformed = self.obj[doc]
                 if transformed:
                     # Update new <=> old mapping

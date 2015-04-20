@@ -242,7 +242,7 @@ class ShardedCorpus(IndexedCorpus):
             logging.info('Chunk type: {0}, length {1}'
                          ''.format(type(doc_chunk), len(doc_chunk)))
             logging.info('Chunk element type: {0}'.format(type(doc_chunk[0])))
-            logging.debug('Chunk element: {0}'.format(doc_chunk[0]))
+            # logging.debug('Chunk element: {0}'.format(doc_chunk[0]))
             # if len(doc_chunk[0]) < 1000:
             #    print 'Chunk: {0}'.format(doc_chunk)
 
@@ -260,7 +260,8 @@ class ShardedCorpus(IndexedCorpus):
                     current_shard[i][:] = doc[:]
             else:
                 for i, doc in enumerate(doc_chunk):
-                    logging.debug('Converting from gensim corpus: {0}'.format(doc))
+                    # logging.debug('Converting from gensim corpus: {0}'
+                    #               ''.format(doc))
                     doc = dict(doc)
                     current_shard[i][list(doc)] = list(gensim.matutils.itervalues(doc))
 

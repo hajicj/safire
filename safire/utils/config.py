@@ -1,5 +1,5 @@
 """
-This module contains classes that allow storing and loading Safire pipelines
+This module contains classes that allow creating and using Safire pipelines
 from configuration files.
 
 Configuring experiments
@@ -10,32 +10,23 @@ pipelines themselves, it should be possible to export (and import) experimental
 settings without having to write the Python code. Think of the configuration
 as pseudocode, which an interpreter will "translate" into Python code.
 
-The difficult part of thus interpreting an experiment configuration is the fact
+The complex part of thus interpreting an experiment configuration is the fact
 that parts of the pipeline depend on each other. Not only are pipeline blocks
 connected to their previous block, some transformers are initialized using the
 output of the pipeline on which they are applied. In other words, there are
 dependencies to resolve when building a pipeline from a configuration.
 
-We can actually think about the configuration as a Makefile. Individual pipeline
-components are targets that may depend on each other. Circular dependencies are
-forbidden. This doesn't mean that we have to use a Makefile specifically for
-storing experiment configurations, only that the principle is similar. The
-Pylearn2 library uses YAML to store configurations, including objects that
-point to one another -- we can use that and implement some mechanism for
-dependency resolution (it's just a topological sort of a DAG, anyway).
-
-We have some options of resolving these dependencies:
-
-* Requiring that the symbols are declared in the order in which they are needed
-  (Who builds circular pipelines, anyway?)
-* Creating the dependency graph and only then initializing the pipeline blocks,
-  in the correct order.
-
+We can actually think about the configuration as a directed acyclic graph of a
+comptation. The vertices of the graph are individual objects of the pipeline.
+Settings of these objects are like attributes of the vertex. The edges in this
+graph are dependencies between these pipeline components. The computation then
+consists of initializing each of these objects in the right order, so that all
+dependencies of a component that is being initialized have already been created.
 
 How to write a configuration
 ============================
 
-Safire pipelines can be configured in plain old *.ini format, with some
+Safire pipelines can be configured in plain old ``*.ini`` format, with some
 safire-specific extras. We'll illustrate on a toy example::
 
     [_info]
@@ -357,6 +348,7 @@ import gensim
 import os
 import sys
 import pprint
+import operator
 
 __author__ = "Jan Hajic jr."
 
@@ -399,7 +391,31 @@ def names_in_code(code_string, eval=True):
     return set(names)
 
 
+def depgraph2gvgraph(obj_dependency_graph, format='svg', **graph_kwargs):
+    """Creates a dot-print graph of the given dependency graph. Although
+    this function doesn't print the graph, it needs to know its output format
+    (by default, it's *.svg).
+
+    Depends on the graphviz package, which it tries to import locally;
+    if the import fails, logs an error and returns ``None``."""
+    try:
+        import graphviz as gv
+    except ImportError:
+        logging.error('Missing package graphviz, cannot draw graph.')
+        return None
+
+    graph = gv.Digraph(format=format, **graph_kwargs)
+    for obj in obj_dependency_graph:
+        graph.node(obj, label=obj)  # Attributes?
+
+    for obj, deps in obj_dependency_graph.items():
+        for dep in deps:
+            graph.edge(dep, obj)
+
+    return graph
+
 # Configuration classes.
+
 
 class Configuration(object):
     """Plain Old Data class; the data structure that represents a configuration.
@@ -549,8 +565,29 @@ class ConfigParser(object):
 class ConfigBuilder(object):
     """The ConfigBuilder takes a parsed config file and generates the actual
     Python code requested in the config.
+
+    Builder options
+    ---------------
+
+    The ConfigBuilder has some settings that control its behavior. These can be
+    set through the ``[_builder]`` section of the configuration file. Currently,
+    the following settings are recognized:
+
+    * ``_import``: Gives a list of modules, classes or functions to import into
+      the local environment that the builder uses. (This section may be
+      superseded in the future by a separate ``[_import]`` section.)
+    * ``no_loading``: If set, will ignore all load-able objects during building.
+    * ``clear``: If set, will clear all load-able objects before building. This
+      should guarantee that the entire pipeline will be re-built from scratch.
+
+    Other options will be added as necessary.
     """
     def __init__(self, conf):
+        # Defaults
+        self.no_loading = False
+        self.clear = False
+        self._import = []
+
         self.configuration = conf
 
         self._info = self.dict2module(conf._info, '_info')
@@ -739,6 +776,88 @@ class ConfigBuilder(object):
                 sorted_graph[key] = value
         return sorted_graph
 
+    def get_dependency_graph_drawing(self, format='svg', **graph_kwargs):
+        """Creates the dependency graph of the configuration.
+        """
+        # graph = depgraph2gvgraph(self.deps_graph, format=format, **graph_kwargs)
+        try:
+            import graphviz as gv
+        except ImportError:
+            logging.error('Could not import graphviz, exiting.')
+            return
+
+        # Drawing style(s)
+        block_node_attrs = {'style': 'filled',
+                            'fillcolor': '#ffb46e',
+                            'shape': 'rectangle'}
+        noblock_node_attrs = {'style': 'filled',
+                              'fillcolor': '#eeffee'}
+        dep_edge_attrs = {}
+        access_dep_edge_attrs = {'style': 'dashed',
+                                 'color': '#bbbbbb',
+                                 'fontcolor': '#bbbbbb'}
+
+        will_load_updates = {'color': 'blue',
+                             'fillcolor': '#aaffaa'}
+        block_will_be_loaded_updates = {'fillcolor': '#cccccc',
+                                        'color': block_node_attrs['fillcolor']}
+        noblock_will_be_loaded_updates = {'fillcolor': '#cccccc',
+                                          'color': '#aaaaaa'}
+        will_init_updates = {}
+
+        will_load, will_be_loaded, will_init = self.resolve_persistence()
+
+        graph = gv.Digraph(format=format, **graph_kwargs)
+        for name in self.deps_graph:
+            if self.is_block(name):
+                node_attrs = copy.deepcopy(block_node_attrs)
+                if name in will_load:
+                    node_attrs.update(will_load_updates)
+                elif name in will_be_loaded:
+                    node_attrs.update(block_will_be_loaded_updates)
+                elif name in will_init:
+                    node_attrs.update(will_init_updates)
+                graph.node(name, label=name, **block_node_attrs)
+            else:
+                node_attrs = copy.deepcopy(noblock_node_attrs)
+                if name in will_load:
+                    node_attrs.update(will_load_updates)
+                elif name in will_be_loaded:
+                    node_attrs.update(noblock_will_be_loaded_updates)
+                elif name in will_init:
+                    node_attrs.update(will_init_updates)
+                graph.node(name, label=name, **node_attrs)
+
+        for obj, deps in self.deps_graph.items():
+            for dep in deps:
+                graph.edge(dep, obj, **dep_edge_attrs)
+            if obj in self.configuration.objects \
+                    and '_access_deps' in self.configuration.objects[obj]:
+                access_deps = self.configuration.objects[obj]['_access_deps']
+                for a_dep, access in access_deps.items():
+                    graph.edge(obj, a_dep, label=access,
+                               **access_dep_edge_attrs)
+        return graph
+
+    def draw_dependency_graph(self, filename, format='svg', **graph_kwargs):
+        """Draws the dependency graph of the configuration to the given file."""
+        graph_style = {'label': '\nConfiguration dependency graph for: '
+                                + self._info.name,
+                       'fontsize': str(len(self.deps_graph) / 2),
+                       'font': 'Helvetica',
+                       }
+        if 'graph_attr' in graph_kwargs:
+            graph_kwargs['graph_attr'].update({k: v
+                                               for k, v in graph_style.items()
+                                               if k not in graph_kwargs['graph_attr']})
+        else:
+            graph_kwargs['graph_attr'] = graph_style
+        graph = self.get_dependency_graph_drawing(format=format, **graph_kwargs)
+        if graph is None:
+            logging.error('Could not import graphviz, drawing failed.')
+
+        graph.render(filename)
+
     def resolve_persistence(self):
         """Categorizes the objects according to whether they will be loaded
         directly, will be loaded as a dependency of something else, or will have
@@ -750,7 +869,7 @@ class ConfigBuilder(object):
         able_to_load = []
         able_to_init = []
         for item in self.sorted_deps:
-            if self.can_load(item):
+            if not self.no_loading and self.can_load(item):
                 # Mark all objects that will be loaded.
                 able_to_load.append(item)
             else:
@@ -774,26 +893,27 @@ class ConfigBuilder(object):
                 # print '   ...will load.'
                 will_load.add(current_obj)
                 to_resolve.remove(current_obj)
-            # Traverse all dependencies of current object and mark them as
-            # "to be loaded"
-            deps = copy.deepcopy(self.deps_graph[current_obj])
-            while deps:
+            # Traverse all accessible dependencies of current object and mark
+            # them as "to be loaded"
+            logging.debug('Current object that will be loaded: {0}'.format(current_obj))
+            # This should also be accessible deps only
+            deps = self.get_accesible_objects(current_obj)
+            while len(deps) > 0:
                 current_dep = deps.pop()
                 if current_dep not in to_resolve:
                     continue
                 to_resolve.remove(current_dep)
                 will_be_loaded.add(current_dep)
-                # Add to dependency BFS traversal queue
-                for d in self.deps_graph[current_dep]:
-                    deps.add(d)
+                accessible_deps = self.get_accesible_objects(current_dep)
+                deps.update(accessible_deps)
         # Whatever's left will be initialized, as it is unreachable from
         # the load-able objects.
         will_init = to_resolve
 
         logging.debug('Working with configuration: {0}'.format(self._info.name))
-        logging.debug('  Will load: {0}'.format(will_load))
-        logging.debug('  Will be loaded transitively: {0}'.format(will_be_loaded))
-        logging.debug('  Will initialize: {0}'.format(will_init))
+        logging.debug('  Will load: {0}'.format(pprint.pformat(will_load)))
+        logging.debug('  Will be loaded transitively: {0}'.format(pprint.pformat(will_be_loaded)))
+        logging.debug('  Will initialize: {0}'.format(pprint.pformat(will_init)))
 
         return will_load, will_be_loaded, will_init
 
@@ -846,16 +966,24 @@ class ConfigBuilder(object):
         dependency from the object called ``name``."""
         if self.is_block(name):
             symbol_conf = getattr(self._assembly, name)
-            if symbol in symbol_conf:
+            if symbol in names_in_code(symbol_conf):
                 return True
         else:
             conf = self.configuration.objects[name]
             if '_access_deps' in conf:
-                if symbol in conf['_access_deps']:
+                if symbol in conf['_access_deps']:  # This is a dict: no parsing
                     return True
-            if self._uses_block(name, symbol):
-                return True
+            # Currently disabled, TODO: determine correctness
+            # if self._uses_block(name, symbol):  # This is not always true!
+            #     return True
         return False
+
+    def get_accesible_objects(self, name):
+        """Returns a set of names of objects that should be accessible from the
+        object with the given name."""
+        output = set(dep for dep in self.deps_graph[name]
+                     if self.is_dep_obj_accessible(name, dep))
+        return output
 
     def _uses_block(self, name, blockname):
         """Checks whether the object of the given ``name`` depends on the block
@@ -870,12 +998,25 @@ class ConfigBuilder(object):
 
     def retrieve_dep_obj(self, name, obj, symbol):
         """Retrieve the actual dependency object signified by ``symbol`` from
-        the ``obj`` with the ``name``."""
+        the ``obj`` with the ``name``.
+
+        With blocks: the requested object can be either
+        """
         if not self.is_dep_obj_accessible(name, symbol):
             return None
-        obj_conf = self.configuration.objects[name]
-        access_expr = obj_conf['_access_deps'][symbol]
-        dep_obj = eval(access_expr, globals(), locals={name: obj})
+        # If obj is a block, the accessible object can be either the previous
+        # block, or the block's transformer.
+        if self.is_block(name):
+            if self.is_block(symbol):
+                dep_obj = obj.corpus
+            else:
+                dep_obj = obj.obj
+        else:
+            obj_conf = self.configuration.objects[name]
+            if '_access_deps' not in obj_conf:
+                return None
+            access_expr = obj_conf['_access_deps'][symbol]
+            dep_obj = eval(access_expr, globals(), {name: obj})
         return dep_obj
 
     def build(self):
@@ -883,6 +1024,10 @@ class ConfigBuilder(object):
         with persistence, etc. It outputs a dictionary of all objects (blocks
         and non-blocks) that do not depend on anything.
         """
+        if hasattr(self, 'clear') and self.clear is True:
+            logging.info('Clearing all saved objects...')
+            self.clear_saved()
+
         will_load, will_be_loaded, will_init = self.resolve_persistence()
 
         logging.debug('Will load: {0}'.format(will_load))
@@ -898,9 +1043,10 @@ class ConfigBuilder(object):
 
         for item in load_queue:
             #  - load item (using loader, etc.)
-            print 'Loading item: {0}'.format(item)
+            logging.info('========== Loading item: {0}\t'
+                         '=========='.format(item))
             persistent_label = getattr(self._persistence, item)
-            print '   Persistent label: {0}'.format(persistent_label)
+            logging.info('   Persistent label: {0}'.format(persistent_label))
             fname = self.get_loading_filename(persistent_label)
             obj = self._execute_load(fname)
             #  - add item to object dict
@@ -911,6 +1057,8 @@ class ConfigBuilder(object):
             #    loaded. Add each of these to the object dict.
             obj_queue = [(item, obj)]
             while obj_queue:
+                logging.debug('Current queue:\n{0}'
+                              ''.format(pprint.pformat(map(operator.itemgetter(0), obj_queue))))
                 current_symbol, current_obj = obj_queue.pop()
 
                 # Add to objects dict.
@@ -924,24 +1072,30 @@ class ConfigBuilder(object):
                                     for dep_symbol in current_dep_symbols
                                     if self.is_dep_obj_accessible(current_symbol,
                                                                   dep_symbol)}
+                logging.debug('Extending dep_objs queue: {0}'.format(current_dep_objs.keys()))
                 obj_queue.extend(current_dep_objs.items())
 
         # Verify that everything that should have been loaded has been loaded
         for item in will_be_loaded:
             if item not in self.objects:
                 logging.warn('Object {0} not found after it should have been'
-                             ' loaded. (Available objects: {1})'
-                             ''.format(item, self.objects.keys()))
+                             ' loaded.' #(Available objects: {1})'
+                             ''.format(item,
+                             #          pprint.pformat(self.objects.keys())
+                             )
+                )
 
         # Initialize objects that weren't loaded.
         # Note that the ordering needs to be re-computed.
         to_init = [item for item in self.sorted_deps if item in will_init]
         for item in to_init:
             if self.is_block(item):
-                # print 'Initializing block: {0}'.format(item)
+                logging.info('========== Initializing block: {0}\t'
+                             '=========='.format(item))
                 self.init_block(item, **self.objects)
             else:
-                # print 'Initializing object: {0}'.format(item)
+                logging.info('========== Initializing object: {0}\t'
+                             '=========='.format(item))
                 self.init_object(item,
                                  self.configuration.objects[item],
                                  **self.objects)
@@ -963,7 +1117,7 @@ class ConfigBuilder(object):
         output_objects = {obj_name: obj
                           for obj_name, obj in self.objects.items()
                           if len(reverse_deps[obj_name]) == 0
-                            and obj_name not in self.exclude_from_build_output}
+                          and obj_name not in self.exclude_from_build_output}
         return output_objects
 
     def run_saving(self):
@@ -974,6 +1128,19 @@ class ConfigBuilder(object):
             fname = self.get_loading_filename(obj_label)
             # print 'Saving object {0} to file {1}'.format(obj_name, fname)
             self.objects[obj_name].save(fname)
+
+    def clear_saved(self):
+        """Saves the built objects according to the persistence instruction."""
+        for obj_name, obj_label in self.configuration._persistence.items():
+            if obj_name == 'loader' and 'loader' not in self.objects:
+                continue
+            fname = self.get_loading_filename(obj_label)
+            # print 'Saving object {0} to file {1}'.format(obj_name, fname)
+            if os.path.isfile(fname):
+                logging.info('Removing file {0}...'.format(fname))
+                os.remove(fname)
+            else:
+                logging.info('Cannot remove file {0}: not found!'.format(fname))
 
     @staticmethod
     def eval_dict(dictionary, no_eval=None, **kwargs):
@@ -1017,11 +1184,11 @@ class ConfigBuilder(object):
         if save and name in self.configuration._persistence:
             label = self.configuration._persistence[name]
             fname = self.get_loading_filename(label)
-            print 'Saving object {0} as {1}'.format(name, fname)
+            logging.debug('Saving object {0} as {1}'.format(name, fname))
             self.objects[name].save(fname)
 
     def init_object(self, name, conf_obj, **kwargs):
-        print 'Initializing object with name: {0}'.format(name)
+        # print 'Initializing object with name: {0}'.format(name)
         locals_names = kwargs
         locals_names.update(self.imports)
         obj = self._execute_init(conf_obj, **locals_names)

@@ -170,7 +170,7 @@ class TestConfig(SafireTestCase):
         iid2intro = introspection.iid2introspection_filename
         firstfile = iid2intro[sorted(iid2intro.keys())[0]]
         self.assertTrue(os.path.isfile(firstfile))
-        for filename in iid2intro.keys():
+        for filename in iid2intro.values():
             self.assertTrue(os.path.isfile(filename))
         # webbrowser.open(firstfile)
 

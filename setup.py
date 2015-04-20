@@ -64,7 +64,7 @@ SCRIPTS = ['scripts/annotation_stats.py',
            'scripts/pretrain_multimodal.py',
            'scripts/remove_duplicate_images.py',
            'scripts/rename_iids.py',
-           'scripts/run.py',
+           'scripts/run_t2i.py',
            'scripts/text_preprocessing_explorer.py']
 
 ###############################################################################
