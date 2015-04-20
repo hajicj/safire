@@ -863,8 +863,8 @@ def docnames2indexes(data, docnames):
     doc2ids = [get_doc2id_obj(c) for c in data.corpus]
     # Problem: returned doc2id object in DocumentFilterCorpus retains the
     # original IDs, not the new ones. We need to convert these IDs
-    #print 'Doc2ids:\n  {0}'.format(u'  \n'.join([str(type(d)) for d in doc2ids]))
-    print 'Doc2ids:\n{0}'.format(u'  \n'.join([str(d) for d in doc2ids]))
+    # print 'Doc2ids:\n  {0}'.format(u'  \n'.join([str(type(d)) for d in doc2ids]))
+    # print 'Doc2ids:\n{0}'.format(u'  \n'.join([str(d) for d in doc2ids]))
     output = []
     for name_item in docnames:
         #print 'Name item: {0}'.format(name_item)

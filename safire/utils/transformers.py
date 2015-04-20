@@ -476,6 +476,11 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
         self.length = 0
         self.orig2new_iid = collections.defaultdict(int)
         self.new2orig_iid = collections.defaultdict(set)
+
+        # What the document -- iid mapping looks like *after* aggregation.
+        self.doc2id = collections.defaultdict(set)
+        self.id2doc = collections.defaultdict(str)
+
         prev_doc = None
         for orig_iid, doc in sorted(self.orig_id2doc.items(),
                                     key=operator.itemgetter(0)):
@@ -485,6 +490,9 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
             self.orig2new_iid[orig_iid] = self.length
             self.new2orig_iid[self.length].add(orig_iid)
             if doc != prev_doc and prev_doc is not None:
+                # Compute the id2doc, doc2id mapping as well
+                self.id2doc[self.length] = prev_doc
+                self.doc2id[prev_doc].add(self.length)
                 self.length += 1
             prev_doc = doc
         # Imagine a corpus with items from only one source document.
@@ -492,12 +500,15 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
         # incremented. (The new <--> orig iid mappings will use 0 as the new
         # iid for all original items, which is correct.) However, the total
         # length of the aggregated corpus will be 1.
+        self.id2doc[self.length] = prev_doc
+        self.doc2id[prev_doc].add(self.length)
         self.length += 1
 
+    def __iter__(self):
+        # Reset doc2id/id2doc mapping
         self.doc2id = collections.defaultdict(set)
         self.id2doc = collections.defaultdict(str)
 
-    def __iter__(self):
         itembuffer = []
         output_iid = 0
         # orig_id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
@@ -505,13 +516,13 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
         # current_docname is the docname we are currently aggregating items for.
         current_docname = None
 
-        print 'Aggregator: starting iteration.'
+        logging.debug('Aggregator: starting iteration.')
         for iid, item in enumerate(self.corpus):
             # docname is the document name for the current item.
             docname = self.orig_id2doc[iid]
-            #print 'Processing item with docname: {0}'.format(docname)
-            __id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
-            #print 'Original id2doc: id {0}/len {1}, corpus id2doc: id {2}/len {3}'.format(id(orig_id2doc), len(orig_id2doc), id(__id2doc), len(__id2doc))
+            logging.debug('Processing item with docname: {0}'.format(docname))
+            # __id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
+            # print 'Original id2doc: id {0}/len {1}, corpus id2doc: id {2}/len {3}'.format(id(orig_id2doc), len(orig_id2doc), id(__id2doc), len(__id2doc))
             # If the underlying corpus is only being built, there are no
             # original docnames to speak of and we'll need to look up the
             # docname from the corpus, not from our snapshot into the corpus
@@ -537,6 +548,7 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
         self.doc2id[current_docname].add(output_iid)
         self.id2doc[output_iid] = current_docname
         # print 'Document {0}: Yielding itembuffer of length {1}'.format(current_docname, len(itembuffer))
+        logging.debug('Final doc2id of aggregator: {0}'.format(self.doc2id))
         yield self.obj[itembuffer]
 
     def __getitem__(self, item):
@@ -548,6 +560,7 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
         #       ''.format(item,
         #                 len(self.iid2source_iids(item)),
         #                 self.iid2source_iids(item))
+        logging.debug('Aggregator: retrieving item {0}'.format(item))
         if isinstance(item, int):
             itembuffer = self.iid2items(item)
         elif isinstance(item, slice):

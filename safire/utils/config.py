@@ -790,10 +790,10 @@ class ConfigBuilder(object):
         # the load-able objects.
         will_init = to_resolve
 
-        print 'Working with configuration: {0}'.format(self._info.name)
-        print '  Will load: {0}'.format(will_load)
-        print '  Will be loaded transitively: {0}'.format(will_be_loaded)
-        print '  Will initialize: {0}'.format(will_init)
+        logging.debug('Working with configuration: {0}'.format(self._info.name))
+        logging.debug('  Will load: {0}'.format(will_load))
+        logging.debug('  Will be loaded transitively: {0}'.format(will_be_loaded))
+        logging.debug('  Will initialize: {0}'.format(will_init))
 
         return will_load, will_be_loaded, will_init
 
@@ -1021,6 +1021,7 @@ class ConfigBuilder(object):
             self.objects[name].save(fname)
 
     def init_object(self, name, conf_obj, **kwargs):
+        print 'Initializing object with name: {0}'.format(name)
         locals_names = kwargs
         locals_names.update(self.imports)
         obj = self._execute_init(conf_obj, **locals_names)

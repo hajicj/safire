@@ -686,10 +686,10 @@ class VTextCorpus(TextCorpus):
 
                 doc_full_name = self.doc_full_path(doc_short_name)
                 vtlist.append(doc_full_name)
+        logging.debug('Precomputed vtlist, doc2id: {0}'.format(self.doc2id))
         return vtlist
 
     def save(self, *args, **kwargs):
-        #attrs_to_ignore = ['__getitem__']
         attrs_to_ignore = []
         if 'ignore' not in kwargs:
             kwargs['ignore'] = frozenset(attrs_to_ignore)

@@ -7,6 +7,7 @@ import codecs
 from gensim.utils import is_corpus
 import numpy
 import operator
+import pprint
 from safire.data.composite_corpus import CompositeCorpus
 from safire.datasets.dataset import CompositeDataset
 from safire.datasets.transformations import FlattenedDatasetCorpus
@@ -165,8 +166,8 @@ class HtmlSimpleWriter(WriterABC):
         # Create heading.
         docname = str(get_id2doc_obj(corpus)[iid])
 
-        print 'Docname: {0}'.format(docname)
-        print 'Value: {0}'.format(value)
+        # print 'Docname: {0}'.format(docname)
+        # print 'Value: {0}'.format(value)
         absolute_docname = os.path.join(self.root, docname)
         heading = u'Safire introspection: iid {0}, docname {1}' \
                   u''.format(iid, absolute_docname)
@@ -285,6 +286,8 @@ class HtmlSimilarImagesWriter(HtmlSimpleWriter):
         """
         super(HtmlSimilarImagesWriter, self).__init__(root, **kwargs)
         self.image_id2doc = image_id2doc
+        ### DEBUG
+        logging.debug('Image id2doc: {0}'.format(pprint.pformat(self.image_id2doc)))
         self.n_rows = n_rows  # TODO: So far ignored...
 
     def generate_value(self, iid, value, corpus):

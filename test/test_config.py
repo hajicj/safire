@@ -218,14 +218,42 @@ class TestConfig(SafireTestCase):
 
         outputs = builder.build()
 
-        self.assertTrue('_aggregated_similarities_' in outputs)
-        pipeline = outputs['_aggregated_similarities_']
+        print 'Outputs: {0}'.format(pprint.pformat(outputs))
+        pipeline = outputs['_intro_results_']
         print log_corpus_stack(pipeline)
         retrieval_results = [x for x in pipeline]
         print 'Retrieval results: length {0}'.format(len(retrieval_results))
-        pprint.pprint(get_id2doc_obj(pipeline))
-        pprint.pprint(get_doc2id_obj(pipeline))
-        pprint.pprint(retrieval_results)
+
+        will_load, will_be_loaded, will_init = builder.resolve_persistence()
+
+        print 'Will load: {0}'.format(pprint.pformat(will_load))
+        print 'Will be loaded: {0}'.format(pprint.pformat(will_be_loaded))
+        print 'Will init: {0}'.format(pprint.pformat(will_init))
+
+        # print 'Id2doc of output pipeline:'
+        # pprint.pprint(get_id2doc_obj(pipeline))
+        # print 'Doc2id of output pipeline:'
+        # pprint.pprint(get_doc2id_obj(pipeline))
+
+        # agg_similarities = builder.objects['_aggregated_similarities_']
+        # as_id2doc = get_id2doc_obj(agg_similarities)
+        # as_doc2id = get_doc2id_obj(agg_similarities)
+        # print 'Id2doc of aggregated similarities:\n{0}'.format(as_id2doc)
+        # print 'Doc2id of aggregated similarities:\n{0}'.format(as_doc2id)
+
+        # intro_vtcorp = builder.objects['_intro_vtcorp_']
+        # iv_id2doc = get_id2doc_obj(intro_vtcorp)
+        # iv_doc2id = get_doc2id_obj(intro_vtcorp)
+        # print 'Id2doc of intro_vtcorp:\n{0}'.format(iv_id2doc)
+        # print 'Doc2id of intro_vtcorp:\n{0}'.format(iv_doc2id)
+
+
+        # pprint.pprint(retrieval_results)
+        iid2intro = pipeline.obj.iid2introspection_filename
+        filenames = [iid2intro[iid] for iid in sorted(iid2intro.keys())]
+        #webbrowser.open(filenames[0])
+
+        self.assertTrue('_intro_results_' in outputs)
         self.assertEqual(len(retrieval_results), len(pipeline))
 
     def test_autodetect_dependencies(self):
