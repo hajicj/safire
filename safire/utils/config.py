@@ -538,8 +538,9 @@ class ConfigParser(object):
                         values = {}
                         for dep in value.split('|'):
                             name, code = dep.split(':', 1)
-                        values[name] = code
+                            values[name] = code
                         value = values
+                        #print 'Access deps for name {0}: {1}'.format(current_section_name, value)
 
                     current_section[key] = value
                 # junk
@@ -797,7 +798,7 @@ class ConfigBuilder(object):
                                  'color': '#bbbbbb',
                                  'fontcolor': '#bbbbbb'}
 
-        will_load_updates = {'color': 'blue',
+        will_load_updates = {'color': 'red',
                              'fillcolor': '#aaffaa'}
         block_will_be_loaded_updates = {'fillcolor': '#cccccc',
                                         'color': block_node_attrs['fillcolor']}
@@ -817,7 +818,7 @@ class ConfigBuilder(object):
                     node_attrs.update(block_will_be_loaded_updates)
                 elif name in will_init:
                     node_attrs.update(will_init_updates)
-                graph.node(name, label=name, **block_node_attrs)
+                graph.node(name, label=name, **node_attrs)
             else:
                 node_attrs = copy.deepcopy(noblock_node_attrs)
                 if name in will_load:
@@ -833,14 +834,18 @@ class ConfigBuilder(object):
                 graph.edge(dep, obj, **dep_edge_attrs)
             if obj in self.configuration.objects \
                     and '_access_deps' in self.configuration.objects[obj]:
+                # print 'Access deps found on object {0} with deps {1}'.format(obj, deps)
                 access_deps = self.configuration.objects[obj]['_access_deps']
+                # print 'Access deps: {0}'.format(access_deps)
                 for a_dep, access in access_deps.items():
+                    # print 'Drawing access_deps edge {0} -> {1}'.format(obj, a_dep)
                     graph.edge(obj, a_dep, label=access,
                                **access_dep_edge_attrs)
         return graph
 
     def draw_dependency_graph(self, filename, format='svg', **graph_kwargs):
         """Draws the dependency graph of the configuration to the given file."""
+        # Default graph style
         graph_style = {'label': '\nConfiguration dependency graph for: '
                                 + self._info.name,
                        'fontsize': str(len(self.deps_graph) / 2),
@@ -852,6 +857,7 @@ class ConfigBuilder(object):
                                                if k not in graph_kwargs['graph_attr']})
         else:
             graph_kwargs['graph_attr'] = graph_style
+
         graph = self.get_dependency_graph_drawing(format=format, **graph_kwargs)
         if graph is None:
             logging.error('Could not import graphviz, drawing failed.')

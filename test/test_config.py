@@ -37,7 +37,8 @@ class TestConfig(SafireTestCase):
 
     def test_parser(self):
         parser = ConfigParser()
-        with open(self.config_file) as config_handle:
+        # Let's work with the most complicated config file we have.
+        with open(self.t2i_config_file) as config_handle:
             conf = parser.parse(config_handle)
 
         # Correct type returned?
@@ -45,9 +46,11 @@ class TestConfig(SafireTestCase):
 
         # All objects parsed?
         self.assertIsInstance(conf.objects, collections.OrderedDict)
-        self.assertEqual(len(conf.objects), 4)
+        self.assertEqual(len(conf.objects), 30)
+
+        # Objects parsed as proper types?
         for name, obj in conf.objects.items():
-            self.assertTrue('_class' in obj)
+            self.assertTrue('_class' in obj or '_init' in obj)
             if '_dependencies' in obj:
                 self.assertIsInstance(obj['_dependencies'], list)
             if '_access_deps' in obj:
@@ -61,6 +64,12 @@ class TestConfig(SafireTestCase):
         self.assertTrue(hasattr(conf, '_builder'))
         self.assertTrue(hasattr(conf, '_loader'))
         self.assertTrue(hasattr(conf, '_persistence'))
+
+        # Check for correctness
+        expected_objects = ['combined']
+        for name in expected_objects:
+            self.assertTrue(name in conf.objects)
+        self.assertTrue(len(conf.objects['combined']['_access_deps']) == 2)
 
     def test_builder(self):
         cparser = ConfigParser()
