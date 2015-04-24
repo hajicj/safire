@@ -349,6 +349,7 @@ import os
 import sys
 import pprint
 import operator
+import re
 
 __author__ = "Jan Hajic jr."
 
@@ -470,7 +471,6 @@ class ConfigParser(object):
     to the config values that the ConfigBuilder will use. It does *not*
     interpret the configuration file (that's the Builder's job).
     """
-
     def parse(self, file):
         """Given a config file (handle), will build the Configuration object."""
         conf = Configuration()
@@ -777,14 +777,14 @@ class ConfigBuilder(object):
         return sorted_graph
 
     def get_dependency_graph_drawing(self, format='svg', **graph_kwargs):
-        """Creates the dependency graph of the configuration.
+        """Creates the dependency graph of the configuration; doesn't render it.
         """
         # graph = depgraph2gvgraph(self.deps_graph, format=format, **graph_kwargs)
         try:
             import graphviz as gv
         except ImportError:
             logging.error('Could not import graphviz, exiting.')
-            return
+            return None
 
         # Drawing style(s)
         block_node_attrs = {'style': 'filled',
@@ -1000,13 +1000,63 @@ class ConfigBuilder(object):
         """Retrieve the actual dependency object signified by ``symbol`` from
         the ``obj`` with the ``name``.
 
-        With blocks: the requested object can be either
+        With blocks: the requested object can be either the ``corpus`` member
+        of a TransformedCorpus, or an ``obj`` member.
         """
         if not self.is_dep_obj_accessible(name, symbol):
-            return None
+            raise ValueError('Dependency {0} not accessible from object {1}.'.format(symbol, name))
         # If obj is a block, the accessible object can be either the previous
         # block, or the block's transformer.
+        logging.debug('Retrieving dep symbol {0}\n\tfrom obj {1}\n'
+                      '\twith name {2}'.format(symbol, obj, name))
+        # TODO: Problem with CompositeCorpus around here.
+        # Currently solved by ugly hack that checks for A=B pattern. Should be
+        # resolved through a better _assembly parsing mechanism, or a different
+        # way of assembling pipelines.
+        #       -- when _combined_ is delegated to [combined], the dependency
+        #          symbol for the dependency of _combined_ ('combined') is
+        #          never found, because it doesn't stick to the corpus/obj
+        #          pattern. The problem is in the _combined_=combined pattern:
+        #          while _combined_ is a block, in reality, it is the [combined]
+        #          obj and _access_deps should be applied.
         if self.is_block(name):
+            logging.debug('Assuming the current obj is a block.')
+            #  -- quick fix: try to detect '_a_=b' assignments and move along
+            #     the dependency chain
+            logging.debug('Detecting a=b direct assignment pattern in assembly.')
+            assembly_code = self.configuration._assembly[name]
+            logging.debug('  Assembly code: {0}'.format(assembly_code))
+            pure_assignment_pattern = re.compile('^([^\[]*)$')
+            # If the block was assigned through a straightforward a=b scheme
+            match = re.match(pure_assignment_pattern, assembly_code)
+            if match:
+                logging.debug('  Match detected! Assigned name: {0}'.format(match.group(1)))
+                assigned_name = match.group(1)
+                _hook_active = True
+                if assigned_name not in self.configuration.objects:
+                    logging.debug('  Assigned name {0} not found among '
+                                  'configuration objects, checking if it is at '
+                                  'least a block.'.format(assigned_name))
+                    if assigned_name not in self.configuration._assembly:
+                        logging.debug('  Assigned name not found among block '
+                                      'names, either. Assignment cannot be'
+                                      ' interpreted by this hook, proceeding '
+                                      'as though nothing was detected.')
+                        _hook_active = False
+                # ...we should search for the dependency in the assigned
+                if _hook_active:
+                    logging.debug('Assuming the dependency we were trying to find'
+                                  ' was caused by the simple assignment in the'
+                                  ' _assembly section of the form A=B, so the'
+                                  ' current object under name A is requesting'
+                                  ' a dependency called B that is in fact the'
+                                  ' same object as the one under name A.')
+                    dep_obj = obj
+                    return dep_obj
+            else:
+                logging.debug('  Assembly code not a simple assignment, '
+                              'proceeding without hook.')
+
             if self.is_block(symbol):
                 dep_obj = obj.corpus
             else:
@@ -1060,6 +1110,8 @@ class ConfigBuilder(object):
                 logging.debug('Current queue:\n{0}'
                               ''.format(pprint.pformat(map(operator.itemgetter(0), obj_queue))))
                 current_symbol, current_obj = obj_queue.pop()
+                logging.debug('Current symbol: {0}, obj: {1}'
+                              ''.format(current_symbol, current_obj))
 
                 # Add to objects dict.
                 self.objects[current_symbol] = current_obj
@@ -1071,7 +1123,8 @@ class ConfigBuilder(object):
                                                                   dep_symbol)
                                     for dep_symbol in current_dep_symbols
                                     if self.is_dep_obj_accessible(current_symbol,
-                                                                  dep_symbol)}
+                                                                  dep_symbol)
+                                    and dep_symbol is not None}
                 logging.debug('Extending dep_objs queue: {0}'.format(current_dep_objs.keys()))
                 obj_queue.extend(current_dep_objs.items())
 

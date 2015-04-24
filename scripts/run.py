@@ -20,6 +20,9 @@ def main(args):
     with open(args.configuration) as config_handle:
         configuration = cparser.parse(config_handle)
 
+    if args.clear:
+        configuration._builder['clear'] = 'True'
+
     logging.info('Building configuration {0}: creating builder...'
                  ''.format(args.configuration))
     builder = ConfigBuilder(configuration)
@@ -46,6 +49,9 @@ def build_argument_parser():
     parser.add_argument('--draw_configuration', action='store',
                         help='Draws the configuration graph to this file in'
                              ' SVG format.')
+    parser.add_argument('--clear', action='store_true',
+                        help='If set, will set the \'clear\' configuration'
+                             ' value in the _builder section to True.')
 
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Turn on INFO logging messages.')
