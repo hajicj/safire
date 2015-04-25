@@ -3,16 +3,56 @@ This module contains classes that ...
 """
 import logging
 import copy
+import gensim
 import safire.utils.transcorp
 from safire.utils import IndexedTransformedCorpus
 
 __author__ = "Jan Hajic jr."
 
 
+class Zipper(gensim.interfaces.TransformationABC):
+    """This transformer combines several pipelines into one. Applying a Zipper
+    to a tuple of pipelines creates a CompositeCorpus block.
+
+    While a Zipper instance should theoretically be independent of what it is
+    actually zipping and this should be determined at the time of the ``_apply``
+    call, in practice, we need to instantiate the zipper with a specific
+    combination of pipelines in mind to avoid a multi-parameter ``__getitem__``
+    call. Therefore, once a Zipper is created, it already knows its output
+    dimension.
+
+    The Zipper works like this::
+
+    >>> x = [[1, 10], [2, 20], [3, 30]]
+    >>> y = [[-1, -10], [-2, -20], [-3, -30]]
+    >>> z = Zipper((x, y))
+    >>> composite = z._apply((x, y))
+    >>> composite[0]
+    ([1, 10], [-1, -10])
+    >>> composite[0:2]
+    [([1, 10], [-1, -10]), ([2, 20], [-2, -20])]
+
+    The Zipper by default returns output structured in tuples that
+    correspond to the structure of the input combination of pipelines.
+    This can be changed using the ``flatten`` parameter::
+
+    >>> z_flatten = Zipper((x, y), flatten=True)
+    >>> composite_flat = z_flatten._apply((x, y))
+    >>> composite_flat[0:2]
+    [[1, 10, -1, -10], [2, 20, -2, -20]]
+
+    **The Zipper expects all its input pipelines to be of the same length.**
+    (The :class:`ReorderingCorpus` is useful to meet this condition.)
+
+    Zippers are an essential part of Safire. Do get to know them.
+    """
+    pass
+
+
 class CompositeCorpus(IndexedTransformedCorpus):
     """Allows combining pipelines from multiple sources into one, like a more
     flexible version of ``itertools.izip()``. A CompositeCorpus can either be
-    created directly, or through a :class:`ZipPipelines` transformer. [NOT
+    created directly, or through a :class:`Zipper` transformer. [NOT
     IMPLEMENTED]
 
     Also allows naming pipelines (this is useful for train/dev/test splits and
@@ -63,7 +103,7 @@ class CompositeCorpus(IndexedTransformedCorpus):
         """
         self.aligned = aligned
         # Check lengths??
-        self.length = len(corpora[0])  # TODO: This is very temporary.
+        self.length = len(corpora[0])  # TODO: This is very ugly.
 
         self.corpus = corpora
         self.obj = None  # No obj so far, waiting to implement ZipPipelines.
