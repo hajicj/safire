@@ -4,8 +4,10 @@ This module contains classes that ...
 import logging
 import copy
 import gensim
+import numpy
+from safire.datasets.transformations import FlattenComposite
 import safire.utils.transcorp
-from safire.utils import IndexedTransformedCorpus
+from safire.utils import IndexedTransformedCorpus, flatten_composite_item
 
 __author__ = "Jan Hajic jr."
 
@@ -46,7 +48,42 @@ class Zipper(gensim.interfaces.TransformationABC):
 
     Zippers are an essential part of Safire. Do get to know them.
     """
-    pass
+    def __init__(self, corpora, flatten=False, dim=None, names=None):
+        # Check that 'corpora' is a tuple
+        if not isinstance(corpora, tuple):
+            raise TypeError('Input to zipper must be a tuple of corpora, got:'
+                            ' {0} with type {1}'.format(corpora, type(corpora)))
+
+        self.flatten = flatten
+        self.names = names
+
+        # Generate proposed dim from corpora
+        proposed_dim = tuple(safire.utils.transcorp.dimension(c) for c in corpora)
+        if dim is not None and dim != proposed_dim:
+            logging.warn('Supplied dimension {0} and proposed dimension {1} do '
+                         'not match, defaulting to supplied dim.'
+                         ''.format(dim, proposed_dim))
+        if dim is None:
+            dim = proposed_dim
+
+        if self.flatten:
+            flat_dim = FlattenComposite.flattened_dimension(dim)
+            dim = flat_dim
+        self.dim = dim
+
+    def __getitem__(self, item):
+        if isinstance(item[0], gensim.interfaces.CorpusABC):
+            return self._apply(item)
+
+        if self.flatten:
+            output = list(flatten_composite_item(item))
+            output = numpy.hstack(output)
+            return output
+        else:
+            return item
+
+    def _apply(self, corpora):
+        return CompositeCorpus(corpora, dim=self.dim, names=self.names)
 
 
 class CompositeCorpus(IndexedTransformedCorpus):
