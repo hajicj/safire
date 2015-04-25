@@ -115,10 +115,12 @@ class SafireTestCase(unittest.TestCase):
             cls.vtcorp.dry_run()
             t_serializer = Serializer(cls.vtcorp, ShardedCorpus,
                                       cls.vtcorp_s_name)
+            cls.vtcorp_serialized = t_serializer[cls.vtcorp]
 
             cls.icorp_s_name = cls.loader.pipeline_serialization_target('.img')
             i_serializer = Serializer(cls.icorp, ShardedCorpus,
                                       cls.icorp_s_name)
+            cls.icorp_serialized = i_serializer[cls.icorp]
 
 
 
