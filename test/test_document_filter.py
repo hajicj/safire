@@ -134,7 +134,6 @@ class TestDocumentFilter(SafireTestCase):
         docs = [d for d in mmcorp]
         print 'Total docs after flattening: {0}'.format(len(docs))
 
-
     def test_flatten_tokens_dryrun(self):
         icorp = ImagenetCorpus(os.path.join(self.loader.root,
                                             self.loader.layout.image_vectors),

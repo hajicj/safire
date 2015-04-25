@@ -38,6 +38,8 @@ class SafireMockCorpus(gensim.interfaces.CorpusABC):
     def __getitem__(self, item):
         if isinstance(item, list):
             return [self.data[i] for i in item]
+        elif isinstance(item, slice):
+            return [self.data[i] for i in xrange(*item.indices(len(self)))]
         else:
             return self.data[item]
 

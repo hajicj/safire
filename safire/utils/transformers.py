@@ -617,6 +617,109 @@ class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
         return orig_iids
 
 
+class ReorderingTransform(gensim.interfaces.TransformationABC):
+    """This transformation allows arbitrary re-ordering of the underlying
+    corpus. No transformation is applied to the content of the data. Note
+    that the transformer does not do anything with individual items, its role
+    is to create the ReorderingCorpus block.
+
+    To apply a re-ordering, you must first supply the mapping of items from
+    the underlying corpus to the new, re-ordered one. This mapping is simply
+    a list of indices. If the original corpus looked like this::
+
+    [['A'], ['B'], ['C']]
+
+    and was re-ordered through this map::
+
+    [1, 0, 0, 2, 1, 2]
+
+    the transformed ReorderingCorpus corpus will look like this::
+
+    [['B'], ['A'], ['A'], ['C'], ['B'], ['C']]
+
+    A good use case is for flattening data sources that are not aligned
+    (for instance, if multiple news articles use the same image but the image
+    appears only once in the image dataset)."""
+    def __init__(self, mapping):
+        """Initializes the reordering transform."""
+        self.mapping = mapping
+
+    def __getitem__(self, item):
+        if isinstance(item, gensim.interfaces.CorpusABC):
+            return self._apply(item)
+        # Duck typing is maybe too risky here?
+        # is_corpus, _ = gensim.utils.is_corpus(item)
+        # if is_corpus:
+        #     return self._apply(item)
+
+        # The basic ReorderingTransformer does not apply any transformation,
+        # but maybe some subclasses will?
+        return item
+
+    def _apply(self, corpus, chunksize=None):
+        return ReorderingCorpus(self, corpus, chunksize)
+
+
+class ReorderingCorpus(IndexedTransformedCorpus):
+    """A pipeline block that handles the re-ordering of items.
+
+    Note that it can only be built over a complete underlying corpus (ideally
+    post-serialization)."""
+    def __init__(self, obj, corpus, chunksize=None):
+        if not isinstance(obj, ReorderingTransform):
+            raise TypeError('ReorderingCorpus may only be initialized by a '
+                            'ReorderingTransform, got obj of type {0} instead.'
+                            ''.format(type(obj)))
+        if not safire.utils.transcorp.is_fully_indexable(corpus):
+            raise ValueError('Supplied corpu {0} is not fully indexable.'
+                             ''.format(corpus))
+
+        self.obj = obj
+        self.corpus = corpus
+
+        # Precompute doc2id, id2doc mappings
+        self.id2doc = collections.defaultdict(str)
+        self.doc2id = collections.defaultdict(set)
+
+        mapping = self.obj.mapping
+        orig_id2doc = safire.utils.transcorp.get_id2doc_obj(corpus)
+        # orig_doc2id = safire.utils.transcorp.get_doc2id_obj(corpus)
+        for iid, orig_iid in enumerate(mapping):
+            if orig_iid not in orig_id2doc:
+                raise ValueError('Invalid reordering supplied for corpus {0}:'
+                                 ' requested iid {1} not available.'
+                                 ''.format(corpus, orig_iid))
+            docname = orig_id2doc[orig_iid]
+            self.id2doc[iid] = docname
+            self.doc2id[docname].add(iid)
+
+    def __getitem__(self, item):
+        if isinstance(item, list):
+            return [self[i] for i in item]
+        elif isinstance(item, slice):
+            return [self[i] for i in xrange(*item.indices(len(self)))]
+
+        if not isinstance(item, int):
+            raise TypeError('Unsupported __getitem__ request type {0} '
+                            '(requested item: {1})'.format(type(item), item))
+
+        mapped_id = self.obj.mapping[item]
+        retrieved = self.corpus[mapped_id]
+        # This currently doesn't do anything,
+        # but we might have other subclasses of the ReorderingTransform
+        # that reorder items might want  to change the output in some
+        # way later.
+        output = self.obj[retrieved]
+        return output
+
+    def __iter__(self):
+        for i in xrange(len(self)):
+            yield self[i]
+
+    def __len__(self):
+        return len(self.obj.mapping)
+
+
 class SplitDocPerFeatureTransform(gensim.interfaces.TransformationABC):
     """Transforms an item into multiple items so that each output item is
     a vector with only one non-zero entry and there is one such vector for
