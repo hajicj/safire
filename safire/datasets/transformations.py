@@ -6,7 +6,7 @@ from gensim.utils import is_corpus
 import itertools
 import numpy
 from safire.datasets.dataset import CompositeDataset
-from safire.data.composite_corpus import CompositeCorpus
+# from safire.data.composite_corpus import CompositeCorpus
 
 from safire.utils import IndexedTransformedCorpus
 from safire.utils import flatten_composite_item

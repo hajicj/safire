@@ -1,0 +1,113 @@
+import itertools
+import collections
+import os
+from safire.data.composite_corpus import CompositeCorpus, Zipper
+from safire.datasets.transformations import FlattenComposite
+from safire.utils import mock_data
+from safire.utils.transcorp import compute_docname_flatten_mapping, dimension
+from safire.utils.transformers import ReorderingTransform, ReorderingCorpus
+
+__author__ = 'Jan Hajic jr'
+
+import unittest
+from test.safire_test_case import SafireTestCase, SafireMockCorpus
+
+############################################################################
+
+# Creating mock data
+dim = 1000
+n_items = 100
+data = mock_data(n_items=n_items, dim=dim, prob_nnz=0.3)
+n_docs = 7
+doclengths = [10, 20, 10, 1, 19, 30, 10]
+docnames = list(itertools.chain(*[['doc{0}'.format(i)
+                                   for _ in xrange(doclengths[i])]
+                                  for i in xrange(len(doclengths))]
+))
+id2doc = collections.defaultdict(str)
+for i in xrange(n_items):
+    id2doc[i] = docnames[i]
+
+mock_corpus = SafireMockCorpus(data=data, dim=dim, id2doc=id2doc)
+
+############################################################################
+
+
+class TestZipper(SafireTestCase):
+    def setUp(self):
+        self.corpus_1 = mock_corpus
+        self.corpus_2 = mock_corpus
+
+        self.zipper = Zipper((self.corpus_1, self.corpus_2))
+        self.zipper_f = Zipper((self.corpus_1, self.corpus_2), flatten=True)
+
+    def tearDown(self):
+        del self.corpus_1
+        del self.corpus_2
+        del self.zipper
+        del self.zipper_f
+
+    def test_init(self):
+        self.assertIsInstance(self.zipper, Zipper)
+
+        # Dimension derived correctly
+        self.assertEqual(self.zipper.dim, (dim, dim))
+        self.assertEqual(self.zipper_f.dim, 2 * dim)
+
+    def test_apply(self):
+        composite = self.zipper._apply((self.corpus_1, self.corpus_2))
+        self.assertIsInstance(composite, CompositeCorpus)
+        self.assertEqual(dimension(composite), self.zipper.dim)
+
+    def test_getitem(self):
+        item = (self.corpus_1[0], self.corpus_2[0])
+        self.assertEqual(item, self.zipper[item])
+
+    def test_getitem_flattened_numpy(self):
+        self.assertTrue(False)
+
+    def test_getitem_flattened_gensim(self):
+        self.assertTrue(False)
+
+    def test_reordering_for_zipper(self):
+        return
+        # Tests flattening texts and images through reordering.
+        mm_data = CompositeCorpus((self.vtcorp_serialized,
+                                   self.icorp_serialized),
+                                  names=('txt', 'img'),
+                                  aligned=False)
+        t2i_indexes = compute_docname_flatten_mapping(
+            mm_data,
+            os.path.join(self.loader.root, self.loader.layout.textdoc2imdoc))
+        flatten = FlattenComposite(mm_data,
+                                   indexes=t2i_indexes,
+                                   structured=True)
+        flattened = flatten[mm_data]
+
+        t_mapping, i_mapping = zip(*t2i_indexes)
+        t_reorder = ReorderingTransform(t_mapping)
+        vtcorp_reordered = t_reorder[self.vtcorp_serialized]
+        i_reorder = ReorderingTransform(i_mapping)
+        icorp_reordered = i_reorder[self.icorp_serialized]
+
+        composite = CompositeCorpus((vtcorp_reordered, icorp_reordered),
+                                    names=('txt', 'img'),
+                                    aligned=True)
+
+        self.assertEqual(len(composite), len(t2i_indexes))
+        self.assertEqual(len(composite), len(flattened))
+        for i in xrange(len(composite)):
+            # There's a problem with formats. From the aligned composite
+            # corpus, we get a tuple; from the flattened structured corpus,
+            # we get a list. Currently we're checking against individual
+            # values.
+            for c, f in zip(composite[i], flattened[i]):
+                self.assertEqual(c.all(), f.all())
+
+if __name__ == '__main__':
+    suite = unittest.TestSuite()
+    loader = unittest.TestLoader()
+    tests = loader.loadTestsFromTestCase(TestZipper)
+    suite.addTest(tests)
+    runner = unittest.TextTestRunner()
+    runner.run(suite)

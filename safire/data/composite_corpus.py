@@ -5,7 +5,7 @@ import logging
 import copy
 import gensim
 import numpy
-from safire.datasets.transformations import FlattenComposite
+import safire.datasets.transformations
 import safire.utils.transcorp
 from safire.utils import IndexedTransformedCorpus, flatten_composite_item
 
@@ -67,15 +67,17 @@ class Zipper(gensim.interfaces.TransformationABC):
             dim = proposed_dim
 
         if self.flatten:
-            flat_dim = FlattenComposite.flattened_dimension(dim)
+            flat_dim = safire.datasets.transformations.FlattenedDatasetCorpus.flattened_dimension(dim)
             dim = flat_dim
         self.dim = dim
 
     def __getitem__(self, item):
+        # The check for _apply is quite unreliable.
         if isinstance(item[0], gensim.interfaces.CorpusABC):
             return self._apply(item)
 
         if self.flatten:
+            # Only works for ndarrays so far, support for gensim not implemented
             output = list(flatten_composite_item(item))
             output = numpy.hstack(output)
             return output
