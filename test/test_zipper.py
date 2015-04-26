@@ -90,20 +90,15 @@ class TestZipper(SafireTestCase):
         expected = numpy.array([1, 3, 0, 0, 5, 0, 0, 2, 0, 1, 0, 1])
         self.assertEqual(expected.all(), Zipper.flatten_numpy((item_1, item_2)).all())
 
-    def test_reordering_for_zipper(self):
-        return
+    def test_zipper_and_composite(self):
         # Tests flattening texts and images through reordering.
-        mm_data = CompositeCorpus((self.vtcorp_serialized,
-                                   self.icorp_serialized),
-                                  names=('txt', 'img'),
-                                  aligned=False)
+        zipper_mm = Zipper((self.vtcorp_serialized, self.icorp_serialized),
+                           names=('txt', 'img'), flatten=False)
+        mm_data = zipper_mm._apply((self.vtcorp_serialized,
+                                    self.icorp_serialized))
         t2i_indexes = compute_docname_flatten_mapping(
             mm_data,
             os.path.join(self.loader.root, self.loader.layout.textdoc2imdoc))
-        flatten = FlattenComposite(mm_data,
-                                   indexes=t2i_indexes,
-                                   structured=True)
-        flattened = flatten[mm_data]
 
         t_mapping, i_mapping = zip(*t2i_indexes)
         t_reorder = ReorderingTransform(t_mapping)
@@ -111,19 +106,19 @@ class TestZipper(SafireTestCase):
         i_reorder = ReorderingTransform(i_mapping)
         icorp_reordered = i_reorder[self.icorp_serialized]
 
-        composite = CompositeCorpus((vtcorp_reordered, icorp_reordered),
-                                    names=('txt', 'img'),
-                                    aligned=True)
+        zipper = Zipper((vtcorp_reordered, icorp_reordered),
+                        names=('txt', 'img'))
+        composite = zipper._apply((vtcorp_reordered, icorp_reordered))
+        single_item = composite[0]
+        sliced_item = composite[:4]
+        list_item = composite[[0, 4, 2, 6]]
 
-        self.assertEqual(len(composite), len(t2i_indexes))
-        self.assertEqual(len(composite), len(flattened))
-        for i in xrange(len(composite)):
-            # There's a problem with formats. From the aligned composite
-            # corpus, we get a tuple; from the flattened structured corpus,
-            # we get a list. Currently we're checking against individual
-            # values.
-            for c, f in zip(composite[i], flattened[i]):
-                self.assertEqual(c.all(), f.all())
+        zipper_f = Zipper((vtcorp_reordered, icorp_reordered),
+                          names=('txt', 'img'), flatten=True)
+        composite_f = zipper_f._apply((vtcorp_reordered, icorp_reordered))
+        single_item_f = composite_f[0]
+        sliced_item_f = composite_f[:4]
+        list_item_f = composite_f[[0, 4, 2, 6]]
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
