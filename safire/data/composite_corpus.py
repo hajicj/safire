@@ -82,8 +82,7 @@ class Zipper(gensim.interfaces.TransformationABC):
         if self.flatten:
             if isinstance(item[0], numpy.ndarray):
                 # Only works for ndarrays so far, support for gensim not implemented
-                output = list(flatten_composite_item(item))
-                output = numpy.hstack(output)
+                output = self.flatten_numpy(item)
             else:
                 output = self.flatten_gensim(item, self.orig_dim)
             return output
