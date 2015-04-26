@@ -5,6 +5,7 @@ transformer components, mainly used for miscellaneous preprocessing (scaling,
 normalization, sigmoid nonlinearity, etc.).
 
 """
+import collections
 import itertools
 import logging
 import operator
@@ -13,10 +14,10 @@ import gensim
 from gensim.interfaces import TransformedCorpus
 from gensim.similarities import Similarity
 import numpy
-#from safire.utils.transcorp import dimension
-from safire.data.filters.basefilter import BaseFilter
+import scipy.sparse
 import safire.datasets.dataset
 from safire.utils import gensim2ndarray, IndexedTransformedCorpus
+from safire.utils.matutils import sum_gensim_columns
 import safire.utils.transcorp
 
 from sklearn.preprocessing import StandardScaler
@@ -177,10 +178,10 @@ class GeneralFunctionTransform(gensim.interfaces.TransformationABC):
         if is_corpus:
             return self._apply(bow, chunksize)
 
-        if len(bow) == 0:
-            logging.debug('Running empty doc through GeneralFunctionTransform.')
-        else:
-            logging.debug('-- GeneralFunctionTransform. doc length=%d --' % len(bow))
+        # if len(bow) == 0:
+        #     logging.debug('Running empty doc through GeneralFunctionTransform.')
+        # else:
+        #     logging.debug('-- GeneralFunctionTransform. doc length=%d --' % len(bow))
 
         oK = self.o_mul
         oC = self.o_add
@@ -237,6 +238,14 @@ class LeCunnVarianceScalingTransform(gensim.interfaces.TransformationABC):
         #if numpy.random.random() < 0.001:
         #    print 'UCov. Transformation:\n%s\n%s' % (bow[:10], out[:10])
         return out
+
+
+class TfidfModel(gensim.models.TfidfModel):
+    """Overrides _apply to provide IndexedTransformedCorpus, if possible."""
+    def _apply(self, corpus, chunksize=None):
+        return safire.utils.transcorp.smart_apply_transcorp(self,
+                                                            corpus,
+                                                            chunksize=chunksize)
 
 
 class StandardScalingTransformer(gensim.interfaces.TransformationABC):
@@ -304,7 +313,7 @@ class Corpus2Dense(gensim.interfaces.TransformationABC):
             return self._apply(item)
 
         # need to add logic for one item vs. an array of items?
-        #print 'Transforming item: {0}'.format(item)
+        # print 'Transforming item: {0}'.format(item)
         return gensim2ndarray(item, self.dim)
 
 
@@ -365,4 +374,470 @@ class SimilarityTransformer(gensim.interfaces.TransformationABC):
     def _apply(self, corpus, chunksize=None):
 
         return safire.utils.transcorp.smart_apply_transcorp(self, corpus)
+
+
+class ItemAggregationTransform(gensim.interfaces.TransformationABC):
+    """The ItemAggregationTransform combines items that map to the same source
+    document through the input pipeline's ``id2doc`` mapping.
+
+    The specific method of combining items belonging to the same source document
+    is chosen at initialization/subclassed (TBD), by default the aggregator sums
+    the individual items by column. Combining a set of items is handled by its
+    ``__getitem__()`` method.
+
+    During iteration, the aggregator buffers **consecutive** items that map to
+    the same source document. Once the buffer is full, it applies the method of
+    aggregation and yields the resulting item.
+
+    .. note::
+
+        This does *not* guarantee that there will be one item per source
+        document -- the aggregator combines runs of *consecutive* items from the
+        same source doc, so if the input corpus is interleaved, there will be
+        multiple items for the same source document. This strategy is chosen to
+        make the transformation work without reading the entire input pipeline.
+
+        However, note that this breaks down when CompositeCorpus outputs are
+        being aggregated (and indexes are used for flattening)!
+
+    The transformer again has its own corpus, the DocAggregatedCorpus, as it
+    alters iteration behavior.
+
+    """
+    def __init__(self, average=False):
+        self.average = average
+
+    def _apply(self, corpus, chunksize=None):
+        return ItemAggregationCorpus(self, corpus, chunksize=chunksize)
+
+    def __getitem__(self, itembuffer):
+        """In the default implementation, sums the supplied item buffer
+        column-wise."""
+        if isinstance(itembuffer, gensim.interfaces.CorpusABC):
+            return self._apply(itembuffer)
+
+        return self.sum(itembuffer, average=self.average)
+
+    @staticmethod
+    def sum(aggregated_items, average=False):
+        """Performs a column-wise sum of the given set of items. If ``averaged``
+        is set to True, will also divide the result by the number of items in
+        the buffer."""
+        if isinstance(aggregated_items, numpy.ndarray):
+            total = numpy.sum(aggregated_items, axis=0)
+            if average:
+                return total / aggregated_items.shape[0]
+            else:
+                return total
+        elif isinstance(aggregated_items, scipy.sparse.csr_matrix):
+            logging.critical('Support for aggregating scipy sparse matrices not'
+                             ' implemented yet.')
+            raise NotImplementedError()
+        else:
+            # List of gensim sparse vectors?
+            if safire.utils.is_gensim_batch(aggregated_items):
+                # List of lists of gensim sparse vectors?
+                total = sum_gensim_columns(aggregated_items)
+            elif safire.utils.is_list_of_gensim_batches(aggregated_items):
+                # Dealing with list of gensim batches: flatten it by one level
+                flattened_items = list(itertools.chain(*aggregated_items))
+                total = sum_gensim_columns(flattened_items)
+            else:
+                raise ValueError('Cannot deal with the following input: {0}'
+                                 ''.format(aggregated_items))
+            if average:
+                length = float(len(aggregated_items))
+                total = [(key, value / length) for key, value in total]
+            return total
+
+
+class ItemAggregationCorpus(gensim.interfaces.TransformedCorpus):
+    """This TransformedCorpus block aggregates items that come from the same
+    source document. See :class:`ItemAggregationTransform` for a descriptiont
+    of how the corpus behaves.
+
+    This is a utility class that should not be initialized outside the _apply()
+    method of ItemAggregationTransform."""
+    def __init__(self, obj, corpus, chunksize=None):
+        # Chunksize is ignored.
+        self.obj = obj
+        self.corpus = corpus
+        self.dim = safire.utils.transcorp.dimension(corpus)
+
+        self.orig_id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
+        self.orig_doc2id = safire.utils.transcorp.get_id2doc_obj(self.corpus)
+
+        # Compute length: it's NOT the number of distinct keys, as the
+        # aggregator combines only items from consecutive items with the same
+        # source document.
+        #
+        # In the same cycle, we can pre-compute which original iids will match
+        # to which new iid, thus enabling __getitem__ operation.
+        self.length = 0
+        self.orig2new_iid = collections.defaultdict(int)
+        self.new2orig_iid = collections.defaultdict(set)
+
+        # What the document -- iid mapping looks like *after* aggregation.
+        self.doc2id = collections.defaultdict(set)
+        self.id2doc = collections.defaultdict(str)
+
+        logging.debug('Aggregator pre-computing doc/id mappings from corpus {0}...'.format(safire.utils.transcorp.log_corpus_stack(corpus)))
+        prev_doc = None
+        for orig_iid, doc in sorted(self.orig_id2doc.items(),
+                                    key=operator.itemgetter(0)):
+            # If breaking a run of consecutive original IIDs that map to the
+            # same source document: add 1 to length, as we will be outputting
+            # the combination of buffer items at that point.
+            self.orig2new_iid[orig_iid] = self.length
+            self.new2orig_iid[self.length].add(orig_iid)
+            if doc != prev_doc and prev_doc is not None:
+                # Compute the id2doc, doc2id mapping as well
+                self.id2doc[self.length] = prev_doc
+                self.doc2id[prev_doc].add(self.length)
+                self.length += 1
+            prev_doc = doc
+        # Imagine a corpus with items from only one source document.
+        # After iterating through it, self.length will never have been
+        # incremented. (The new <--> orig iid mappings will use 0 as the new
+        # iid for all original items, which is correct.) However, the total
+        # length of the aggregated corpus will be 1.
+        self.id2doc[self.length] = prev_doc
+        self.doc2id[prev_doc].add(self.length)
+        self.length += 1
+
+        logging.debug('After pre-computing:\n\tLength: {0}\n\tdoc2id: {1}\n\t'
+                      'id2doc: {2}'.format(len(self), self.doc2id, self.id2doc))
+
+    def __iter__(self):
+        # Reset doc2id/id2doc mapping
+        self.doc2id = collections.defaultdict(set)
+        self.id2doc = collections.defaultdict(str)
+
+        itembuffer = []
+        output_iid = 0
+        # orig_id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
+
+        # current_docname is the docname we are currently aggregating items for.
+        current_docname = None
+
+        logging.debug('Aggregator: starting iteration.')
+        for iid, item in enumerate(self.corpus):
+            # docname is the document name for the current item.
+            docname = self.orig_id2doc[iid]
+            logging.debug('Processing item with docname: {0}'.format(docname))
+            # __id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
+            # print 'Original id2doc: id {0}/len {1}, corpus id2doc: id {2}/len {3}'.format(id(orig_id2doc), len(orig_id2doc), id(__id2doc), len(__id2doc))
+            # If the underlying corpus is only being built, there are no
+            # original docnames to speak of and we'll need to look up the
+            # docname from the corpus, not from our snapshot into the corpus
+            # at initialization time. This is inefficient, because we have to
+            # look up the updated id2doc object each time.
+            if docname == current_docname:
+                itembuffer.append(item)
+            else:
+                if current_docname is None:
+                    current_docname = docname
+                    itembuffer.append(item)
+                else:
+                    # These mappings are created for the output item
+                    self.doc2id[current_docname].add(output_iid)
+                    self.id2doc[output_iid] = current_docname
+                    # print 'Document {0}: Yielding itembuffer of length {1}'.format(current_docname, len(itembuffer))
+                    yield self.obj[itembuffer]
+                    output_iid += 1
+                    current_docname = docname
+                    itembuffer = [item]
+
+        # Last set of items
+        self.doc2id[current_docname].add(output_iid)
+        self.id2doc[output_iid] = current_docname
+        # print 'Document {0}: Yielding itembuffer of length {1}'.format(current_docname, len(itembuffer))
+        logging.debug('Final doc2id of aggregator: {0}'.format(self.doc2id))
+        yield self.obj[itembuffer]
+
+    def __getitem__(self, item):
+        # How to support indexing?
+        # - Precompute which original item IDs are
+        #   mapped to which aggregated item IDs. Then, if the underlying corpus
+        #   is indexable, combine the requested original IDs.
+        # print 'Total input iids for source iids {0}: {1}\n{2}' \
+        #       ''.format(item,
+        #                 len(self.iid2source_iids(item)),
+        #                 self.iid2source_iids(item))
+        logging.debug('Aggregator: retrieving item {0}'.format(item))
+        if isinstance(item, int):
+            itembuffer = self.iid2items(item)
+        elif isinstance(item, slice):
+            itembuffer = [self[i] for i in xrange(*item.indices(len(self)))]
+            return itembuffer  # Return without aggregation - already aggregated
+        elif isinstance(item, list):
+            itembuffer = [self[i] for i in item]
+            return itembuffer  # Return without aggregateion - already aggregated
+        else:
+            logging.critical('Cannot aggregate batch over indices of type {0}'
+                             ''.format(type(item)))
+            raise NotImplementedError()
+        # logging.debug('Returning itembuffer from request {0}:\n' \
+        #               'Indices: {1}\nValue: {2}'.format(item,
+        #                                                 self.iid2source_iids(item),
+        #                                                 itembuffer))
+        return self.obj[itembuffer]
+
+    def __len__(self):
+        return len(self.id2doc)
+
+    def iid2items(self, new_iid):
+        """Returns the set of input corpus items that correspond to the given
+        new iid.
+        """
+        orig_iids = sorted(self.new2orig_iid[new_iid])
+        if len(orig_iids) == 0:
+            return []
+        items = self.corpus[orig_iids[0]:orig_iids[-1]]
+        return items
+
+    def iid2source_iids(self, new_iid):
+        """Returns the list of source corpus iids for the given iid. Can also
+        work with a slice or list.
+        """
+        if isinstance(new_iid, int):
+            orig_iids = sorted(self.new2orig_iid[new_iid])
+        elif isinstance(new_iid, list):
+            orig_iids = list(itertools.chain(*[self.new2orig_iid[i]
+                                               for i in new_iid]))
+        elif isinstance(new_iid, slice):
+            orig_iids = list(itertools.chain(
+                *[self.new2orig_iid[i]
+                  for i in xrange(*new_iid.indices(len(self)))]
+            ))
+        else:
+            raise TypeError('Can only find new IIDs for an integer, list or '
+                            'slice request, not for request of type {0}'
+                            ''.format(type(new_iid)))
+        return orig_iids
+
+
+class ReorderingTransform(gensim.interfaces.TransformationABC):
+    """This transformation allows arbitrary re-ordering of the underlying
+    corpus. No transformation is applied to the content of the data. Note
+    that the transformer does not do anything with individual items, its role
+    is to create the ReorderingCorpus block.
+
+    To apply a re-ordering, you must first supply the mapping of items from
+    the underlying corpus to the new, re-ordered one. This mapping is simply
+    a list of indices. If the original corpus looked like this::
+
+    [['A'], ['B'], ['C']]
+
+    and was re-ordered through this map::
+
+    [1, 0, 0, 2, 1, 2]
+
+    the transformed ReorderingCorpus corpus will look like this::
+
+    [['B'], ['A'], ['A'], ['C'], ['B'], ['C']]
+
+    A good use case is for flattening data sources that are not aligned
+    (for instance, if multiple news articles use the same image but the image
+    appears only once in the image dataset)."""
+    def __init__(self, mapping):
+        """Initializes the reordering transform."""
+        self.mapping = mapping
+
+    def __getitem__(self, item):
+        if isinstance(item, gensim.interfaces.CorpusABC):
+            return self._apply(item)
+        # Duck typing is maybe too risky here?
+        # is_corpus, _ = gensim.utils.is_corpus(item)
+        # if is_corpus:
+        #     return self._apply(item)
+
+        # The basic ReorderingTransformer does not apply any transformation,
+        # but maybe some subclasses will?
+        return item
+
+    def _apply(self, corpus, chunksize=None):
+        return ReorderingCorpus(self, corpus, chunksize)
+
+
+class ReorderingCorpus(IndexedTransformedCorpus):
+    """A pipeline block that handles the re-ordering of items.
+
+    Note that it can only be built over a complete underlying corpus (ideally
+    post-serialization)."""
+    def __init__(self, obj, corpus, chunksize=None):
+        if not isinstance(obj, ReorderingTransform):
+            raise TypeError('ReorderingCorpus may only be initialized by a '
+                            'ReorderingTransform, got obj of type {0} instead.'
+                            ''.format(type(obj)))
+        if not safire.utils.transcorp.is_fully_indexable(corpus):
+            raise ValueError('Supplied corpu {0} is not fully indexable.'
+                             ''.format(corpus))
+
+        self.obj = obj
+        self.corpus = corpus
+
+        # Precompute doc2id, id2doc mappings
+        self.id2doc = collections.defaultdict(str)
+        self.doc2id = collections.defaultdict(set)
+
+        mapping = self.obj.mapping
+        orig_id2doc = safire.utils.transcorp.get_id2doc_obj(corpus)
+        # orig_doc2id = safire.utils.transcorp.get_doc2id_obj(corpus)
+        for iid, orig_iid in enumerate(mapping):
+            if orig_iid not in orig_id2doc:
+                raise ValueError('Invalid reordering supplied for corpus {0}:'
+                                 ' requested iid {1} not available.'
+                                 ''.format(corpus, orig_iid))
+            docname = orig_id2doc[orig_iid]
+            self.id2doc[iid] = docname
+            self.doc2id[docname].add(iid)
+
+    def __getitem__(self, item):
+        if isinstance(item, list):
+            return [self[i] for i in item]
+        elif isinstance(item, slice):
+            return [self[i] for i in xrange(*item.indices(len(self)))]
+
+        if not isinstance(item, int):
+            raise TypeError('Unsupported __getitem__ request type {0} '
+                            '(requested item: {1})'.format(type(item), item))
+
+        mapped_id = self.obj.mapping[item]
+        retrieved = self.corpus[mapped_id]
+        # This currently doesn't do anything,
+        # but we might have other subclasses of the ReorderingTransform
+        # that reorder items might want  to change the output in some
+        # way later.
+        output = self.obj[retrieved]
+        return output
+
+    def __iter__(self):
+        for i in xrange(len(self)):
+            yield self[i]
+
+    def __len__(self):
+        return len(self.obj.mapping)
+
+
+class SplitDocPerFeatureTransform(gensim.interfaces.TransformationABC):
+    """Transforms an item into multiple items so that each output item is
+    a vector with only one non-zero entry and there is one such vector for
+    each non-zero entry in the input vector.
+
+    Note that this does *not* in any way reflect the value at the given
+    coordinate, so passing a corpus through this transformer is not equivalent
+    to converting for example a document to tokens in case there is a token
+    with frequency higher than 1 in the document.
+    """
+    def __init__(self):
+        pass
+
+    def _apply(self, corpus, chunksize=None):
+        return SplitDocPerFeatureCorpus(self, corpus, chunksize=chunksize)
+
+
+class SplitDocPerFeatureCorpus(gensim.interfaces.TransformedCorpus):
+    def __init__(self, obj, corpus, chunksize=None):
+        if not safire.utils.transcorp.is_fully_indexable(corpus):
+            logging.warn('Initializing splitter corpus without a fully'
+                         ' indexable input corpus, __getitem__ may not work.'
+                         ' (Input corpus type: {0})'.format(type(corpus)))
+        self.corpus = corpus
+        self.obj = obj
+        self.chunksize = chunksize
+
+        # Initialize old to new iid mapping.
+        self.new2orig_iids = collections.defaultdict(int)
+        self.orig2new_iids = collections.defaultdict(set)
+
+        self.id2doc = collections.defaultdict(str)
+        self.doc2id = collections.defaultdict(set)
+
+        # Can we precompute the id2doc/doc2id mapping? No: the iids depend on
+        # the size of the input vector.
+
+        self.orig_id2doc = safire.utils.transcorp.get_id2doc_obj(self.corpus)
+        self.orig_doc2id = safire.utils.transcorp.get_doc2id_obj(self.corpus)
+
+    def __iter__(self):
+        current_iid = 0
+        orig_iid = 0
+        for item in self.corpus:
+            # Gensim corpora
+            if isinstance(item, list):
+                if safire.utils.is_gensim_vector(item):
+                    current_doc = self.orig_id2doc[orig_iid]
+                    for entry in item:
+                        self.new2orig_iids[current_iid] = orig_iid
+                        self.orig2new_iids[orig_iid].add(current_iid)
+                        self.id2doc[current_iid] = current_doc
+                        self.doc2id[current_doc].add(current_iid)
+                        yield [entry]
+                        current_iid += 1
+                    orig_iid += 1
+                # Shouldn't happen..?
+                elif safire.utils.is_gensim_batch(item):
+                    for row in item:
+                        current_doc = self.orig_id2doc[orig_iid]
+                        for entry in row:
+                            self.new2orig_iids[current_iid] = orig_iid
+                            self.orig2new_iids[orig_iid].add(current_iid)
+                            self.id2doc[current_iid] = current_doc
+                            self.doc2id[current_doc].add(current_iid)
+                            yield [entry]
+                            current_iid += 1
+                        orig_iid += 1
+                elif safire.utils.is_list_of_gensim_batches(item):
+                    raise TypeError('Got list of gensim batches, expected'
+                                    ' at most a gensim batch.')
+                else:
+                    raise TypeError('Got list, but with unrecognizable content'
+                                    ' type. Item: {0}'.format(item))
+            # Dense corpora. Note that this transformation is very inefficient
+            # for dense corpora.
+            elif isinstance(item, numpy.ndarray):
+                if len(item.shape) >= 2:
+                    for row in item:
+                        current_doc = self.orig_id2doc[orig_iid]
+                        output = numpy.zeros(row.shape)
+                        for idx, entry in enumerate(row):
+                            output[idx] = entry
+                            self.new2orig_iids[current_iid] = orig_iid
+                            self.orig2new_iids[orig_iid].add(current_iid)
+                            self.id2doc[current_iid] = current_doc
+                            self.doc2id[current_doc].add(current_iid)
+                            yield output
+                            current_iid += 1
+                            orig_iid += 1
+                            output[idx] = 0.0
+                else:
+                    # Yield by coordinate, idividual items
+                    output = numpy.zeros(item.shape)
+                    current_doc = self.orig_id2doc[orig_iid]
+                    for idx, entry in enumerate(row):
+                        output[idx] = entry
+                        self.new2orig_iids[current_iid] = orig_iid
+                        self.orig2new_iids[orig_iid].add(current_iid)
+                        self.id2doc[current_iid] = current_doc
+                        self.doc2id[current_doc].add(current_iid)
+                        yield output
+                        current_iid += 1
+                        orig_iid += 1
+                        output[idx] = 0.0
+            else:
+                raise TypeError('Unsupported corpus item type: {0}'
+                                ''.format(type(item)))
+        self.length = current_iid
+
+    def __getitem__(self, key):
+        # Problem with __getitem__
+        if isinstance(key, slice):
+            pass
+
+        if isinstance(key, int):
+            pass
+
+    def __len__(self):
+        return self.length
 

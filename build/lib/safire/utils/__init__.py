@@ -21,6 +21,7 @@ from itertools import chain
 from collections import deque
 
 from gensim.matutils import full2sparse, sparse2full, corpus2dense
+import itertools
 
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
@@ -404,8 +405,6 @@ def shuffle_together(*lists):
     random.shuffle(zipped_lists)
     unzipped_lists = map(list, zip(*zipped_lists))
 
-    #print unzipped_lists
-
     return unzipped_lists
 
 
@@ -429,7 +428,7 @@ def iter_sample_fast(iterable, samplesize):
 
 
 def flatten_composite_item(item):
-    """Simply flattens a (recursive) tuple of ndarrays. Is a generator,
+    """Unrolls a (recursive) tuple of ndarrays. Is a generator,
     so you have to use ``list(flatten_composite_item(item))``.
 
     >>> x = numpy.array([1, 2, 3, 4])
@@ -800,6 +799,156 @@ def gensim2ndarray(corpus, dim, num_docs=None, dtype=numpy.float32):
     return corpus2dense(corpus, dim, num_docs=num_docs, dtype=dtype).T
 
 
+# Checks list of gensim sparse vectors vs. list of lists of gensim sparse
+# vectors
+def is_gensim_vector(data, strict=False):
+    """Checks whether the given data is a gensim sparse vector."""
+    if not isinstance(data, list):
+        return False
+    if not len(data) > 0:
+        return True
+    if strict:
+        for d in data:
+            if not (isinstance(d, tuple) and len(d) == 2):
+                return False
+            if not isinstance(d[0], int):
+                return False
+            if not (isinstance(d[1], int) or isinstance(d[1], float)):
+                return False
+    else:
+        if not isinstance(data[0], tuple):
+            return False
+    return True
+
+
+def is_gensim_batch(data, strict=False):
+    """Checks whether the given data is a gensim batch (list of gensim sparse
+    vectors).
+
+    >>> data = [[(0, 1), (1, 1), (2, 4)], [(1, 1), (3, 2), (5, 1)]]
+    >>> is_gensim_batch(data)
+    True
+    >>> other_data = [[[(0, 1), (1, 1), (2, 4)]], [[(1, 1), (3, 2), (5, 1)]]]
+    >>> is_gensim_batch(other_data)
+    False
+
+    Note that unless ``strict`` is set, the function does not check that each
+    member of each (potential) sparse vector is a gensim ``(key, value)`` pair,
+    it will only check the first member of each row. (Using ``strict`` should
+    not be necessary when checking the output of a safire pipeline.)
+
+    >>> data = [[(0, 1), 'a']]
+    >>> is_gensim_batch(data)
+    True
+    >>> is_gensim_batch(data, strict=True)
+    False
+
+    :param data: Some data to verify.
+
+    :param strict: When set, will check each individual (key, value) pair in
+        the given batch. This can be very slow and is usually not necessary if
+        the input data is an output of a safire pipeline.
+
+    :return: ``True`` or ``False``.
+    """
+    if not isinstance(data, list):
+        return False
+    for row in data:
+        if not isinstance(row, list):
+            return False
+        if len(row) > 0:
+            if strict is True:
+                for item in row:
+                    if not isinstance(item, tuple) or not len(item) == 2:
+                        return False
+                    if not isinstance(item[0], int):
+                        return False
+                    if not isinstance(item[1], int) or isinstance(item[1], float):
+                        return False
+            else:
+                if not isinstance(row[0], tuple) or not len(row[0]) == 2:
+                    return False
+    return True
+
+
+def is_list_of_gensim_batches(data, strict=False):
+    """Checks that the given data is a list of gensim batches (where a gensim
+    batch is defined as an object that passes the ``is_gensim_batch()`` check).
+
+    Useful in safire for detecting an "over-batched" output: in a situation
+    where we are iterating one by one over a pipeline that produces a batch even
+    for requests of size 1 and storing these length-1 batches in a list.
+
+    >>> data = [[(0, 1), (1, 1), (2, 4)], [(1, 1), (3, 2), (5, 1)]]
+    >>> is_list_of_gensim_batches(data)
+    False
+    >>> other_data = [[[(0, 1), (1, 1), (2, 4)]], [[(1, 1), (3, 2), (5, 1)]]]
+    >>> is_list_of_gensim_batches(other_data)
+    True
+
+    :param data: Some data to verify.
+
+    :param strict: If set, will check elements of ``data`` for being strict
+        gensim batches.
+
+    :return: True or False
+    """
+    if not isinstance(data, list):
+        return False
+    for item in data:
+        if not is_gensim_batch(item, strict=strict):
+            return False
+    return True
+
+
+def compact_list_of_gensim_batches(data, strict_verify=False):
+    """Combines a list of gensim batches into a single gensim batch.
+
+    >>> data = [[[(0, 1), (1, 1), (2, 4)]], [[(1, 1), (3, 2), (5, 1)]]]
+    >>> is_list_of_gensim_batches(data)
+    True
+    >>> compact_list_of_gensim_batches(data)
+    [[(0, 1), (1, 1), (2, 4)], [(1, 1), (3, 2), (5, 1)]]
+
+    :param data: A list of gensim batches.
+
+    :param strict_verify: Set to True if you want a strict verification that the
+        input is a gensim batch.
+
+    :return: A gensim batch
+    """
+    if not is_list_of_gensim_batches(data, strict=strict_verify):
+        raise ValueError('Input is not a list of gensim batches. Input:\n{0}'
+                         ''.format(data))
+    batch = list(itertools.chain(*data))
+    return batch
+
+
+def gensim_batch_nth_member(data, n):
+    """Returns the n-th element in a gensim batch.
+
+    >>> data = [[(0, 1), (1, 1), (2, 4)], [(1, 1), (3, 2), (5, 1)]]
+    >>> gensim_batch_nth_member(data, 3)
+    (1, 1)
+
+    If ``n`` is larger than available data, will raise an IndexError, just as
+    a list.
+    """
+    remaining = n
+    total = 0
+    for row in data:
+        rlen = len(row)
+        total += rlen
+        if rlen > remaining:
+            return row[remaining]
+        else:
+            remaining -= rlen
+    if n > 0:
+        raise IndexError('Too high index specified: {0}, total: {1}'
+                         ''.format(n, total))
+    raise ValueError('Wrong input (negative?): {0}'.format(n))
+
+
 # Parsing some elementary data files
 def parse_textdoc2imdoc_map(textdoc2imdoc):
     """Given a file with tab-separated docname/imagename pairs, returns
@@ -854,12 +1003,18 @@ class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):
 
     def __getitem__(self, item):
 
-        #logging.debug('Accessing item: {0}'.format(item))
+        # logging.debug('  ITrCorpAccessing item: {0}'.format(item))
+        if isinstance(item, list):
+            # logging.debug('  ...processing as list.')
+            return [self[i] for i in item]
+        if isinstance(item, slice):
+            # logging.debug('  ...processing as slice.')
+            return [self[i] for i in xrange(*item.indices(len(self)))]
 
         retrieved = self.corpus[item]
-        #logging.debug('Retrieved: {0}'.format(retrieved))
+        # logging.debug('  ITrCorp Retrieved: {0}'.format(retrieved))
 
         output = self.obj[retrieved]
-        #logging.debug('Output: {0}'.format(output))
+        # logging.debug('  ITrCorp Output: {0}'.format(output))
 
         return output

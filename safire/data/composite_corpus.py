@@ -6,7 +6,7 @@ import copy
 import gensim
 import itertools
 import numpy
-import safire.datasets.transformations
+# import safire.datasets.transformations
 import safire.utils.transcorp
 from safire.utils import IndexedTransformedCorpus, flatten_composite_item
 
@@ -70,7 +70,7 @@ class Zipper(gensim.interfaces.TransformationABC):
         self.orig_dim = dim
 
         if self.flatten:
-            flat_dim = safire.datasets.transformations.FlattenedDatasetCorpus.flattened_dimension(dim)
+            flat_dim = safire.utils.transcorp.flattened_dimension(dim)
             dim = flat_dim
         self.dim = dim
 

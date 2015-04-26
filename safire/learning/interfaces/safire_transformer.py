@@ -19,7 +19,7 @@ import theano.printing
 import safire
 from safire.datasets.dataset import DatasetABC
 
-from safire.learning.interfaces import ModelHandle
+from safire.learning.interfaces.model_handle import ModelHandle
 from safire.utils import profile_run, gensim2ndarray, IndexedTransformedCorpus
 from safire.utils.transcorp import smart_apply_transcorp
 

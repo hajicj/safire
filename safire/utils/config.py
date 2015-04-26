@@ -1266,7 +1266,8 @@ class ConfigBuilder(object):
     @staticmethod
     def _execute_import(imported):
         imported_name = imported
-        # print 'Importing: {0}'.format(imported)
+        logging.debug('Executing import: {0}'.format(imported))
+        # print 'Executing import: {0}'.format(imported)
         try:
             imported_obj = __import__(imported)
             # The imported_obj is the root module (e.g. for
@@ -1318,7 +1319,7 @@ class ConfigBuilder(object):
         # Pull in classes used during initialization. Only use them in local
         # context, don't pollute sys.modules!
         ### DEBUG
-        #print 'Executing init for object:\n{0}'.format(pprint.pformat(obj))
+        # print 'Executing init for object:\n{0}'.format(pprint.pformat(obj))
         if '_import' in obj:
             for imported in obj['_import']:
                 # Importing a module:

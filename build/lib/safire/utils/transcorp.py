@@ -31,6 +31,7 @@ import scipy.sparse
 from safire.data import FrequencyBasedTransformer, VTextCorpus
 import safire.data.serializer
 import safire.data.sharded_corpus
+import safire.data.composite_corpus
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
@@ -91,8 +92,12 @@ def get_id2word_obj(corpus):
 
 def get_id2doc_obj(corpus):
     if hasattr(corpus, 'id2doc'):
+        # ### DEBUG
+        #print 'Returning id2doc member (type: {0}) in corpus {1}\n  stack: {2}' \
+        #      ''.format(type(corpus.id2doc), corpus, log_corpus_stack(corpus))
         return corpus.id2doc
     elif isinstance(corpus, TransformedCorpus):
+        # Problem with CompositeCorpus...
         return get_id2doc_obj(corpus.corpus)
     elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
         return get_id2doc_obj(corpus.data)
@@ -124,10 +129,31 @@ def doc2id(corpus, docname):
     return obj[docname]
 
 
-def bottom_corpus(corpus):
+def id2doc_to_doc2id(id2doc):
+    """Creates a reverse doc2id mapping from the supplied id2doc mapping.
+    Returns the default for doc2id maps, ``collections.defaultdict(set)``.
+    """
+    doc2id = collections.defaultdict(set)
+    for iid, doc in id2doc.items():
+        doc2id[doc].add(iid)
+    return doc2id
+
+
+def doc2id_to_id2doc(doc2id):
+    """Creates a reverse id2doc mapping from the supplied doc2id mapping.
+    Returns the default for id2doc maps, ``collections.defaultdict(str)``.
+    """
+    id2doc = collections.defaultdict(str)
+    for doc, iids in doc2id.items():
+        for iid in iids:
+            id2doc[iid] = doc
+    return id2doc
+
+
+def bottom_corpus(pipeline):
     """Jumps through a stack of TransformedCorpus or Dataset
     objects all the way to the bottom corpus."""
-    current_corpus = corpus
+    current_corpus = pipeline
     if isinstance(current_corpus, TransformedCorpus):
         return bottom_corpus(current_corpus.corpus)
     if isinstance(current_corpus, safire.datasets.dataset.DatasetABC):
@@ -135,15 +161,60 @@ def bottom_corpus(corpus):
     return current_corpus
 
 
+def set_as_bottom_corpus(pipeline, corpus):
+    """Puts the given corpus at the bottom of the given pipeline.
+    Note that this invalidates all id2doc/doc2id mappings and there's currently
+    no mechanism to fix that.
+
+    :param pipeline: The pipeline which should have its bottom corpus reset.
+
+    :param corpus: The new bottom corpus. (Of course, can be a whole pipeline!)
+
+    """
+    # The "Dataset is not a TransformedCorpus" problem shows up here a *lot*.
+    current_pipeline = pipeline
+    if isinstance(current_pipeline, TransformedCorpus):
+        if not hasattr(current_pipeline, corpus):
+            raise ValueError('Haven\'t yet found bottom-plus-1st corpus, but'
+                             ' already cannot continue (no \'corpus\' attribute'
+                             ' -- something strange is happening.')
+        if isinstance(current_pipeline.corpus, TransformedCorpus) or \
+                isinstance(current_pipeline.corpus,
+                           safire.datasets.dataset.DatasetABC):
+            set_as_bottom_corpus(current_pipeline, corpus)
+        else:
+            logging.info('Setting as bottom corpus of {0}: {1}'
+                         ''.format(current_pipeline.corpus, corpus))
+            current_pipeline.corpus = corpus
+
+    if isinstance(current_pipeline, safire.datasets.dataset.DatasetABC):
+        if not hasattr(current_pipeline, corpus):
+            raise ValueError('Haven\'t yet found bottom-plus-1st corpus, but'
+                             ' already cannot continue (no \'corpus\' attribute'
+                             ' -- something strange is happening.')
+        if isinstance(current_pipeline.corpus, TransformedCorpus) or \
+                isinstance(current_pipeline.corpus,
+                           safire.datasets.dataset.DatasetABC):
+            set_as_bottom_corpus(current_pipeline.data, corpus)
+        else:
+            logging.info('Setting as bottom corpus of {0}: {1}'
+                         ''.format(current_pipeline, corpus))
+            current_pipeline.data = corpus
+
+
 def dimension(corpus):
     """Finds the topmost corpus that can provide information about its
-    output dimension."""
+    output dimension.
+
+    MOST IMPORTANT FUNCTION. EVER. Always use this function to determine the
+    dimension of a pipeline."""
     # print 'Deriving dimension of corpus {0}'.format(type(corpus))
     if isinstance(corpus, numpy.ndarray) and len(corpus.shape) == 2:
         return corpus.shape[1]
     current_corpus = corpus
     if hasattr(current_corpus, 'dim'):
-        # Covers almost everything non-recursive in safire.
+        # Covers almost everything non-recursive in safire (and some recursive,
+        # too; this is also the policy for all future dimension-setting objects)
         return current_corpus.dim
     if hasattr(current_corpus, 'n_out'):
         return current_corpus.n_out
@@ -156,8 +227,8 @@ def dimension(corpus):
 
     # This is the "magic". There's no unified mechanism for providing output
     # corpus dimension in gensim, so we have to deal with it case-by-case.
-    # Stuff that is in safire usually has an 'n_out' attribute (or, in other
-    # words: whenever something in safire has the 'n_out' attribute, it means
+    # Stuff that is in safire usually has an 'dim' attribute (or, in other
+    # words: whenever something in safire has the 'dim' attribute, it means
     # the output dimension).
     if isinstance(current_corpus, TransformedCorpus):
         if isinstance(current_corpus.obj, FrequencyBasedTransformer):
@@ -186,6 +257,10 @@ def get_composite_source(pipeline, name):
                         'data source names, you supplied {0} of type {1}.'
                         ''.format(name, type(name)))
     if isinstance(pipeline, safire.datasets.dataset.CompositeDataset):
+        return pipeline[name]
+    if isinstance(pipeline, safire.data.composite_corpus.CompositeCorpus):
+        # print 'Returning source: {0}, with dimension {1}' \
+        #       ''.format(pipeline[name], dimension(pipeline[name]))
         return pipeline[name]
     else:
         if isinstance(pipeline, TransformedCorpus):
@@ -337,33 +412,35 @@ def keymap2dict(keymap_dict):
 
 def log_corpus_stack(corpus):
     """Reports the types of corpora and transformations of a given
-    corpus stack. Currently cannot deal with CompositeDataset pipelines."""
-    if isinstance(corpus, TransformedCorpus):
+    corpus stack. Can deal with CompositeDataset pipelines."""
+    if isinstance(corpus, safire.datasets.dataset.CompositeDataset)\
+            or isinstance(corpus, safire.data.composite_corpus.CompositeCorpus):
+        r = 'Type: {0} with the following datasets: {1}'.format(
+            type(corpus),
+            ''.join(['\n    {0}'.format(type(d)) for d in corpus.corpus])
+        )
+        individual_logs = [log_corpus_stack(d) for d in corpus.corpus]
+        combined_logs = '------component-------\n' + \
+                        '------component-------\n'.join(individual_logs)
+        return '\n'.join([r, combined_logs])
+    elif isinstance(corpus, TransformedCorpus):
         r = 'Type: {0} with obj {1}'.format(type(corpus), type(corpus.obj))
         return '\n'.join([r, log_corpus_stack(corpus.corpus)])
     elif isinstance(corpus, safire.datasets.dataset.TransformedDataset):
         r = 'Type: %s with obj %s' % (type(corpus), type(corpus.obj))
         return '\n'.join([r, log_corpus_stack(corpus.data)])
-    elif isinstance(corpus, safire.datasets.dataset.CompositeDataset):
-        r = 'Type: {0} with the following datasets: {1}'.format(
-            type(corpus),
-            ''.join(['\n    {0}'.format(type(d)) for d in corpus.data])
-        )
-        individual_logs = [log_corpus_stack(d) for d in corpus.data]
-        combined_logs = '------component-------\n' + \
-                        '------component-------\n'.join(individual_logs)
-        return '\n'.join([r, combined_logs])
     elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
         r = 'Type: {0}, passing through DatasetABC to underlying corpus {1}' \
-            ''.format(type(corpus), type(corpus.data))
-        return '\n'.join([r, log_corpus_stack(corpus.data)])
+            ''.format(type(corpus), type(corpus.corpus))
+        return '\n'.join([r, log_corpus_stack(corpus.corpus)])
     else:
         r = 'Type: %s' % (type(corpus))
         return '\n'.join([r, '=== STACK END ===\n'])
 
 
-def convert_to_dense(corpus):
-    """Adds a utility block that outputs items in a dense format.
+def convert_to_dense(corpus, dim=None):
+    """Adds a utility block that outputs items in a dense format. If a dimension
+    is not supplied, will try to guess based on the input corpus.
 
     If the given corpus is of a type that can support dense output by itself
     (for example a SwapoutCorpus with a ShardedCorpus back-end), will instead
@@ -408,7 +485,7 @@ def convert_to_dense(corpus):
                      'sparse vector output and applying Corpus2Dense.'
                      ''.format(type(corpus)))
 
-        transformer = safire.utils.transformers.Corpus2Dense(corpus)
+        transformer = safire.utils.transformers.Corpus2Dense(corpus, dim=dim)
         # Have to _apply to make sure the output is a pipeline, because
         # Corpus2Dense call on __getitem__ might call gensim2dense directly
         # on something that behaves like a corpus but is not an instance of
@@ -496,8 +573,13 @@ def is_fully_indexable(pipeline):
 
     Checks only duck typing.
     """
+    # print 'Inspecting pipeline: {0}'.format(pipeline)
     if len(pipeline) == 0:
-        raise ValueError('Cannot inspect empty pipeline!')
+        logging.warn('Cannot inspect empty pipeline!\n{0}'
+                     ''.format(log_corpus_stack(pipeline)))
+        #raise ValueError('Cannot inspect empty pipeline!\n{0}'
+        #                 ''.format(log_corpus_stack(pipeline)))
+        return False
     try:
         _ = pipeline[0]
         _ = pipeline[0:1]
@@ -505,7 +587,7 @@ def is_fully_indexable(pipeline):
         _ = pipeline[-1:]
         _ = pipeline[[0]]
         return True
-    except (TypeError, AttributeError, ValueError):
+    except (TypeError, AttributeError, ValueError, NotImplementedError):
         raise
         return False
 
@@ -547,7 +629,7 @@ def ensure_serialization(pipeline, force=False, serializer_class=ShardedCorpus,
     return pipeline
 
 
-def dry_run(pipeline):
+def dry_run(pipeline, max=None):
     """Iterates over the pipeline, but doesn't store any results. (
 
     This is useful just for testing; anytime else, you would be better off just
@@ -557,8 +639,13 @@ def dry_run(pipeline):
     vocabularies...
 
     :param pipeline: The pipeline over which to iterate.
+
+    :param max: Iterate over at most this many items. (Useful for taking just
+        samples, for example for introspection.)
     """
-    for p in pipeline:
+    for i, p in enumerate(pipeline):
+        if max and i > max:
+            break
         pass
 
 
@@ -773,11 +860,11 @@ def docnames2indexes(data, docnames):
     :returns: A list of indices into the individual components of the ``data``
         composite dataset.
     """
-    doc2ids = [get_doc2id_obj(d) for d in data.data]
+    doc2ids = [get_doc2id_obj(c) for c in data.corpus]
     # Problem: returned doc2id object in DocumentFilterCorpus retains the
     # original IDs, not the new ones. We need to convert these IDs
-    #print 'Doc2ids:\n  {0}'.format(u'  \n'.join([str(type(d)) for d in doc2ids]))
-    #print 'Doc2ids:\n{0}'.format(u'  \n'.join([str(d) for d in doc2ids]))
+    # print 'Doc2ids:\n  {0}'.format(u'  \n'.join([str(type(d)) for d in doc2ids]))
+    # print 'Doc2ids:\n{0}'.format(u'  \n'.join([str(d) for d in doc2ids]))
     output = []
     for name_item in docnames:
         #print 'Name item: {0}'.format(name_item)

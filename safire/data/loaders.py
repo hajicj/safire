@@ -32,19 +32,20 @@ import gensim
 from gensim.corpora.mmcorpus import MmCorpus
 from gensim.similarities import Similarity
 
-from safire.datasets.corpus_dataset import UnsupervisedVTextCorpusDataset, \
-    UnsupervisedImagenetCorpusDataset
-from safire.datasets.sharded_dataset import ShardedDataset
-from safire.datasets.sharded_multimodal_dataset import ShardedMultimodalDataset, \
-    UnsupervisedShardedImagenetCorpusDataset, \
-    UnsupervisedShardedVTextCorpusDataset
-from safire.learning.interfaces import ModelHandle
+# from safire.datasets.corpus_dataset import UnsupervisedVTextCorpusDataset, \
+#     UnsupervisedImagenetCorpusDataset
+# from safire.datasets.sharded_dataset import ShardedDataset
+# from safire.datasets.sharded_multimodal_dataset import
+#  ShardedMultimodalDataset, \
+#    UnsupervisedShardedImagenetCorpusDataset, \
+#    UnsupervisedShardedVTextCorpusDataset
+from safire.learning.interfaces.model_handle import ModelHandle
 from safire.learning.interfaces.safire_transformer import SafireTransformer
-from safire.learning.learners import BaseSGDLearner
+from safire.learning.learners.base_sgd_learner import BaseSGDLearner
 from safire.learning.models.base_model import BaseModel
 from safire.data.vtextcorpus import VTextCorpus
 from safire.data.imagenetcorpus import ImagenetCorpus
-from safire.datasets.multimodal_dataset import MultimodalDataset
+# from safire.datasets.multimodal_dataset import MultimodalDataset
 from safire.data.layouts import DataDirLayout
 
 
@@ -534,165 +535,165 @@ class MultimodalDatasetLoader(object):
 
         self.build_image_corpora(img_corpus_args, img_serializer)
 
-    def load(self, infix=None, text_infix=None, img_infix=None,
-             text_serializer=MmCorpus, img_serializer=MmCorpus):
-        """Creates the SAFIRE MultimodalDataset. If corpora are not generated,
-        raises a ValueError.
-
-        :type infix: str
-        :param infix: The infix (corpus label) of the desired text
-            and image corpora. (Infixes serve to differentiate corpora
-            obtained with different methods, such as filtering tokens
-            according to Part of Speech tags or scaling down image
-            dimensionality.)
-
-            If ``infix`` is supplied, ``text_infix`` and ``img_infix`` are
-            overriden by ``infix``.
-
-        :type text_infix: str
-        :param text_infix: The infix (corpus label) of the desired text
-            corpora. (Infixes serve to differentiate corpora
-            obtained with different methods, such as filtering tokens
-            according to Part of Speech tags.)
-
-        :type img_infix: str
-        :param img_infix: The infix (corpus label) of the desired image
-            corpora. (Infixes serve to differentiate corpora
-            obtained with different methods, such as filtering tokens
-            according to Part of Speech tags.)
-
-        :type text_serializer: class froom gensim.interfaces.CorpusABC
-        :param text_serializer: The corpus class that should be used to
-            de-serialize the given text corpus data. Defaults to
-            ``text_serializer`` passed in ``__init__``.
-
-        :type img_serializer: class froom gensim.interfaces.CorpusABC
-        :param img_serializer: The corpus class that should be used to
-            de-serialize the given image corpus data. Defaults to
-            ``img_serializer`` passed in ``__init__``.
-
-        :rtype: safire.data.multimodal_dataset.MultimodalDataset
-        :returns: A :class:`MultimodalDataset` representation of the
-            dataset.
-
-        :raises: ValueError
-        """
-        if not text_serializer:
-            text_serializer = self.text_serializer
-        if not img_serializer:
-            img_serializer = self.img_serializer
-
-        if infix:
-            text_infix = infix
-            img_infix = infix
-
-        if not self.has_text_corpora(text_infix):
-            raise ValueError('Text corpora unavailable in SAFIRE dataset '+
-                             'at %s with infix %s' % (os.path.join(self.root,
-                             self.layout.corpus_dir), text_infix))
-
-        if not self.has_image_corpora(img_infix):
-            raise ValueError('Text corpora unavailable in SAFIRE dataset '+
-                             'at %s with infix %s' % (os.path.join(self.root,
-                             self.layout.corpus_dir), text_infix))
-
-
-        corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
-
-        text_corpora_fnames = self.layout.required_text_corpus_names(text_infix)
-        text_data = os.path.join(corpus_dir, text_corpora_fnames[0])
-        text_obj = os.path.join(corpus_dir, text_corpora_fnames[2])
-            # Skipping the '.mmcorp.index' file
-
-        img_corpora_fnames = self.layout.required_img_corpus_names(img_infix)
-        img_data = os.path.join(corpus_dir, img_corpora_fnames[0])
-        img_obj = os.path.join(corpus_dir, img_corpora_fnames[2])
-
-        textdoc2imdoc = os.path.join(self.root, self.layout.textdoc2imdoc)
-
-        dataset = MultimodalDataset(text_data, text_obj, img_data, img_obj,
-                                    aligned=False,
-                                    textdoc2imdoc=textdoc2imdoc,
-                                    text_serializer=self.text_serializer,
-                                    img_serializer=self.img_serializer)
-
-        return dataset
-
-    def load_text(self, text_infix=None, dataset_init_args={}):
-        """Loads a text-only dataset using the class
-        :class:`UnsupervisedVTextCorpusDataset`.
-
-        :type text_infix: str
-        :param text_infix: The infix (corpus label) of the desired text
-            corpora. (Infixes serve to differentiate corpora
-            obtained with different methods, such as filtering tokens
-            according to Part of Speech tags.)
-
-        :type dataset_init_args: dict
-        :param dataset_init_args: Further init args that will be passed to the
-            dataset constructor.
-
-        :rtype: safire.data.corpus_dataset.UnsueprvisedVTextCorpusDataset
-        :returns: The :class:`UnsupervisedVTextCorpusDataset` built from the
-            given text corpora.
-
-        """
-        if not self.has_text_corpora(text_infix):
-            raise ValueError('Text corpora unavailable in SAFIRE dataset '+
-                             'at %s with infix %s' % (os.path.join(self.root,
-                             self.layout.corpus_dir), text_infix))
-
-        corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
-
-        text_corpora_fnames = self.layout.required_text_corpus_names(text_infix)
-        text_data = os.path.join(corpus_dir, text_corpora_fnames[0])
-        text_obj = os.path.join(corpus_dir, text_corpora_fnames[2])
-            # Skipping the '.mmcorp.index' file
-
-        dataset = UnsupervisedVTextCorpusDataset(text_data, text_obj,
-                                                 **dataset_init_args)
-
-        return dataset
-
-    def load_img(self, img_infix=None, dataset_init_args={}):
-        """Loads an image-only dataset using the class
-        :class:`UnsupervisedImagenetCorpusDataset`.
-
-        :type img_infix: str
-        :param img_infix: The infix (corpus label) of the desired text
-            corpora. (Infixes serve to differentiate corpora
-            obtained with different methods, such as filtering tokens
-            according to Part of Speech tags.)
-
-        :type dataset_init_args: dict
-        :param dataset_init_args: Further init args that will be passed to the
-            dataset constructor.
-
-        :rtype: safire.data.corpus_dataset.UnsueprvisedImagenetCorpusDataset
-        :returns: The :class:`UnsupervisedImagenetCorpusDataset` built from the
-            given text corpora.
-
-        """
-        if not self.has_image_corpora(img_infix):
-            raise ValueError('Image corpora unavailable in SAFIRE dataset '+
-                             'at %s with infix %s' % (os.path.join(self.root,
-                             self.layout.corpus_dir), img_infix))
-
-
-        corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
-
-        img_corpora_fnames = self.layout.required_img_corpus_names(img_infix)
-        img_data = os.path.join(corpus_dir, img_corpora_fnames[0])
-        img_obj = os.path.join(corpus_dir, img_corpora_fnames[2])
-
-        logging.debug('Loading UnsupervisedImagenetCorpusDataset with'
-                      ' data %s, obj %s' % (img_data, img_obj))
-
-        dataset = UnsupervisedImagenetCorpusDataset(img_data, img_obj,
-                                                    **dataset_init_args)
-
-        return dataset
-
+    # def load(self, infix=None, text_infix=None, img_infix=None,
+    #          text_serializer=MmCorpus, img_serializer=MmCorpus):
+    #     """Creates the SAFIRE MultimodalDataset. If corpora are not generated,
+    #     raises a ValueError.
+    #
+    #     :type infix: str
+    #     :param infix: The infix (corpus label) of the desired text
+    #         and image corpora. (Infixes serve to differentiate corpora
+    #         obtained with different methods, such as filtering tokens
+    #         according to Part of Speech tags or scaling down image
+    #         dimensionality.)
+    #
+    #         If ``infix`` is supplied, ``text_infix`` and ``img_infix`` are
+    #         overriden by ``infix``.
+    #
+    #     :type text_infix: str
+    #     :param text_infix: The infix (corpus label) of the desired text
+    #         corpora. (Infixes serve to differentiate corpora
+    #         obtained with different methods, such as filtering tokens
+    #         according to Part of Speech tags.)
+    #
+    #     :type img_infix: str
+    #     :param img_infix: The infix (corpus label) of the desired image
+    #         corpora. (Infixes serve to differentiate corpora
+    #         obtained with different methods, such as filtering tokens
+    #         according to Part of Speech tags.)
+    #
+    #     :type text_serializer: class froom gensim.interfaces.CorpusABC
+    #     :param text_serializer: The corpus class that should be used to
+    #         de-serialize the given text corpus data. Defaults to
+    #         ``text_serializer`` passed in ``__init__``.
+    #
+    #     :type img_serializer: class froom gensim.interfaces.CorpusABC
+    #     :param img_serializer: The corpus class that should be used to
+    #         de-serialize the given image corpus data. Defaults to
+    #         ``img_serializer`` passed in ``__init__``.
+    #
+    #     :rtype: safire.data.multimodal_dataset.MultimodalDataset
+    #     :returns: A :class:`MultimodalDataset` representation of the
+    #         dataset.
+    #
+    #     :raises: ValueError
+    #     """
+    #     if not text_serializer:
+    #         text_serializer = self.text_serializer
+    #     if not img_serializer:
+    #         img_serializer = self.img_serializer
+    #
+    #     if infix:
+    #         text_infix = infix
+    #         img_infix = infix
+    #
+    #     if not self.has_text_corpora(text_infix):
+    #         raise ValueError('Text corpora unavailable in SAFIRE dataset '+
+    #                          'at %s with infix %s' % (os.path.join(self.root,
+    #                          self.layout.corpus_dir), text_infix))
+    #
+    #     if not self.has_image_corpora(img_infix):
+    #         raise ValueError('Text corpora unavailable in SAFIRE dataset '+
+    #                          'at %s with infix %s' % (os.path.join(self.root,
+    #                          self.layout.corpus_dir), text_infix))
+    #
+    #
+    #     corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
+    #
+    #     text_corpora_fnames = self.layout.required_text_corpus_names(text_infix)
+    #     text_data = os.path.join(corpus_dir, text_corpora_fnames[0])
+    #     text_obj = os.path.join(corpus_dir, text_corpora_fnames[2])
+    #         # Skipping the '.mmcorp.index' file
+    #
+    #     img_corpora_fnames = self.layout.required_img_corpus_names(img_infix)
+    #     img_data = os.path.join(corpus_dir, img_corpora_fnames[0])
+    #     img_obj = os.path.join(corpus_dir, img_corpora_fnames[2])
+    #
+    #     textdoc2imdoc = os.path.join(self.root, self.layout.textdoc2imdoc)
+    #
+    #     dataset = MultimodalDataset(text_data, text_obj, img_data, img_obj,
+    #                                 aligned=False,
+    #                                 textdoc2imdoc=textdoc2imdoc,
+    #                                 text_serializer=self.text_serializer,
+    #                                 img_serializer=self.img_serializer)
+    #
+    #     return dataset
+    #
+    # def load_text(self, text_infix=None, dataset_init_args={}):
+    #     """Loads a text-only dataset using the class
+    #     :class:`UnsupervisedVTextCorpusDataset`.
+    #
+    #     :type text_infix: str
+    #     :param text_infix: The infix (corpus label) of the desired text
+    #         corpora. (Infixes serve to differentiate corpora
+    #         obtained with different methods, such as filtering tokens
+    #         according to Part of Speech tags.)
+    #
+    #     :type dataset_init_args: dict
+    #     :param dataset_init_args: Further init args that will be passed to the
+    #         dataset constructor.
+    #
+    #     :rtype: safire.data.corpus_dataset.UnsueprvisedVTextCorpusDataset
+    #     :returns: The :class:`UnsupervisedVTextCorpusDataset` built from the
+    #         given text corpora.
+    #
+    #     """
+    #     if not self.has_text_corpora(text_infix):
+    #         raise ValueError('Text corpora unavailable in SAFIRE dataset '+
+    #                          'at %s with infix %s' % (os.path.join(self.root,
+    #                          self.layout.corpus_dir), text_infix))
+    #
+    #     corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
+    #
+    #     text_corpora_fnames = self.layout.required_text_corpus_names(text_infix)
+    #     text_data = os.path.join(corpus_dir, text_corpora_fnames[0])
+    #     text_obj = os.path.join(corpus_dir, text_corpora_fnames[2])
+    #         # Skipping the '.mmcorp.index' file
+    #
+    #     dataset = UnsupervisedVTextCorpusDataset(text_data, text_obj,
+    #                                              **dataset_init_args)
+    #
+    #     return dataset
+    #
+    # def load_img(self, img_infix=None, dataset_init_args={}):
+    #     """Loads an image-only dataset using the class
+    #     :class:`UnsupervisedImagenetCorpusDataset`.
+    #
+    #     :type img_infix: str
+    #     :param img_infix: The infix (corpus label) of the desired text
+    #         corpora. (Infixes serve to differentiate corpora
+    #         obtained with different methods, such as filtering tokens
+    #         according to Part of Speech tags.)
+    #
+    #     :type dataset_init_args: dict
+    #     :param dataset_init_args: Further init args that will be passed to the
+    #         dataset constructor.
+    #
+    #     :rtype: safire.data.corpus_dataset.UnsueprvisedImagenetCorpusDataset
+    #     :returns: The :class:`UnsupervisedImagenetCorpusDataset` built from the
+    #         given text corpora.
+    #
+    #     """
+    #     if not self.has_image_corpora(img_infix):
+    #         raise ValueError('Image corpora unavailable in SAFIRE dataset '+
+    #                          'at %s with infix %s' % (os.path.join(self.root,
+    #                          self.layout.corpus_dir), img_infix))
+    #
+    #
+    #     corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
+    #
+    #     img_corpora_fnames = self.layout.required_img_corpus_names(img_infix)
+    #     img_data = os.path.join(corpus_dir, img_corpora_fnames[0])
+    #     img_obj = os.path.join(corpus_dir, img_corpora_fnames[2])
+    #
+    #     logging.debug('Loading UnsupervisedImagenetCorpusDataset with'
+    #                   ' data %s, obj %s' % (img_data, img_obj))
+    #
+    #     dataset = UnsupervisedImagenetCorpusDataset(img_data, img_obj,
+    #                                                 **dataset_init_args)
+    #
+    #     return dataset
+    #
     def generate_icorp_name_infix(self, img_corpus):
         """Retrieves the infix of the standard name given by the Loader to the
         image corpus it builds.
@@ -1549,31 +1550,31 @@ class ShardedDatasetLoader(object):
 
         dataset.save(dataset_full_path)
 
-    def load_dataset(self, infix=None):
-        """Loads a similarity index object for the dataset with the specified
-        infix.
-
-        :type infix: str
-        :param infix: The infix (index label) of the desired index.
-            (Infixes serve to differentiate saved indexes
-            obtained from different image corpora, like a full 4096-dimensional
-            Imagenet feature corpus or a lower-dimensional encoding.)
-
-        :raises: ValueError
-        """
-        infix = self.__default_infix(infix)
-
-        if not self.has_dataset(infix):
-            raise ValueError('Cannot find index %s with infix %s in data dir %s.' % (
-                self.layout.get_dataset_name(infix), infix, self.root))
-
-        dataset_file = self.layout.get_dataset_file(infix)
-        dataset_full_path = os.path.join(self.root, dataset_file)
-
-        index = ShardedDataset.load(dataset_full_path)
-
-        return index
-
+    # def load_dataset(self, infix=None):
+    #     """Loads a similarity index object for the dataset with the specified
+    #     infix.
+    #
+    #     :type infix: str
+    #     :param infix: The infix (index label) of the desired index.
+    #         (Infixes serve to differentiate saved indexes
+    #         obtained from different image corpora, like a full 4096-dimensional
+    #         Imagenet feature corpus or a lower-dimensional encoding.)
+    #
+    #     :raises: ValueError
+    #     """
+    #     infix = self.__default_infix(infix)
+    #
+    #     if not self.has_dataset(infix):
+    #         raise ValueError('Cannot find index %s with infix %s in data dir %s.' % (
+    #             self.layout.get_dataset_name(infix), infix, self.root))
+    #
+    #     dataset_file = self.layout.get_dataset_file(infix)
+    #     dataset_full_path = os.path.join(self.root, dataset_file)
+    #
+    #     index = ShardedDataset.load(dataset_full_path)
+    #
+    #     return index
+    #
     def output_prefix(self, infix=None, sparse_serialization=False):
         """Builds the output_prefix parameter for a ShardedDataset object
         so that the dataset can then be correctly saved/loaded."""
@@ -1700,203 +1701,203 @@ class MultimodalShardedDatasetLoader(MultimodalDatasetLoader):
         dataset_file = self.layout.get_dataset_file(infix)
         return os.path.join(self.root, dataset_file)
 
-    def load(self, infix=None, text_infix=None, img_infix=None,
-             text_serializer=MmCorpus, img_serializer=MmCorpus):
-        """Creates a ShardedMultimodalDataset. If corpora are not generated,
-        raises a ValueError.
-
-        :type infix: str
-        :param infix: The infix (corpus label) of the desired text
-            and image corpora. (Infixes serve to differentiate corpora
-            obtained with different methods, such as filtering tokens
-            according to Part of Speech tags or scaling down image
-            dimensionality.)
-
-            If ``infix`` is supplied, ``text_infix`` and ``img_infix`` are
-            overriden by ``infix``.
-
-        :type text_infix: str
-        :param text_infix: The infix (corpus label) of the desired text
-            corpora. (Infixes serve to differentiate corpora
-            obtained with different methods, such as filtering tokens
-            according to Part of Speech tags.)
-
-        :type img_infix: str
-        :param img_infix: The infix (corpus label) of the desired image
-            corpora. (Infixes serve to differentiate corpora
-            obtained with different methods, such as filtering tokens
-            according to Part of Speech tags.)
-
-        :type text_serializer: class froom gensim.interfaces.CorpusABC
-        :param text_serializer: The corpus class that should be used to
-            de-serialize the given text corpus data. Defaults to
-            ``text_serializer`` passed in ``__init__``.
-
-        :type img_serializer: class froom gensim.interfaces.CorpusABC
-        :param img_serializer: The corpus class that should be used to
-            de-serialize the given image corpus data. Defaults to
-            ``img_serializer`` passed in ``__init__``.
-
-        :rtype: safire.data.multimodal_dataset.ShardedMultimodalDataset
-        :returns: A :class:`ShardedMultimodalDataset` representation of the
-            dataset.
-
-        :raises: ValueError
-        """
-        if not text_serializer:
-            text_serializer = self.text_serializer
-        if not img_serializer:
-            img_serializer = self.img_serializer
-
-        if infix:
-            text_infix = infix
-            img_infix = infix
-
-        if not self.has_text_corpora(text_infix):
-            raise ValueError('Text corpora unavailable in SAFIRE dataset '+
-                             'at %s with infix %s' % (os.path.join(self.root,
-                             self.layout.corpus_dir), text_infix))
-
-        if not self.has_image_corpora(img_infix):
-            raise ValueError('Text corpora unavailable in SAFIRE dataset '+
-                             'at %s with infix %s' % (os.path.join(self.root,
-                             self.layout.corpus_dir), text_infix))
-
-        corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
-
-        text_corpora_fnames = self.layout.required_text_corpus_names(text_infix)
-        text_data = os.path.join(corpus_dir, text_corpora_fnames[0])
-        text_obj = os.path.join(corpus_dir, text_corpora_fnames[2])
-            # Skipping the '.mmcorp.index' file
-
-        img_corpora_fnames = self.layout.required_img_corpus_names(img_infix)
-        img_data = os.path.join(corpus_dir, img_corpora_fnames[0])
-        img_obj = os.path.join(corpus_dir, img_corpora_fnames[2])
-
-        textdoc2imdoc = os.path.join(self.root, self.layout.textdoc2imdoc)
-
-        text_output_prefix = self.text_output_prefix(text_infix)
-        img_output_prefix = self.img_output_prefix(img_infix)
-
-        dataset = ShardedMultimodalDataset(text_output_prefix, text_obj,
-                                           img_output_prefix, img_obj,
-                                           textdoc2imdoc=textdoc2imdoc,
-                                           text_serializer=text_serializer,
-                                           img_serializer=img_serializer,
-                                           text_mm_filename=text_data,
-                                           img_mm_filename=img_data)
-
-        return dataset
-
-    def build_text(self, corpus, text_infix=None, dataset_init_args={}):
-        """From the given corpus, builds a text ShardedDataset with the given
-        infix."""
-        output_prefix = self.text_output_prefix(text_infix)
-        dataset = ShardedDataset(output_prefix, corpus, **dataset_init_args)
-        dataset.save()
-
-    def load_text(self, text_infix=None, dataset_init_args={}):
-        """Loads a text-only dataset using the class
-        :class:`UnsupervisedVTextCorpusDataset`.
-
-        :type text_infix: str
-        :param text_infix: The infix (corpus label) of the desired text
-            corpora. (Infixes serve to differentiate corpora
-            obtained with different methods, such as filtering tokens
-            according to Part of Speech tags.)
-
-        :type dataset_init_args: dict
-        :param dataset_init_args: Further init args that will be passed to the
-            dataset constructor.
-
-        :rtype: safire.data.corpus_dataset.UnsueprvisedVTextCorpusDataset
-        :returns: The :class:`UnsupervisedVTextCorpusDataset` built from the
-            given text corpora.
-
-        """
-        if not self.has_text_corpora(text_infix):
-            raise ValueError('Text corpora unavailable in SAFIRE dataset '+
-                             'at %s with infix %s' % (os.path.join(self.root,
-                             self.layout.corpus_dir), text_infix))
-
-
-        corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
-
-        text_corpora_fnames = self.layout.required_text_corpus_names(text_infix)
-        text_mm_fname = os.path.join(corpus_dir, text_corpora_fnames[0])
-        text_ic_fname = os.path.join(corpus_dir, text_corpora_fnames[2])
-
-        output_prefix = self.text_output_prefix(text_infix)
-        if not os.path.isfile(output_prefix):
-            output_prefix = self.output_prefix(text_infix)
-
-        logging.debug('Loading UnsupervisedShardedVTextCorpusDataset with'
-                      ' data %s, obj %s' % (output_prefix, text_ic_fname))
-
-        dataset_init_args['mm_corpus_filename'] = text_mm_fname
-
-        dataset = UnsupervisedShardedVTextCorpusDataset(output_prefix,
-                                                        text_ic_fname,
-                                                        **dataset_init_args)
-
-        return dataset
-
-    def build_img(self, corpus, img_infix=None, dataset_init_args={}):
-        """From the given corpus, builds a text ShardedDataset with the given
-        infix."""
-        output_prefix = self.img_output_prefix(img_infix)
-        dataset = ShardedDataset(output_prefix, corpus, **dataset_init_args)
-        dataset.save()
-
-    def load_img(self, img_infix=None, dataset_init_args={}):
-        """Loads an image-only dataset using the class
-        :class:`UnsupervisedShardedImagenetCorpusDataset`.
-
-        :type img_infix: str
-        :param img_infix: The infix (corpus label) of the desired image
-            corpora. (Infixes serve to differentiate corpora
-            obtained with different methods, such as filtering tokens
-            according to Part of Speech tags.)
-
-        :type dataset_init_args: dict
-        :param dataset_init_args: Further init args that will be passed to the
-            dataset constructor.
-
-        :rtype: safire.data.corpus_dataset.UnsueprvisedShardedImagenetCorpusDataset
-        :returns: The :class:`UnsupervisedImagenetCorpusDataset` built from the
-            given text corpora.
-
-        """
-        if not self.has_image_corpora(img_infix):
-            raise ValueError('Image corpora unavailable in dataset '+
-                             'at %s with infix %s (available: %s)' % (
-                             os.path.join(self.root, self.layout.corpus_dir),
-                             img_infix, '\n'.join(
-                                 map(str, os.listdir(os.path.join(self.root,
-                                                     self.layout.corpus_dir)))
-                             )))
-
-        corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
-
-        img_corpora_fnames = self.layout.required_img_corpus_names(img_infix)
-        img_mm_fname = os.path.join(corpus_dir, img_corpora_fnames[0])
-        img_ic_fname = os.path.join(corpus_dir, img_corpora_fnames[2])
-
-        output_prefix = self.img_output_prefix(img_infix)
-        if not os.path.isfile(output_prefix):
-            output_prefix = self.output_prefix(img_infix)
-
-        logging.debug('Loading UnsupervisedShardedImagenetCorpusDataset with'
-                      ' data %s, obj %s' % (output_prefix, img_ic_fname))
-
-        dataset_init_args['mm_corpus_filename'] = img_mm_fname
-
-        dataset = UnsupervisedShardedImagenetCorpusDataset(output_prefix,
-                                                           img_ic_fname,
-                                                           **dataset_init_args)
-
-        return dataset
-
+    # def load(self, infix=None, text_infix=None, img_infix=None,
+    #          text_serializer=MmCorpus, img_serializer=MmCorpus):
+    #     """Creates a ShardedMultimodalDataset. If corpora are not generated,
+    #     raises a ValueError.
+    #
+    #     :type infix: str
+    #     :param infix: The infix (corpus label) of the desired text
+    #         and image corpora. (Infixes serve to differentiate corpora
+    #         obtained with different methods, such as filtering tokens
+    #         according to Part of Speech tags or scaling down image
+    #         dimensionality.)
+    #
+    #         If ``infix`` is supplied, ``text_infix`` and ``img_infix`` are
+    #         overriden by ``infix``.
+    #
+    #     :type text_infix: str
+    #     :param text_infix: The infix (corpus label) of the desired text
+    #         corpora. (Infixes serve to differentiate corpora
+    #         obtained with different methods, such as filtering tokens
+    #         according to Part of Speech tags.)
+    #
+    #     :type img_infix: str
+    #     :param img_infix: The infix (corpus label) of the desired image
+    #         corpora. (Infixes serve to differentiate corpora
+    #         obtained with different methods, such as filtering tokens
+    #         according to Part of Speech tags.)
+    #
+    #     :type text_serializer: class froom gensim.interfaces.CorpusABC
+    #     :param text_serializer: The corpus class that should be used to
+    #         de-serialize the given text corpus data. Defaults to
+    #         ``text_serializer`` passed in ``__init__``.
+    #
+    #     :type img_serializer: class froom gensim.interfaces.CorpusABC
+    #     :param img_serializer: The corpus class that should be used to
+    #         de-serialize the given image corpus data. Defaults to
+    #         ``img_serializer`` passed in ``__init__``.
+    #
+    #     :rtype: safire.data.multimodal_dataset.ShardedMultimodalDataset
+    #     :returns: A :class:`ShardedMultimodalDataset` representation of the
+    #         dataset.
+    #
+    #     :raises: ValueError
+    #     """
+    #     if not text_serializer:
+    #         text_serializer = self.text_serializer
+    #     if not img_serializer:
+    #         img_serializer = self.img_serializer
+    #
+    #     if infix:
+    #         text_infix = infix
+    #         img_infix = infix
+    #
+    #     if not self.has_text_corpora(text_infix):
+    #         raise ValueError('Text corpora unavailable in SAFIRE dataset '+
+    #                          'at %s with infix %s' % (os.path.join(self.root,
+    #                          self.layout.corpus_dir), text_infix))
+    #
+    #     if not self.has_image_corpora(img_infix):
+    #         raise ValueError('Text corpora unavailable in SAFIRE dataset '+
+    #                          'at %s with infix %s' % (os.path.join(self.root,
+    #                          self.layout.corpus_dir), text_infix))
+    #
+    #     corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
+    #
+    #     text_corpora_fnames = self.layout.required_text_corpus_names(text_infix)
+    #     text_data = os.path.join(corpus_dir, text_corpora_fnames[0])
+    #     text_obj = os.path.join(corpus_dir, text_corpora_fnames[2])
+    #         # Skipping the '.mmcorp.index' file
+    #
+    #     img_corpora_fnames = self.layout.required_img_corpus_names(img_infix)
+    #     img_data = os.path.join(corpus_dir, img_corpora_fnames[0])
+    #     img_obj = os.path.join(corpus_dir, img_corpora_fnames[2])
+    #
+    #     textdoc2imdoc = os.path.join(self.root, self.layout.textdoc2imdoc)
+    #
+    #     text_output_prefix = self.text_output_prefix(text_infix)
+    #     img_output_prefix = self.img_output_prefix(img_infix)
+    #
+    #     dataset = ShardedMultimodalDataset(text_output_prefix, text_obj,
+    #                                        img_output_prefix, img_obj,
+    #                                        textdoc2imdoc=textdoc2imdoc,
+    #                                        text_serializer=text_serializer,
+    #                                        img_serializer=img_serializer,
+    #                                        text_mm_filename=text_data,
+    #                                        img_mm_filename=img_data)
+    #
+    #     return dataset
+    #
+    # def build_text(self, corpus, text_infix=None, dataset_init_args={}):
+    #     """From the given corpus, builds a text ShardedDataset with the given
+    #     infix."""
+    #     output_prefix = self.text_output_prefix(text_infix)
+    #     dataset = ShardedDataset(output_prefix, corpus, **dataset_init_args)
+    #     dataset.save()
+    #
+    # def load_text(self, text_infix=None, dataset_init_args={}):
+    #     """Loads a text-only dataset using the class
+    #     :class:`UnsupervisedVTextCorpusDataset`.
+    #
+    #     :type text_infix: str
+    #     :param text_infix: The infix (corpus label) of the desired text
+    #         corpora. (Infixes serve to differentiate corpora
+    #         obtained with different methods, such as filtering tokens
+    #         according to Part of Speech tags.)
+    #
+    #     :type dataset_init_args: dict
+    #     :param dataset_init_args: Further init args that will be passed to the
+    #         dataset constructor.
+    #
+    #     :rtype: safire.data.corpus_dataset.UnsueprvisedVTextCorpusDataset
+    #     :returns: The :class:`UnsupervisedVTextCorpusDataset` built from the
+    #         given text corpora.
+    #
+    #     """
+    #     if not self.has_text_corpora(text_infix):
+    #         raise ValueError('Text corpora unavailable in SAFIRE dataset '+
+    #                          'at %s with infix %s' % (os.path.join(self.root,
+    #                          self.layout.corpus_dir), text_infix))
+    #
+    #
+    #     corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
+    #
+    #     text_corpora_fnames = self.layout.required_text_corpus_names(text_infix)
+    #     text_mm_fname = os.path.join(corpus_dir, text_corpora_fnames[0])
+    #     text_ic_fname = os.path.join(corpus_dir, text_corpora_fnames[2])
+    #
+    #     output_prefix = self.text_output_prefix(text_infix)
+    #     if not os.path.isfile(output_prefix):
+    #         output_prefix = self.output_prefix(text_infix)
+    #
+    #     logging.debug('Loading UnsupervisedShardedVTextCorpusDataset with'
+    #                   ' data %s, obj %s' % (output_prefix, text_ic_fname))
+    #
+    #     dataset_init_args['mm_corpus_filename'] = text_mm_fname
+    #
+    #     dataset = UnsupervisedShardedVTextCorpusDataset(output_prefix,
+    #                                                     text_ic_fname,
+    #                                                     **dataset_init_args)
+    #
+    #     return dataset
+    #
+    # def build_img(self, corpus, img_infix=None, dataset_init_args={}):
+    #     """From the given corpus, builds a text ShardedDataset with the given
+    #     infix."""
+    #     output_prefix = self.img_output_prefix(img_infix)
+    #     dataset = ShardedDataset(output_prefix, corpus, **dataset_init_args)
+    #     dataset.save()
+    #
+    # def load_img(self, img_infix=None, dataset_init_args={}):
+    #     """Loads an image-only dataset using the class
+    #     :class:`UnsupervisedShardedImagenetCorpusDataset`.
+    #
+    #     :type img_infix: str
+    #     :param img_infix: The infix (corpus label) of the desired image
+    #         corpora. (Infixes serve to differentiate corpora
+    #         obtained with different methods, such as filtering tokens
+    #         according to Part of Speech tags.)
+    #
+    #     :type dataset_init_args: dict
+    #     :param dataset_init_args: Further init args that will be passed to the
+    #         dataset constructor.
+    #
+    #     :rtype: safire.data.corpus_dataset.UnsueprvisedShardedImagenetCorpusDataset
+    #     :returns: The :class:`UnsupervisedImagenetCorpusDataset` built from the
+    #         given text corpora.
+    #
+    #     """
+    #     if not self.has_image_corpora(img_infix):
+    #         raise ValueError('Image corpora unavailable in dataset '+
+    #                          'at %s with infix %s (available: %s)' % (
+    #                          os.path.join(self.root, self.layout.corpus_dir),
+    #                          img_infix, '\n'.join(
+    #                              map(str, os.listdir(os.path.join(self.root,
+    #                                                  self.layout.corpus_dir)))
+    #                          )))
+    #
+    #     corpus_dir = os.path.join(self.root, self.layout.corpus_dir)
+    #
+    #     img_corpora_fnames = self.layout.required_img_corpus_names(img_infix)
+    #     img_mm_fname = os.path.join(corpus_dir, img_corpora_fnames[0])
+    #     img_ic_fname = os.path.join(corpus_dir, img_corpora_fnames[2])
+    #
+    #     output_prefix = self.img_output_prefix(img_infix)
+    #     if not os.path.isfile(output_prefix):
+    #         output_prefix = self.output_prefix(img_infix)
+    #
+    #     logging.debug('Loading UnsupervisedShardedImagenetCorpusDataset with'
+    #                   ' data %s, obj %s' % (output_prefix, img_ic_fname))
+    #
+    #     dataset_init_args['mm_corpus_filename'] = img_mm_fname
+    #
+    #     dataset = UnsupervisedShardedImagenetCorpusDataset(output_prefix,
+    #                                                        img_ic_fname,
+    #                                                        **dataset_init_args)
+    #
+    #     return dataset
+    #
     def __default_infix(self, infix):
         """Handles converting an infix value of None to an empty string,
         because the Layout object does not accept None when looking for

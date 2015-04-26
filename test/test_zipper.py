@@ -2,6 +2,7 @@ import itertools
 import collections
 import numpy
 import os
+import pprint
 from safire.data.composite_corpus import CompositeCorpus, Zipper
 from safire.datasets.transformations import FlattenComposite
 from safire.utils import mock_data, gensim2ndarray
@@ -92,10 +93,10 @@ class TestZipper(SafireTestCase):
 
     def test_zipper_and_composite(self):
         # Tests flattening texts and images through reordering.
-        zipper_mm = Zipper((self.vtcorp_serialized, self.icorp_serialized),
-                           names=('txt', 'img'), flatten=False)
-        mm_data = zipper_mm._apply((self.vtcorp_serialized,
-                                    self.icorp_serialized))
+        mm_data = CompositeCorpus((self.vtcorp_serialized,
+                                   self.icorp_serialized),
+                                  names=('txt', 'img'),
+                                  aligned=False)
         t2i_indexes = compute_docname_flatten_mapping(
             mm_data,
             os.path.join(self.loader.root, self.loader.layout.textdoc2imdoc))
@@ -113,12 +114,22 @@ class TestZipper(SafireTestCase):
         sliced_item = composite[:4]
         list_item = composite[[0, 4, 2, 6]]
 
+        pprint.pprint(single_item)
+        pprint.pprint(sliced_item)
+        self.assertIsInstance(single_item, tuple)
+        self.assertIsInstance(single_item[0], numpy.ndarray)
+
         zipper_f = Zipper((vtcorp_reordered, icorp_reordered),
                           names=('txt', 'img'), flatten=True)
         composite_f = zipper_f._apply((vtcorp_reordered, icorp_reordered))
         single_item_f = composite_f[0]
         sliced_item_f = composite_f[:4]
         list_item_f = composite_f[[0, 4, 2, 6]]
+
+        pprint.pprint(single_item_f)
+        pprint.pprint(sliced_item_f)
+        self.assertIsInstance(single_item_f, numpy.ndarray)
+        self.assertIsInstance(sliced_item_f, numpy.ndarray)
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()

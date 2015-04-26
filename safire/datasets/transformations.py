@@ -5,15 +5,16 @@ from gensim.interfaces import TransformationABC
 from gensim.utils import is_corpus
 import itertools
 import numpy
-from safire.datasets.dataset import CompositeDataset
+# from safire.datasets.dataset import CompositeDataset
 # from safire.data.composite_corpus import CompositeCorpus
 
 from safire.utils import IndexedTransformedCorpus
 from safire.utils import flatten_composite_item
 import safire.utils.transcorp
-from safire.datasets.dataset import DatasetTransformer, DatasetABC
+import safire.data.composite_corpus
+from safire.datasets.dataset import DatasetABC
 
-# TODO: refactor/enhance to work with corpora as well as datasets
+# TODO: phase out in favor of Reorder+Zipper pattern
 
 
 class FlattenComposite(TransformationABC):
@@ -22,7 +23,7 @@ class FlattenComposite(TransformationABC):
     batches.
 
     It is strongly recommended to have serialized all the datasets in the
-    CompositeDataset you will be flattening. This won't slow you down much,
+    CompositeCorpus you will be flattening. This won't slow you down much,
     as you might have to access these datasets in some weird and repeated
     patterns anyway, so having a fast random-access version of your data might
     save you time in the long run, even though you needed a pass over the
@@ -30,7 +31,7 @@ class FlattenComposite(TransformationABC):
 
     .. warn::
 
-        All datasets aggregated in the CompositeDataset being flattened must
+        All datasets aggregated in the CompositeCorpus being flattened must
         allow list-based retrieval through ``__getitem__``. This *is* the case
         with Datasets that draw from ShardedCorpus-serialized data, as the
         ``__getitem__`` call propagates through the dataset transformation stack
@@ -38,7 +39,7 @@ class FlattenComposite(TransformationABC):
 
     >>> source1 = DatasetABC([[1], [2], [3]], dim=1)
     >>> source2 = DatasetABC([[-1], [-2], [-3]], dim=1)
-    >>> composite = CompositeDataset((source1, source2), names=('source1', 'source2'))
+    >>> composite = safire.data.composite_corpus.CompositeCorpus((source1, source2), names=('source1', 'source2'))
     >>> flatten = FlattenComposite(composite)
     >>> flat = flatten[composite]
     >>> flat[1:3]

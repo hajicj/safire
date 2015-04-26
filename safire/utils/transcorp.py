@@ -249,6 +249,18 @@ def dimension(corpus):
         raise ValueError('Cannot find output dimension of corpus %s' % str(corpus))
 
 
+def flattened_dimension(composite_dim):
+
+    total = 0
+    logging.debug('Composite dim: {0}'.format(composite_dim))
+    for d in composite_dim:
+        if isinstance(d, tuple):
+            total += flattened_dimension(d)
+        else:
+            total += d
+    return total
+
+
 def get_composite_source(pipeline, name):
     """Retrieves the pipeline of a named data source from a composite dataset
     down the (presumably composite) pipeline."""

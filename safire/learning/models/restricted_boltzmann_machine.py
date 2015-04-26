@@ -15,7 +15,7 @@ import safire
 
 from safire.learning.models.base_unsupervised_model import BaseUnsupervisedModel
 from safire.learning.interfaces.pretraining_model_handle import PretrainingModelHandle
-from safire.learning.interfaces import ModelHandle
+from safire.learning.interfaces.model_handle import ModelHandle
 from safire.utils import check_kwargs
 
 
