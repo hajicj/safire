@@ -1,9 +1,10 @@
 import itertools
 import collections
+import numpy
 import os
 from safire.data.composite_corpus import CompositeCorpus, Zipper
 from safire.datasets.transformations import FlattenComposite
-from safire.utils import mock_data
+from safire.utils import mock_data, gensim2ndarray
 from safire.utils.transcorp import compute_docname_flatten_mapping, dimension
 from safire.utils.transformers import ReorderingTransform, ReorderingCorpus
 
@@ -34,6 +35,7 @@ mock_corpus = SafireMockCorpus(data=data, dim=dim, id2doc=id2doc)
 
 
 class TestZipper(SafireTestCase):
+
     def setUp(self):
         self.corpus_1 = mock_corpus
         self.corpus_2 = mock_corpus
@@ -64,10 +66,29 @@ class TestZipper(SafireTestCase):
         self.assertEqual(item, self.zipper[item])
 
     def test_getitem_flattened_numpy(self):
-        self.assertTrue(False)
+        item = (gensim2ndarray(self.corpus_1[0], dimension(self.corpus_1)),
+                gensim2ndarray(self.corpus_2[0], dimension(self.corpus_2)))
+        self.assertEqual(Zipper.flatten_numpy(item).all(),
+                         self.zipper_f[item].all())
 
     def test_getitem_flattened_gensim(self):
-        self.assertTrue(False)
+        item = (self.corpus_1[0], self.corpus_2[0])
+        self.assertEqual(Zipper.flatten_gensim(item, self.zipper.dim),
+                         self.zipper_f[item])
+
+    def test_flatten_gensim(self):
+        item_1 = [(0, 1), (1, 3), (4, 5)]
+        item_2 = [(0, 2), (2, 1), (4, 1)]
+        d = (7, 5)
+
+        expected = [(0, 1), (1, 3), (4, 5), (7, 2), (9, 1), (11, 1)]
+        self.assertEqual(expected, Zipper.flatten_gensim((item_1, item_2), d))
+
+    def test_flatten_numpy(self):
+        item_1 = numpy.array([1, 3, 0, 0, 5, 0, 0])
+        item_2 = numpy.array([2, 0, 1, 0, 1])
+        expected = numpy.array([1, 3, 0, 0, 5, 0, 0, 2, 0, 1, 0, 1])
+        self.assertEqual(expected.all(), Zipper.flatten_numpy((item_1, item_2)).all())
 
     def test_reordering_for_zipper(self):
         return

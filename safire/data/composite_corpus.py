@@ -4,6 +4,7 @@ This module contains classes that ...
 import logging
 import copy
 import gensim
+import itertools
 import numpy
 import safire.datasets.transformations
 import safire.utils.transcorp
@@ -66,26 +67,78 @@ class Zipper(gensim.interfaces.TransformationABC):
         if dim is None:
             dim = proposed_dim
 
+        self.orig_dim = dim
+
         if self.flatten:
             flat_dim = safire.datasets.transformations.FlattenedDatasetCorpus.flattened_dimension(dim)
             dim = flat_dim
         self.dim = dim
 
     def __getitem__(self, item):
-        # The check for _apply is quite unreliable.
+        # The check for _apply is quite fragile.
         if isinstance(item[0], gensim.interfaces.CorpusABC):
             return self._apply(item)
 
         if self.flatten:
-            # Only works for ndarrays so far, support for gensim not implemented
-            output = list(flatten_composite_item(item))
-            output = numpy.hstack(output)
+            if isinstance(item[0], numpy.ndarray):
+                # Only works for ndarrays so far, support for gensim not implemented
+                output = list(flatten_composite_item(item))
+                output = numpy.hstack(output)
+            else:
+                output = self.flatten_gensim(item, self.orig_dim)
             return output
         else:
             return item
 
     def _apply(self, corpora):
         return CompositeCorpus(corpora, dim=self.dim, names=self.names)
+
+    @staticmethod
+    def flatten_gensim_and_dim(vectors, dim):
+        """Flattens the given gensim vectors, using the supplied dim.
+        Works on both non-recursive and recursive composite vectors.
+
+        >>> v1 = [(0, 1), (1, 2), (4, 1)]
+        >>> v2 = [(1, 1), (2, 4), (3, 1)]
+        >>> v3 = [(0, 2), (3, 1)]
+        >>> dim = ((5, 5), 4)
+        >>> vectors = ((v1, v2), v3)
+        >>> Zipper.flatten_gensim_and_dim(vectors, dim)
+        ([(0, 1), (1, 2), (4, 1), (6, 1), (7, 4), (8, 1), (10, 2), (13, 1)], 14)
+
+        """
+        # logging.warn('Vectors: {0}, dim: {1}'.format(vectors, dim))
+        if isinstance(dim, int):
+            return vectors, dim
+        if len(vectors) != len(dim):
+            raise ValueError('Item length {0} and dimension length {1} do not '
+                             'match.'.format(vectors, dim))
+
+        output = []
+        dim_offset = 0
+        for item, d in itertools.izip(vectors, dim):
+            to_add, to_add_dim = Zipper.flatten_gensim_and_dim(item, d)
+
+            # logging.warn('To add: {0}, dim_offset: {1}'.format(to_add, dim_offset))
+            for key, value in to_add:
+                output.append((key + dim_offset, value))
+            dim_offset += to_add_dim
+
+        total_dim = dim_offset
+        return output, total_dim
+
+    @staticmethod
+    def flatten_numpy(vectors):
+        flattened_vectors = list(flatten_composite_item(vectors))
+        output = numpy.hstack(flattened_vectors)
+        return output
+
+    @staticmethod
+    def flatten_gensim(vectors, dim):
+        """Given a composite item made of gensim vectors and the dimension of the
+        composite item, outputs a flattened version."""
+        output, total_dim = Zipper.flatten_gensim_and_dim(vectors, dim)
+        return output
 
 
 class CompositeCorpus(IndexedTransformedCorpus):
