@@ -1189,7 +1189,8 @@ class ConfigBuilder(object):
             self.objects[obj_name].save(fname)
 
     def clear_saved(self):
-        """Saves the built objects according to the persistence instruction."""
+        """Clears the saved objects according to the persistence
+        instruction."""
         for obj_name, obj_label in self.configuration._persistence.items():
             if obj_name == 'loader' and 'loader' not in self.objects:
                 continue
@@ -1200,6 +1201,23 @@ class ConfigBuilder(object):
                 os.remove(fname)
             else:
                 logging.info('Cannot remove file {0}: not found!'.format(fname))
+
+    def clear_saved_obj(self, obj_name):
+        """Clears the selected saved object. Note that this does *not* clear
+        serialization (yet)."""
+        persistence = self.configuration._persistence
+        if obj_name not in persistence:
+            raise ValueError('Object with the name {0} was never saved.'
+                             ''.format(obj_name))
+        obj_label = persistence[obj_name]
+        fname = self.get_loading_filename(obj_label)
+        if os.path.isfile(fname):
+            logging.info('Removing file {0} (obj name: {1}, obj label: {2})...'
+                         ''.format(fname, obj_name, obj_label))
+            os.remove(fname)
+        else:
+            logging.info('Cannot remove file {0}: not found! (obj name: {1},'
+                         'obj label: {2})'.format(fname, obj_name, obj_label))
 
     @staticmethod
     def eval_dict(dictionary, no_eval=None, **kwargs):

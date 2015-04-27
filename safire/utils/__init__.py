@@ -988,6 +988,31 @@ def print_freqdict(freqdict, top_n=10):
     ])
 
 
+def pformat_nbytes(n_bytes):
+    """Formats the number of bytes "nicely", in human-readable format (kB, MB,
+    ...).
+
+    >>> pformat_nbytes(100)
+    '100 B'
+    >>> pformat_nbytes(10240)
+    '10.0 kB'
+    >>> pformat_nbytes(1024*1024*10)
+    '10.0 MB'
+    >>> pformat_nbytes(1024*1024*1024*10)
+    '10.0 GB'
+
+    """
+    if n_bytes < 1024:
+        return '{0} B'.format(n_bytes)
+    elif n_bytes < 1024**2:
+        return '{0} kB'.format(n_bytes / 1024.0)
+    elif n_bytes < 1024**3:
+        return '{0} MB'.format(n_bytes / (1024.0 ** 2))
+    else:
+        return '{0} GB'.format(n_bytes / (1024.0 ** 3))
+
+
+
 class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):
     """Adds __getitem__ functionality to a TransformedCorpus interface.
     Expects an indexable ``corpus`` object."""

@@ -664,11 +664,11 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
             devel_X = dataset.devel_X_batch(batch_index, self.b_size)
             devel_y = dataset.devel_y_batch(batch_index, self.b_size)
 
-            batch_loss = model_handle.is_valid(devel_X, devel_y)
+            batch_loss = model_handle.validate(devel_X, devel_y)
 
         elif isinstance(model, BaseUnsupervisedModel):
             devel_X = dataset.devel_X_batch(batch_index, self.b_size)
-            batch_loss = model_handle.is_valid(devel_X)
+            batch_loss = model_handle.validate(devel_X)
 
         return batch_loss
 

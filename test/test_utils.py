@@ -181,7 +181,6 @@ class TestUtils(SafireTestCase):
                          key=operator.itemgetter(1), reverse=True)][:10])
 
 
-
 if __name__ == '__main__':
     suite = unittest.TestSuite()
     loader = unittest.TestLoader()

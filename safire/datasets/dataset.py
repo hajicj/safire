@@ -95,13 +95,6 @@ import safire.datasets
 import safire.utils
 import safire.utils.transcorp
 
-
-# Doesn't DatasetABC implement the IndexedCorpus interface?
-# Should it be made explicit?
-# TODO: Try to implement DatasetABC as a CorpusABC subclass.
-#       (would greatly simplify a lot of transcorp.py functions)
-#class DatasetABC(gensim.utils.SaveLoad):
-
 class CastPipelineAsDataset(TransformationABC):
     """Dummy class that acts as an ``obj`` member of a DatasetABC.
     As a transformation, does nothing."""
@@ -394,6 +387,13 @@ class DatasetABC(safire.utils.IndexedTransformedCorpus):
         """Given the first index of a batch and batch size, builds the batch
         from the corpus.
         """
+        if lbound + batch_size >= len(self):
+            raise ValueError('Too high lbound + batch_size: {0} + {1} = {2} for dataset'
+                             ' of length {3}, test_p={4}'.format(lbound,
+                                                     batch_size,
+                                                     lbound + batch_size,
+                                                     len(self),
+                                                     self.test_p))
         result = self[lbound:lbound+batch_size]
         return result
 

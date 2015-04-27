@@ -194,6 +194,8 @@ class ShardedCorpus(IndexedCorpus):
         self.n_out = self.dim
 
         # print 'Total length: {0}'.format(len(self))
+        logging.info('Total size of serialized data on disk: {0}'
+                     ''.format(self.size_on_disk()))
 
     def init_shards(self, output_prefix, corpus, shardsize=4096,
                     dtype=_default_dtype):
@@ -896,3 +898,12 @@ class ShardedCorpus(IndexedCorpus):
         logging.info('Clearing')
         os.remove(instance.output_prefix)
         del instance
+
+    def size_on_disk(self):
+        """Computes how much space the serialized data takes on disk. Uses
+        ``os.path.getsize()``."""
+        total_size = 0
+        for i in xrange(self.n_shards):
+            filename = self._shard_name(i)
+            total_size += os.path.getsize(filename)
+        return total_size
