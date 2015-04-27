@@ -36,7 +36,7 @@ from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.data.word2vec_transformer import Word2VecTransformer
 import safire.datasets.dataset
-from safire.utils import IndexedTransformedCorpus, freqdict
+# from safire.utils import IndexedTransformedCorpus, freqdict
 import safire.utils
 import safire.utils.transformers
 
@@ -478,7 +478,7 @@ def convert_to_dense(corpus, dim=None):
 
     # If we have an IndexedTransformedCorpus that is already outputting dense
     # data, leave it be.
-    elif isinstance(corpus, IndexedTransformedCorpus) \
+    elif isinstance(corpus, safire.utils.IndexedTransformedCorpus) \
             and isinstance(corpus[0], numpy.ndarray):
         logging.warn('Corpus class {0}: conversion to dense already done'
                      ' downstream somewhere, no change.'.format(type(corpus)))
@@ -709,7 +709,7 @@ def smart_apply_transcorp(obj, corpus, *args, **kwargs):
     Decides whether to initialize a TransformedCorpus, or an
     IndexedTransformedCorpus."""
     try:
-        return IndexedTransformedCorpus(obj, corpus, *args, **kwargs)
+        return safire.utils.IndexedTransformedCorpus(obj, corpus, *args, **kwargs)
     except TypeError:
         return TransformedCorpus(obj, corpus, *args, **kwargs)
 
@@ -808,7 +808,7 @@ def compute_word2image_map(vtcorp, icorp, t2i_indexes, freqdicts=None):
     # Get documents as their token representations
     documents = [doc for doc in vtcorp.get_texts()]
     word_sets = [frozenset(doc) for doc in documents]
-    word_freqs = [freqdict(doc) for doc in documents]
+    word_freqs = [safire.utils.freqdict(doc) for doc in documents]
 
     # Get text name <=> tid mappings
     tname2tid = vtcorp.doc2id  # This will be defaultdict(set) -- ex: sentences

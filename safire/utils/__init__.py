@@ -27,7 +27,6 @@ import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import operator
 
-
 try:
     import Image
 except ImportError:
@@ -1012,17 +1011,19 @@ def pformat_nbytes(n_bytes):
         return '{0} GB'.format(n_bytes / (1024.0 ** 3))
 
 
-
 class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):
     """Adds __getitem__ functionality to a TransformedCorpus interface.
     Expects an indexable ``corpus`` object."""
     def __init__(self, obj, corpus, chunksize=None):
         try:
             _ = corpus[0]
-        except TypeError:
+        except (TypeError, AttributeError):
             raise TypeError('Corpus {0} of type {1} is not indexable (does not'
                             'respond to __getitem__ call, raises TypeError)'
                             .format(corpus, type(corpus)))
+        except ValueError:
+            raise TypeError('Corpus {0} of type {1} has zero length.'
+                            ' Corpus stack.'.format(corpus, type(corpus)))
 
         super(IndexedTransformedCorpus, self).__init__(obj, corpus, chunksize)
 

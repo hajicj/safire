@@ -98,12 +98,9 @@ class SwapoutCorpus(IndexedTransformedCorpus):
                                    type(swap),
                                    len(swap)))
 
-        if isinstance(self.obj, safire.data.sharded_corpus.ShardedCorpus):
-            logging.info('Total serialized data size on disk: {0}'
-                         ''.format(safire.utils.pformat_nbytes(self.obj.size_on_disk())))
-
         self.obj = swap  # The corpus which gets used instead of the input
                          # corpus.
+
         self.corpus = corpus
         self.chunksize = None
         self.metadata = False

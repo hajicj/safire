@@ -837,7 +837,10 @@ class ShardedCorpus(IndexedCorpus):
         """Loads itself in clean state. You can happily ignore the ``mmap``
         parameter, as the saving mechanism for the dataset is different from
         how gensim saves things in utils.SaveLoad."""
-        return super(ShardedCorpus, cls).load(fname, mmap)
+        instance = super(ShardedCorpus, cls).load(fname, mmap)
+        logging.info('Loaded ShardedCorpus, total size on disk: {0}'
+                     ''.format(safire.utils.pformat_nbytes(instance.size_on_disk())))
+        return instance
 
     @staticmethod
     def save_corpus(fname, corpus, id2word=None, progress_cnt=1000,
