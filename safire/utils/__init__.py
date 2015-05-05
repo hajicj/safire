@@ -26,6 +26,7 @@ import itertools
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import operator
+from pympler import asizeof
 
 try:
     import Image
@@ -320,9 +321,31 @@ def total_size(o, handlers={}):
     return sizeof(o)
 
 
-##############################################################################
+def obj_memory_usage(obj):
+    """Computes the memory usage of an object's __dict__ members.
+    """
+    memory_usage_dict = {}
+    for key, value in obj.__dict__.items():
+        size = asizeof.asizeof(value)
+        memory_usage_dict[key] = size
+    return memory_usage_dict
 
-### Various interesting activation functions
+
+def memory_usage_report(memory_usage_dict, human_readable=True, linesep='\n'):
+    """Generates a report of memory usage from a memory usage dict. Set
+    ``human_readable=True`` if you want the report in B, kB, MB and GB,
+    otherwise only bytes are used."""
+    report_lines = []
+    for key in sorted(memory_usage_dict.keys()):
+        size = memory_usage_dict[key]
+        if human_readable:
+            size = pformat_nbytes(size)
+        report_lines.append('{0}:\t{1}'.format(key, size))
+    return linesep.join(report_lines)
+
+##############################################################################
+# Various interesting activation functions
+
 
 def mask_ReLU(X):
     """Rectified Linear Unit activation function."""
@@ -1004,11 +1027,11 @@ def pformat_nbytes(n_bytes):
     if n_bytes < 1024:
         return '{0} B'.format(n_bytes)
     elif n_bytes < 1024**2:
-        return '{0} kB'.format(n_bytes / 1024.0)
+        return '{0:.2f} kB'.format(n_bytes / 1024.0)
     elif n_bytes < 1024**3:
-        return '{0} MB'.format(n_bytes / (1024.0 ** 2))
+        return '{0:.2f} MB'.format(n_bytes / (1024.0 ** 2))
     else:
-        return '{0} GB'.format(n_bytes / (1024.0 ** 3))
+        return '{0:.2f} GB'.format(n_bytes / (1024.0 ** 3))
 
 
 class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):

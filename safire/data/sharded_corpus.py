@@ -8,6 +8,7 @@ The corpus is intended for situations where you need to use your data
 as numpy arrays for some iterative processing (like training something
 using SGD, which usually involves heavy matrix multiplication).
 """
+import copy
 import logging
 import os
 import cPickle
@@ -15,6 +16,7 @@ import math
 import numpy
 import scipy.sparse as sparse
 import safire.utils
+# import safire.utils.transcorp
 
 #: Specifies which dtype should be used for serializing the shards.
 _default_dtype = float
@@ -182,7 +184,7 @@ class ShardedCorpus(IndexedCorpus):
 
         logging.info('Initializing sharded corpus with prefix %s' % output_prefix)
         if (not os.path.isfile(output_prefix)) or overwrite:
-            logging.info('Building from corpus...')
+            #logging.info('Building from corpus:\n{0}'.format(safire.utils.transcorp.log_corpus_stack(corpus, with_length=True)))
             self.init_shards(output_prefix, corpus, shardsize)
             self.save()  # Save automatically, to facillitate re-loading
         else:
@@ -563,7 +565,10 @@ class ShardedCorpus(IndexedCorpus):
         if offset < 0:
             offset += len(self)
         self._ensure_shard(offset)
-        result = self.current_shard[offset - self.current_offset]
+        # Deep copy so that there is no reference to the numpy array containing
+        # the shard (that way, working with one row of the data would hog the
+        # memory of all the shard)
+        result = copy.deepcopy(self.current_shard[offset - self.current_offset])
         return result
 
     #@profile

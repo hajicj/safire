@@ -350,6 +350,7 @@ import sys
 import pprint
 import operator
 import re
+from data.pipeline import Pipeline
 
 __author__ = "Jan Hajic jr."
 
@@ -472,7 +473,14 @@ class ConfigParser(object):
     interpret the configuration file (that's the Builder's job).
     """
     def parse(self, file):
-        """Given a config file (handle), will build the Configuration object."""
+        """Given a config file (handle), will build the Configuration object.
+        If a string is passed, will interpret it as the filename."""
+        if isinstance(file, str):
+            with open(file) as conf_handle:
+                output = self.parse(conf_handle)
+            return output
+
+
         conf = Configuration()
 
         current_section = {}
@@ -634,6 +642,142 @@ class ConfigBuilder(object):
         # Works with object names, not the objects themselves.
         self.deps_graph = self.build_dependency_graph(conf)
         self.sorted_deps = self.sort_dependency_graph(self.deps_graph)
+
+    def build(self):
+        """This method does the heavy lifting: determining dependencies, dealing
+        with persistence, etc. It outputs a dictionary of all objects (blocks
+        and non-blocks) that do not depend on anything.
+        """
+        if hasattr(self, 'clear') and self.clear is True:
+            logging.info('Clearing all saved objects...')
+            self.clear_saved()
+
+        will_load, will_be_loaded, will_init = self.resolve_persistence()
+
+        logging.debug('Will load: {0}'.format(will_load))
+        logging.debug('Will be loaded transitively: {0}'.format(will_be_loaded))
+        logging.debug('Will initialize: {0}'.format(will_init))
+
+        # Loading:
+        #  - sort items to load according to the order in the sorted graph
+        load_queue = []
+        for item in self.sorted_deps:
+            if item in will_load:
+                load_queue.append(item)
+
+        for item in load_queue:
+            #  - load item (using loader, etc.)
+            logging.info('========== Loading item: {0}\t'
+                         '=========='.format(item))
+            persistent_label = getattr(self._persistence, item)
+            logging.info('   Persistent label: {0}'.format(persistent_label))
+            fname = self.get_loading_filename(persistent_label)
+            obj = self._execute_load(fname)
+            #  - add item to object dict
+            self.objects[item] = obj
+
+            #  - traverse dependencies according to _access_deps. This time, it
+            #    means iterating over the actual objects, as they have been
+            #    loaded. Add each of these to the object dict.
+            obj_queue = [(item, obj)]
+            while obj_queue:
+                logging.debug('Current queue:\n{0}'
+                              ''.format(pprint.pformat(map(operator.itemgetter(0), obj_queue))))
+                current_symbol, current_obj = obj_queue.pop()
+                logging.debug('Current symbol: {0}, obj: {1}'
+                              ''.format(current_symbol, current_obj))
+
+                # Add to objects dict.
+                self.objects[current_symbol] = current_obj
+
+                # Traverse dependency graph further
+                current_dep_symbols = self.get_dep_symbols(current_symbol)
+                current_dep_objs = {dep_symbol: self.retrieve_dep_obj(current_symbol,
+                                                                  current_obj,
+                                                                  dep_symbol)
+                                    for dep_symbol in current_dep_symbols
+                                    if self.is_dep_obj_accessible(current_symbol,
+                                                                  dep_symbol)
+                                    and dep_symbol is not None}
+                logging.debug('Extending dep_objs queue: {0}'.format(current_dep_objs.keys()))
+                obj_queue.extend(current_dep_objs.items())
+
+        # Verify that everything that should have been loaded has been loaded
+        for item in will_be_loaded:
+            if item not in self.objects:
+                logging.warn('Object {0} not found after it should have been'
+                             ' loaded.' #(Available objects: {1})'
+                             ''.format(item,
+                             #          pprint.pformat(self.objects.keys())
+                             )
+                )
+
+        # Initialize objects that weren't loaded.
+        # Note that the ordering needs to be re-computed.
+        to_init = [item for item in self.sorted_deps if item in will_init]
+        for item in to_init:
+            if self.is_block(item):
+                logging.info('========== Initializing block: {0}\t'
+                             '=========='.format(item))
+                self.init_block(item, **self.objects)
+            else:
+                logging.info('========== Initializing object: {0}\t'
+                             '=========='.format(item))
+                self.init_object(item,
+                                 self.configuration.objects[item],
+                                 **self.objects)
+            if item in self.configuration._persistence:
+                label = self.configuration._persistence[item]
+                fname = self.get_loading_filename(label)
+                print 'Saving object {0} to fname {1}'.format(item, fname)
+                self.objects[item].save(fname)
+
+        # At this point, all objects - blocks, transformers and others - should
+        # be ready. We return a dictionary of objects on which nothing depends.
+        reverse_deps = collections.defaultdict(set)
+        for obj_name in self.objects:
+            if obj_name not in reverse_deps:
+                reverse_deps[obj_name] = set()
+            deps = self.deps_graph[obj_name]
+            for d in deps:
+                reverse_deps[d].add(obj_name)
+        output_objects = {obj_name: obj
+                          for obj_name, obj in self.objects.items()
+                          if len(reverse_deps[obj_name]) == 0
+                          and obj_name not in self.exclude_from_build_output}
+        return output_objects
+
+    def export_pipeline(self, name):
+        """Creates a :class:`safire.data.pipeline.Pipeline` with the output
+        block ``name`` and the pruned depgraph/sorted depgraph/objects
+        dictionary."""
+        if not self.is_block(name):
+            raise ValueError('Specified pipeline output {0} is not a block.'
+                             ''.format(name))
+
+        output = self.objects[name]
+
+        pruned_depgraph = {name: self.deps_graph[name]}
+        depqueue = list(self.deps_graph[name])
+        while depqueue:
+            current_dep = depqueue.pop()
+            deps_to_add = self.deps_graph[current_dep]
+            pruned_depgraph[current_dep] = deps_to_add
+            depqueue.extend(deps_to_add)
+
+        pruned_sortedgraph = collections.OrderedDict()
+        for depname in self.sorted_deps:
+            if depname in pruned_depgraph:
+                pruned_sortedgraph[depname] = self.sorted_deps[depname]
+
+        pruned_objects = {name: self.objects[name]}
+        for depname in pruned_depgraph:
+            pruned_objects[depname] = self.objects[depname]
+
+        pipeline = Pipeline(output,
+                            pruned_objects,
+                            pruned_depgraph)
+        return pipeline
 
     def build_block_dependency_graph(self, assembly):
         """Builds a dependency graph of the pipeline blocks (the topology of the
@@ -1074,110 +1218,6 @@ class ConfigBuilder(object):
             access_expr = obj_conf['_access_deps'][symbol]
             dep_obj = eval(access_expr, globals(), {name: obj})
         return dep_obj
-
-    def build(self):
-        """This method does the heavy lifting: determining dependencies, dealing
-        with persistence, etc. It outputs a dictionary of all objects (blocks
-        and non-blocks) that do not depend on anything.
-        """
-        if hasattr(self, 'clear') and self.clear is True:
-            logging.info('Clearing all saved objects...')
-            self.clear_saved()
-
-        will_load, will_be_loaded, will_init = self.resolve_persistence()
-
-        logging.debug('Will load: {0}'.format(will_load))
-        logging.debug('Will be loaded transitively: {0}'.format(will_be_loaded))
-        logging.debug('Will initialize: {0}'.format(will_init))
-
-        # Loading:
-        #  - sort items to load according to the order in the sorted graph
-        load_queue = []
-        for item in self.sorted_deps:
-            if item in will_load:
-                load_queue.append(item)
-
-        for item in load_queue:
-            #  - load item (using loader, etc.)
-            logging.info('========== Loading item: {0}\t'
-                         '=========='.format(item))
-            persistent_label = getattr(self._persistence, item)
-            logging.info('   Persistent label: {0}'.format(persistent_label))
-            fname = self.get_loading_filename(persistent_label)
-            obj = self._execute_load(fname)
-            #  - add item to object dict
-            self.objects[item] = obj
-
-            #  - traverse dependencies according to _access_deps. This time, it
-            #    means iterating over the actual objects, as they have been
-            #    loaded. Add each of these to the object dict.
-            obj_queue = [(item, obj)]
-            while obj_queue:
-                logging.debug('Current queue:\n{0}'
-                              ''.format(pprint.pformat(map(operator.itemgetter(0), obj_queue))))
-                current_symbol, current_obj = obj_queue.pop()
-                logging.debug('Current symbol: {0}, obj: {1}'
-                              ''.format(current_symbol, current_obj))
-
-                # Add to objects dict.
-                self.objects[current_symbol] = current_obj
-
-                # Traverse dependency graph further
-                current_dep_symbols = self.get_dep_symbols(current_symbol)
-                current_dep_objs = {dep_symbol: self.retrieve_dep_obj(current_symbol,
-                                                                  current_obj,
-                                                                  dep_symbol)
-                                    for dep_symbol in current_dep_symbols
-                                    if self.is_dep_obj_accessible(current_symbol,
-                                                                  dep_symbol)
-                                    and dep_symbol is not None}
-                logging.debug('Extending dep_objs queue: {0}'.format(current_dep_objs.keys()))
-                obj_queue.extend(current_dep_objs.items())
-
-        # Verify that everything that should have been loaded has been loaded
-        for item in will_be_loaded:
-            if item not in self.objects:
-                logging.warn('Object {0} not found after it should have been'
-                             ' loaded.' #(Available objects: {1})'
-                             ''.format(item,
-                             #          pprint.pformat(self.objects.keys())
-                             )
-                )
-
-        # Initialize objects that weren't loaded.
-        # Note that the ordering needs to be re-computed.
-        to_init = [item for item in self.sorted_deps if item in will_init]
-        for item in to_init:
-            if self.is_block(item):
-                logging.info('========== Initializing block: {0}\t'
-                             '=========='.format(item))
-                self.init_block(item, **self.objects)
-            else:
-                logging.info('========== Initializing object: {0}\t'
-                             '=========='.format(item))
-                self.init_object(item,
-                                 self.configuration.objects[item],
-                                 **self.objects)
-            if item in self.configuration._persistence:
-                label = self.configuration._persistence[item]
-                fname = self.get_loading_filename(label)
-                print 'Saving object {0} to fname {1}'.format(item, fname)
-                self.objects[item].save(fname)
-
-        # At this point, all objects - blocks, transformers and others - should
-        # be ready. We return a dictionary of objects on which nothing depends.
-        reverse_deps = collections.defaultdict(set)
-        for obj_name in self.objects:
-            if obj_name not in reverse_deps:
-                reverse_deps[obj_name] = set()
-            deps = self.deps_graph[obj_name]
-            for d in deps:
-                reverse_deps[d].add(obj_name)
-        output_objects = {obj_name: obj
-                          for obj_name, obj in self.objects.items()
-                          if len(reverse_deps[obj_name]) == 0
-                          and obj_name not in self.exclude_from_build_output}
-        return output_objects
 
     def run_saving(self):
         """Saves the built objects according to the persistence instruction."""

@@ -286,7 +286,7 @@ class HtmlSimilarImagesWriter(HtmlSimpleWriter):
         super(HtmlSimilarImagesWriter, self).__init__(root, **kwargs)
         self.image_id2doc = image_id2doc
         ### DEBUG
-        logging.debug('Image id2doc: {0}'.format(pprint.pformat(self.image_id2doc)))
+        # logging.debug('Image id2doc: {0}'.format(pprint.pformat(self.image_id2doc)))
         self.n_rows = n_rows  # TODO: So far ignored...
 
     def generate_value(self, iid, value, corpus):

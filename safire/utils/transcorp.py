@@ -33,7 +33,7 @@ import safire.data.serializer
 import safire.data.sharded_corpus
 import safire.data.composite_corpus
 from safire.data.imagenetcorpus import ImagenetCorpus
-from safire.data.sharded_corpus import ShardedCorpus
+import safire.data.sharded_corpus
 from safire.data.word2vec_transformer import Word2VecTransformer
 import safire.datasets.dataset
 # from safire.utils import IndexedTransformedCorpus, freqdict
@@ -323,7 +323,7 @@ def get_transformers(pipeline):
         # ...and here, ladies and gents, we show how terrible this module is.
 
         # If a silent conversion is happening...
-        if isinstance(pipeline.obj, ShardedCorpus) and \
+        if isinstance(pipeline.obj, safire.data.sharded_corpus.ShardedCorpus) and \
                         pipeline.obj.gensim_retrieval is False and \
                         pipeline.obj.sparse_retrieval is False:
             # ..add a convertor, so that the resulting stack of transformers
@@ -422,7 +422,7 @@ def keymap2dict(keymap_dict):
     return new_dict
 
 
-def log_corpus_stack(corpus):
+def log_corpus_stack(corpus, with_length=False):
     """Reports the types of corpora and transformations of a given
     corpus stack. Can deal with CompositeDataset pipelines."""
     if isinstance(corpus, safire.datasets.dataset.CompositeDataset)\
@@ -431,20 +431,32 @@ def log_corpus_stack(corpus):
             type(corpus),
             ''.join(['\n    {0}'.format(type(d)) for d in corpus.corpus])
         )
-        individual_logs = [log_corpus_stack(d) for d in corpus.corpus]
+        individual_logs = [log_corpus_stack(d, with_length=with_length)
+                           for d in corpus.corpus]
         combined_logs = '------component-------\n' + \
                         '------component-------\n'.join(individual_logs)
         return '\n'.join([r, combined_logs])
     elif isinstance(corpus, TransformedCorpus):
         r = 'Type: {0} with obj {1}'.format(type(corpus), type(corpus.obj))
-        return '\n'.join([r, log_corpus_stack(corpus.corpus)])
+        if with_length:
+            r += ' and length {0}'.format(len(corpus))
+        return '\n'.join([r, log_corpus_stack(corpus.corpus,
+                                              with_length=with_length)])
+
     elif isinstance(corpus, safire.datasets.dataset.TransformedDataset):
         r = 'Type: %s with obj %s' % (type(corpus), type(corpus.obj))
-        return '\n'.join([r, log_corpus_stack(corpus.data)])
+        if with_length:
+            r += ' and length {0}'.format(len(corpus))
+        return '\n'.join([r, log_corpus_stack(corpus.data,
+                                              with_length=with_length)])
+
     elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
         r = 'Type: {0}, passing through DatasetABC to underlying corpus {1}' \
             ''.format(type(corpus), type(corpus.corpus))
-        return '\n'.join([r, log_corpus_stack(corpus.corpus)])
+        if with_length:
+            r += ' and length {0}'.format(len(corpus))
+        return '\n'.join([r, log_corpus_stack(corpus.corpus,
+                                              with_length=with_length)])
     else:
         r = 'Type: %s' % (type(corpus))
         return '\n'.join([r, '=== STACK END ===\n'])
@@ -464,7 +476,7 @@ def convert_to_dense(corpus, dim=None):
     # Straightforward: if we have a dense output-capable corpus, set it to
     # dense output.
     if isinstance(corpus, safire.data.serializer.SwapoutCorpus) \
-            and isinstance(corpus.obj, ShardedCorpus):
+            and isinstance(corpus.obj, safire.data.sharded_corpus.ShardedCorpus):
             corpus.obj.gensim_retrieval = False
             corpus.obj.sparse_retrieval = False
             return corpus
@@ -522,7 +534,7 @@ def convert_to_gensim(corpus):
     logging.info('Converting pipeline to gensim output:\n{0}'
                  ''.format(log_corpus_stack(corpus)))
     if isinstance(corpus, safire.data.serializer.SwapoutCorpus) \
-            and isinstance(corpus.obj, ShardedCorpus):#  \
+            and isinstance(corpus.obj, safire.data.sharded_corpus.ShardedCorpus):#  \
             #and isinstance(corpus.obj.serializaton_class, ShardedCorpus):
         logging.info('SwapoutCorpus/ShardedCorpus serializer detected, '
                      'setting gensim_retrieval to True.')
@@ -566,7 +578,7 @@ def find_type_in_pipeline(pipeline, type_to_find):
         return None
 
 
-def is_serialized(pipeline, serializer_class=ShardedCorpus):
+def is_serialized(pipeline, serializer_class=safire.data.sharded_corpus.ShardedCorpus):
     """Checks if the pipeline contains a serializer that used the given class
     for serialization."""
     swapout = find_type_in_pipeline(pipeline,
@@ -604,7 +616,8 @@ def is_fully_indexable(pipeline):
         return False
 
 
-def ensure_serialization(pipeline, force=False, serializer_class=ShardedCorpus,
+def ensure_serialization(pipeline, force=False,
+                         serializer_class=safire.data.sharded_corpus.ShardedCorpus,
                          **serializer_kwargs):
     """Checks if the pipeline has been serialized using the given class.
     If not, serializes the class using the supplied kwargs.
@@ -685,7 +698,7 @@ def convert_to_dense_recursive(pipeline):
     def _todense_recursive(corpus):
         # This is so far the only supported case of converting to dense.
         if isinstance(corpus, safire.data.serializer.SwapoutCorpus):
-            if isinstance(corpus.obj, ShardedCorpus):
+            if isinstance(corpus.obj, safire.data.sharded_corpus.ShardedCorpus):
                 corpus.obj.gensim_retrieval = False
                 corpus.obdj.sparse_retrieval = False
                 return

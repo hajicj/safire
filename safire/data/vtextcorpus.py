@@ -231,10 +231,10 @@ class VTextCorpus(TextCorpus):
                 self.precompute_vtlist = False
             else:
                 logging.debug('Precomputing vtlist '
-                              '(self.precompute_vtlist = {0}'
+                              '(self.precompute_vtlist = {0})'
                               ''.format(self.precompute_vtlist))
                 self.vtlist = self._precompute_vtlist(self.input)
-
+            logging.info('  Length after precomputing vtlist: {0}'.format(len(self)))
         # Caching
         self._cachedir = mkdtemp()
         self._memory = memory.Memory(cachedir=self._cachedir, verbose=0)
@@ -673,7 +673,7 @@ class VTextCorpus(TextCorpus):
     def _precompute_vtlist(self, input):
         # Should also compute the doc2id and id2doc mapping.
         # Does NOT support sentences.
-        logging.info('VTextCorpus: precomputing vtlist.')
+        logging.info('VTextCorpus: precomputing vtlist {0}.'.format(input))
         if not isinstance(input, str):
             raise TypeError('Cannot precompute vtlist from a handle,'
                             ' must supply parameter input as filename.')
@@ -685,8 +685,9 @@ class VTextCorpus(TextCorpus):
                 self.doc2id[doc_short_name].add(i)
 
                 doc_full_name = self.doc_full_path(doc_short_name)
+                # logging.debug('Adding document to vtlist: {0}'.format(doc_full_name))
                 vtlist.append(doc_full_name)
-        logging.debug('Precomputed vtlist, doc2id: {0}'.format(self.doc2id))
+        #logging.debug('Precomputed vtlist, doc2id: {0}'.format(self.doc2id))
         return vtlist
 
     def save(self, *args, **kwargs):

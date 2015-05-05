@@ -218,8 +218,9 @@ class CompositeCorpus(IndexedTransformedCorpus):
                     raise ValueError('All composite corpus components must '
                                      'have the same length. (Lengths: '
                                      '{0}) Are you sure the CompositeCorpus'
-                                     'should be aligned?'
-                                     ''.format(tuple((len(d) for d in corpora)))
+                                     'should be aligned?\nStacks:{1}'
+                                     ''.format(tuple((len(d) for d in corpora)),
+                                                     '\n\n'.join([safire.utils.transcorp.log_corpus_stack(d, with_length=True) for d in corpora]))
                     )
 
         if names:
