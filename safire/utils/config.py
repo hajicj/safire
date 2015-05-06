@@ -350,11 +350,15 @@ import sys
 import pprint
 import operator
 import re
-from data.pipeline import Pipeline
+from safire.data.pipeline import Pipeline
 
 __author__ = "Jan Hajic jr."
 
-# Some utility functions.
+##############################################################################
+
+###########################
+# Some utility functions. #
+###########################
 
 
 def names_in_code(code_string, eval=True):
@@ -416,7 +420,29 @@ def depgraph2gvgraph(obj_dependency_graph, format='svg', **graph_kwargs):
 
     return graph
 
-# Configuration classes.
+
+def build_pipeline(config_file, output_name):
+    """Shortcut function for getting a pipeline from a config file.
+
+    :param config_file: The configuration file from which you want to get the
+        pipeline.
+
+    :param output_name: The name of the desired pipeline's output block
+
+    :returns: Pipeline with the given block as the output.
+    """
+    cparser = ConfigParser()
+    conf = cparser.parse(config_file)
+    cbuilder = ConfigBuilder(conf)
+    cbuilder.build()
+    pipeline = cbuilder.export_pipeline(output_name)
+    return pipeline
+
+###############################################################################
+
+##########################
+# Configuration classes. #
+##########################
 
 
 class Configuration(object):
@@ -776,7 +802,8 @@ class ConfigBuilder(object):
 
         pipeline = Pipeline(output,
                             pruned_objects,
-                            pruned_depgraph)
+                            pruned_depgraph,
+                            pruned_sortedgraph)
         return pipeline
 
     def build_block_dependency_graph(self, assembly):

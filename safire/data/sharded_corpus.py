@@ -642,7 +642,7 @@ class ShardedCorpus(IndexedCorpus):
             # The easy case: both in one shard.
             if first_shard == last_shard:
                 s_result = self.current_shard[start - self.current_offset:
-                                            stop - self.current_offset]
+                                              stop - self.current_offset]
                 # Handle different sparsity settings:
                 s_result = self._getitem_format(s_result)
 

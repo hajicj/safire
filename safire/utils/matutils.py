@@ -10,6 +10,7 @@ import operator
 
 __author__ = 'Jan Hajic jr.'
 
+##############################################################################
 
 def precision(prediction, true):
     """Computes the precision of the prediction item predicting members of the
@@ -77,6 +78,10 @@ def kappa(a1, a2, length=12.0):
 
     kappa = (p_agree - p_random) / (1.0 - p_random)
     return kappa
+
+
+def cosine_similarity(u, v):
+    return numpy.dot(u, v) / (numpy.linalg.norm(u) * numpy.linalg.norm(v))
 
 ##############################################################################
 
