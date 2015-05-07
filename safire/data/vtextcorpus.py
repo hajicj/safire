@@ -643,7 +643,8 @@ class VTextCorpus(TextCorpus):
 
         :return: The filtered document.
         """
-        return self.positional_filter(sentences, **self.positional_filter_kwargs)
+        return self.positional_filter(sentences,
+                                      **self.positional_filter_kwargs)
 
     def _apply_token_min_freq(self, flt_sentences):
         """Filters the given set of sentences so that tokens that appear
@@ -710,5 +711,5 @@ class VTextCorpus(TextCorpus):
 
         return corpus
 
-    def __setstate__(self, d):
-        self.__dict__.update(d)
+#   def __setstate__(self, d):
+    #     self.__dict__.update(d)
