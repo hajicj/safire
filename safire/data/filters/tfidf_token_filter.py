@@ -10,7 +10,10 @@ __author__ = "Jan Hajic jr."
 class TfidfBasedTokensFilter(object):
     """This class uses TfIdf information to filter out tokens from a document.
     By default, it expects the normalized TfIdf count and will return tokens
-    that round to 1 or more.
+    that round to 1 or more. The exact formula for computing how many tokens
+    are retained for a word type is::
+
+      int(10.0 * (f + 0.05))
     """
     def __init__(self, tfidf_data):
         """

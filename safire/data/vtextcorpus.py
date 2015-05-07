@@ -433,11 +433,11 @@ class VTextCorpus(TextCorpus):
         current_buffer = []
         for line_no, line in enumerate(doc_handle):
 
-            #logging.debug('Line: %s' % line.strip())
-            #safire.utils.check_malformed_unicode(line.strip())
+            # logging.debug('Line: %s' % line.strip())
+            # safire.utils.check_malformed_unicode(line.strip())
 
             if line.strip() == '':
-                #logger.debug('parse_sentences: Adding sentence at %d: %s' % (
+                # logger.debug('parse_sentences: Adding sentence at %d: %s' % (
                 #    line_no, str(current_buffer)))
                 sentences.append(current_buffer)
                 current_buffer = []
@@ -460,6 +460,11 @@ class VTextCorpus(TextCorpus):
                 if self.filter_capital and filter_capital_regex.match(ret_field):
                     continue
                 current_buffer.append(ret_field)
+
+        # Last sentence
+        if len(current_buffer) > 0:
+            sentences.append(current_buffer)
+            # current_buffer = []   #... not strictly necessary
 
         return sentences
 
