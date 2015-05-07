@@ -624,7 +624,8 @@ class VTextCorpus(TextCorpus):
                                 ' the vtlist.')
             try:
                 with self._get_doc_handle(self.vtlist[item]) as vthandle:
-                    document, _ = self.parse_document_and_sentences(vthandle)
+                    document, _ = self.parse_document_and_sentences(vthandle,
+                                                                    docno=item)
             except IndexError:
                 logging.critical('Asking for vtlist item {0}, vtlist length is'
                                  ' only {1}.'.format(item, len(self.vtlist)))
