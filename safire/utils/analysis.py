@@ -6,6 +6,7 @@ module way.
 Essentially, all stuff in here should be later refactored into
 ``introspection``. The functions here are shortcuts.
 """
+import collections
 import logging
 import operator
 import safire.utils.transcorp as transcorp
@@ -41,6 +42,34 @@ def make_token_iid2word_fn(plain_token_corpus):
         return token
 
     return iid2word
+
+
+def get_token_word2iid_obj(iid2word, plain_token_corpus):
+    """Creates a dict that for a given word returns the set of all iids at which
+    the word occurs.
+
+    :param iid2word: A function that maps from iids of token documents to the
+        words that the item with the given iid represents.
+
+    :param plain_token_corpus: The corpus from which the iids should be aggregated
+        by word they represent.
+
+    :return: A defaultdict with words as keys and sets of iids as values.
+    """
+    word2iid = collections.defaultdict(set)
+    for iid in xrange(len(plain_token_corpus)):
+        word = iid2word(iid)
+        word2iid[word].add(iid)
+    return word2iid
+
+
+def make_token_word2iid_fn(iid2word, plain_token_corpus):
+    word2iid_obj = get_token_word2iid_obj(iid2word, plain_token_corpus)
+
+    def word2iid(word):
+        return word2iid_obj[word]
+
+    return word2iid
 
 
 def most_similar_items(corpus, query, limit=10000, k=10,

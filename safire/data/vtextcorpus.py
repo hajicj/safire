@@ -411,7 +411,7 @@ class VTextCorpus(TextCorpus):
         logger.info('Processing corpus took %f s (%f s per document).' % (
             total_time, total_time / self.n_processed))
 
-    def parse_document_and_sentences(self, doc_handle, docno):
+    def parse_document_and_sentences(self, doc_handle, docno=None):
         """Parses the whole document. Returns both the sentences and the
         whole document, filtered by pfilter."""
         # Pre-parse entire document
@@ -420,12 +420,15 @@ class VTextCorpus(TextCorpus):
         # Process sentences and prepare document to return
         flt_sentences = sentences
         if self.positional_filter:
-            flt_sentences = self._apply_positional_filter(sentences)
+            flt_sentences = self._apply_positional_filter(flt_sentences)
 
         if self.token_min_freq:
             flt_sentences = self._apply_token_min_freq(flt_sentences)
 
         if self.tfidf_filter:
+            if docno is None:
+                raise ValueError('Cannot use tfidf_filter with document iid'
+                                 ' not supplied.')
             flt_sentences = self._apply_tfidf_filter(flt_sentences,
                                                      docno,
                                                      sentences=True)

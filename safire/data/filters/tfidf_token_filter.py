@@ -3,6 +3,7 @@ This module contains classes that ...
 """
 import logging
 import itertools
+from pprint import pprint, pformat
 import safire.utils.transcorp
 
 __author__ = "Jan Hajic jr."
@@ -27,6 +28,9 @@ class TfidfBasedTokensFilter(object):
         self.id2word = safire.utils.transcorp.get_id2word_obj(tfidf_data)
         self.word2id = self.id2word.token2id
 
+        logging.info('Total id2word size: {0}'.format(len(self.id2word)))
+        logging.info('Total word2id size: {0}'.format(len(self.word2id)))
+
     def __call__(self, tokens, doc_iid, sentences=False):
         """Input: list of tokens, doc iid.
 
@@ -40,6 +44,8 @@ class TfidfBasedTokensFilter(object):
         """
         tfidf = self.tfidf_data[doc_iid]
         tfidf_dict = dict(tfidf)
+
+        logging.debug(u'Recieved tokens: {0}'.format(pformat(tokens)))
 
         if sentences:
             all_tokens = itertools.chain(*tokens)
