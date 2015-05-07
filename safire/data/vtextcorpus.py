@@ -16,6 +16,7 @@ from joblib import memory
 from gensim.corpora.textcorpus import TextCorpus
 from gensim.corpora.dictionary import Dictionary
 import itertools
+from data.filters.tfidf_token_filter import TfidfBasedTokensFilter
 
 import filters.positional_filters as pfilters
 from safire.utils import freqdict
@@ -56,6 +57,7 @@ class VTextCorpus(TextCorpus):
                  pfilter=None, pfilter_full_freqs=False,
                  filter_capital=False,
                  filter_short=None,
+                 tfidf_filter=None,
                  label=None, precompute_vtlist=True):
         """Initializes the text corpus.
 
@@ -144,6 +146,11 @@ class VTextCorpus(TextCorpus):
             a capital letter in their retfield. This serves to remove named
             entities.
 
+        :param tfidf_filter: If set, will use a specific TfIdf-based filtering
+            to only retain tokens that are significant for the document.
+            Has to be ``__call__``-able with the same signature as
+            :meth:`TfidfBasedTokensFilter.__call__`.
+
         :param label: A "name" the corpus carries with it for identification.
 
         :param precompute_vtlist: If set, will load the list of vtext files in
@@ -191,6 +198,12 @@ class VTextCorpus(TextCorpus):
 
         # Initialize filters
         self.token_filter = token_filter
+
+        if tfidf_filter is not None:
+            if not isinstance(tfidf_filter, TfidfBasedTokensFilter):
+                logging.warn('Unexpected tfidf_filter type: {0}'
+                             ''.format(type(tfidf_filter)))
+        self.tfidf_filter = tfidf_filter
 
         if token_transformer == 'strip_UFAL':
             token_transformer = _strip_UFAL
@@ -321,7 +334,7 @@ class VTextCorpus(TextCorpus):
             # This is where the actual parsing happens.
             with self._get_doc_handle(doc) as doc_handle:
                 document, sentences = self.parse_document_and_sentences(
-                    doc_handle)
+                    doc_handle, docno)
 
             # if len(document) <= 10:
             #     logging.info(u'Total tokens in document {0}: {1} |\n {2}'
@@ -398,7 +411,7 @@ class VTextCorpus(TextCorpus):
         logger.info('Processing corpus took %f s (%f s per document).' % (
             total_time, total_time / self.n_processed))
 
-    def parse_document_and_sentences(self, doc_handle):
+    def parse_document_and_sentences(self, doc_handle, docno):
         """Parses the whole document. Returns both the sentences and the
         whole document, filtered by pfilter."""
         # Pre-parse entire document
@@ -411,6 +424,11 @@ class VTextCorpus(TextCorpus):
 
         if self.token_min_freq:
             flt_sentences = self._apply_token_min_freq(flt_sentences)
+
+        if self.tfidf_filter:
+            flt_sentences = self._apply_tfidf_filter(flt_sentences,
+                                                     docno,
+                                                     sentences=True)
 
         document = list(itertools.chain(*flt_sentences))
 
@@ -667,6 +685,10 @@ class VTextCorpus(TextCorpus):
             filtered_sentences.append(filtered_sentence)
         flt_sentences = filtered_sentences
         return flt_sentences
+
+    def _apply_tfidf_filter(self, flt_sentences, docno, **kwargs):
+        filtered_sentences = self.tfidf_filter(flt_sentences, docno, **kwargs)
+        return filtered_sentences
 
     def _get_doc_handle(self, doc):
         if self.gzipped:

@@ -2,6 +2,7 @@
 This module contains classes that ...
 """
 import logging
+import itertools
 import safire.utils.transcorp
 
 __author__ = "Jan Hajic jr."
@@ -26,14 +27,25 @@ class TfidfBasedTokensFilter(object):
         self.id2word = safire.utils.transcorp.get_id2word_obj(tfidf_data)
         self.word2id = self.id2word.token2id
 
-    def __call__(self, tokens, doc_iid):
+    def __call__(self, tokens, doc_iid, sentences=False):
         """Input: list of tokens, doc iid.
+
+        >>> tfidf_data = [[(0, 0.1), (1, 0.23), (4, 0.03), (5, 0.06)]]
+        >>> item = [(0, 3), (1, 1), (4, 2), (5, 2)]
+
+        :param sentences: If this flag is set, will consider ``tokens`` not as
+            an array of tokens but as an array of arrays of tokens.
 
         :returns: A list of the tokens that made the cut.
         """
         tfidf = self.tfidf_data[doc_iid]
         tfidf_dict = dict(tfidf)
-        wids = [self.word2id[token] for token in tokens]
+
+        if sentences:
+            all_tokens = itertools.chain(*tokens)
+        else:
+            all_tokens = tokens
+        wids = [self.word2id[token] for token in all_tokens]
         output_freqs = {}
         for wid in wids:
             if wid in tfidf_dict:
@@ -45,15 +57,31 @@ class TfidfBasedTokensFilter(object):
                              'in the source tf-idf corpus.\n\twid not found: '
                              '{0}\n\tdoc_iid: {1}'.format(wid, doc_iid))
                 # skip
-        already_passed = {token: 0 for token in output_freqs}
-        output_tokens = []
-        for token in tokens:
-            if token not in output_freqs:
-                continue
-            if already_passed[token] >= output_freqs[token]:
-                continue
-            output_tokens.append(token)
-            already_passed[token] += 1
+
+        # Generate output (should refactor...)
+        if sentences:
+            already_passed = {token: 0 for token in output_freqs}
+            output_tokens = []
+            for sentence in tokens:
+                output_sentence = []
+                for token in sentence:
+                    if token not in output_freqs:
+                        continue
+                    if already_passed[token] >= output_freqs[token]:
+                        continue
+                    output_sentence.append(token)
+                    already_passed[token] += 1
+                output_tokens.append(output_sentence)
+        else:
+            already_passed = {token: 0 for token in output_freqs}
+            output_tokens = []
+            for token in all_tokens:
+                if token not in output_freqs:
+                    continue
+                if already_passed[token] >= output_freqs[token]:
+                    continue
+                output_tokens.append(token)
+                already_passed[token] += 1
 
         return output_tokens
 
