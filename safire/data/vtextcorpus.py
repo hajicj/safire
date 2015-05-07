@@ -16,7 +16,7 @@ from joblib import memory
 from gensim.corpora.textcorpus import TextCorpus
 from gensim.corpora.dictionary import Dictionary
 import itertools
-from data.filters.tfidf_token_filter import TfidfBasedTokensFilter
+from safire.data.filters.tfidf_token_filter import TfidfBasedTokensFilter
 
 import filters.positional_filters as pfilters
 from safire.utils import freqdict

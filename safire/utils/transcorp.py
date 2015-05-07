@@ -28,7 +28,8 @@ import gensim.matutils
 import numpy
 import scipy.sparse
 
-from safire.data import FrequencyBasedTransformer, VTextCorpus
+from safire.data.vtextcorpus import VTextCorpus
+from safire.data.frequency_based_transform import FrequencyBasedTransformer
 import safire.data.serializer
 import safire.data.sharded_corpus
 import safire.data.composite_corpus
