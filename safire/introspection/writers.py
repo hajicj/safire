@@ -12,7 +12,7 @@ from safire.data.composite_corpus import CompositeCorpus
 from safire.datasets.dataset import CompositeDataset
 from safire.datasets.transformations import FlattenedDatasetCorpus
 from safire.introspection import html_utils
-from safire.utils import is_gensim_batch
+from safire.utils import is_gensim_batch, heatmap_matrix
 from safire.utils.transcorp import get_id2doc_obj, get_id2word_obj, \
     find_type_in_pipeline, log_corpus_stack
 
@@ -267,7 +267,7 @@ class HtmlSimilarImagesWriter(HtmlSimpleWriter):
     """This writer works on SimilarityTransformer output. It shows the retrieved
     images and their similarities.
     """
-    def __init__(self, root, image_id2doc, n_rows=1, **kwargs):
+    def __init__(self, root, image_id2doc, n_rows=1, vertical=True, **kwargs):
         """
         :param root: The root folder relative to which do id2doc values describe
             files. In this writer, this should be the *image* folder, as the
@@ -280,6 +280,7 @@ class HtmlSimilarImagesWriter(HtmlSimpleWriter):
             inputs.
 
         :param n_rows:
+        :param vertical:
         :param kwargs:
         :return:
         """
@@ -288,6 +289,7 @@ class HtmlSimilarImagesWriter(HtmlSimpleWriter):
         ### DEBUG
         # logging.debug('Image id2doc: {0}'.format(pprint.pformat(self.image_id2doc)))
         self.n_rows = n_rows  # TODO: So far ignored...
+        self.vertical = vertical
 
     def generate_value(self, iid, value, corpus):
         """
@@ -314,10 +316,18 @@ class HtmlSimilarImagesWriter(HtmlSimpleWriter):
             image_urls.append(html_utils.as_local_url(image_fname))
             similarities.append(similarity)
 
-        image_cells = [html_utils.as_table([[html_utils.as_image(url)], [sim]])
-                       for url, sim in zip(image_urls, similarities)]
-        image_tags_table_row = [image_cells]
-        output = html_utils.as_table(image_tags_table_row)
+        image_cells = [html_utils.as_table([[html_utils.as_image(url,
+                                                                 height=200,
+                                                                 width=300)],
+                                            [sim]])
+                       for url, sim in sorted(zip(image_urls, similarities),
+                                              key=operator.itemgetter(1),
+                                              reverse=True)]
+        if self.vertical:
+            image_tags_table = [[ic] for ic in image_cells]
+        else:
+            image_tags_table = [image_cells]
+        output = html_utils.as_table(image_tags_table)
         return output
 
 
@@ -420,4 +430,49 @@ class HtmlVocabularyWriter(HtmlSimpleWriter):
         wf_pairs_texts = [[u'{0}: {1}'.format(w, f)] for w, f in wf_pairs]
         wf_pairs_table = html_utils.as_table(wf_pairs_texts)
         return wf_pairs_table
+
+
+class HtmlW2VRepresentationWriter(HtmlSimpleWriter):
+    """Receives as a value a document, uses a word2vec transformer to get
+    the representations for individual words. Draws a heatmap with the token
+    representations as rows."""
+    def __init__(self, root, word2vec, heatm_prefix='heatm.', **kwargs):
+        super(HtmlW2VRepresentationWriter, self).__init__(root, **kwargs)
+        self.word2vec = word2vec
+        self.heatm_prefix = heatm_prefix
+
+    def generate_value(self, iid, value, corpus):
+        # The value is expected to be a gensim vector.
+        # Get word2vec representation for each token, sorted by frequency.
+        value_sorted_by_token_freq = sorted(value,
+                                            key=operator.itemgetter(1),
+                                            reverse=False)
+                                            # Most frequent to TOP of heatmap
+        embeddings = []
+        old_dense = self.word2vec.dense
+        self.word2vec.dense = True
+        for wid, freq in value_sorted_by_token_freq:
+            w_embedding = self.word2vec[[(wid, 1)]]
+            for f in xrange(int(freq)):
+                embeddings.append(w_embedding)
+        self.word2vec.dense = old_dense
+
+        # Generate heatmap.
+        embeddings = numpy.array(embeddings)
+        heatmap_matrix_fname = self._heatmap_matrix_fname(iid)
+        heatmap_matrix(embeddings, title='Word2Vec representation',
+                       save=heatmap_matrix_fname, colormap='afmhot',
+                       vmin=numpy.min(embeddings), vmax=numpy.max(embeddings))
+
+        # Generate image link to heatmap
+        heatmap_url = html_utils.as_local_url(heatmap_matrix_fname)
+        heatmap_img = html_utils.as_image(heatmap_url, height=300)
+        return heatmap_img
+
+    def _heatmap_matrix_fname(self, iid):
+        return os.path.join(os.path.abspath(self.root),
+                            self.heatm_prefix +
+                            '{0}'.format(iid) +
+                            '.png')
+
 

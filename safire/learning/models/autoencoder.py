@@ -29,6 +29,7 @@ class Autoencoder(BaseUnsupervisedModel):
                  tied_weights=True,
                  L1_norm=0.0, L2_norm=0.0, bias_decay=0.0,
                  sparsity_target=None, output_sparsity_target=None,
+                 lambda_sparsity_target=1.0, lambda_output_sparsity_target=1.0,
                  rng=numpy.random.RandomState(),
                  theano_rng=None):
         """Initialize the parameters of the Autoencoder.
@@ -110,6 +111,9 @@ class Autoencoder(BaseUnsupervisedModel):
 
         :type bias_decay: float
         :param bias_decay: Adds an extra L2 penalty on the bias terms.
+
+        :type labmda_XYZ: float
+        :param lambda_XYZ: The coefficient of the various regularization terms.
         """
         super(Autoencoder, self).__init__(inputs, n_in, n_out)
 
@@ -123,6 +127,10 @@ class Autoencoder(BaseUnsupervisedModel):
         self.bias_decay = bias_decay
         self.sparsity_target = sparsity_target
         self.output_sparsity_target = output_sparsity_target
+
+        self.lambda_sparsity_target = lambda_sparsity_target
+        self.lambda_output_sparsity_target = lambda_output_sparsity_target
+
          
         if not W:
             W = self._init_weights('W', (n_in, n_out), rng)
@@ -181,21 +189,23 @@ class Autoencoder(BaseUnsupervisedModel):
         is a classmethod) for an initialization of the model."""
 
         init_arg_dict = {
-            'W' : self.W,
-            'W_prime' : self.W_prime,
-            'b' : self.b,
-            'b_prime' : self.b_prime,
-            'n_in' : self.n_in,
-            'n_out' : self.n_out,
-            'activation' : self.activation,
-            'tied_weights' : self.tied_weights,
-            'inputs' : self.inputs,
-            'reconstruction' : self.reconstruction,
+            'W': self.W,
+            'W_prime': self.W_prime,
+            'b': self.b,
+            'b_prime': self.b_prime,
+            'n_in': self.n_in,
+            'n_out': self.n_out,
+            'activation': self.activation,
+            'tied_weights': self.tied_weights,
+            'inputs': self.inputs,
+            'reconstruction': self.reconstruction,
             'L1_norm': self.L1_norm,
             'L2_norm': self.L2_norm,
             'bias_decay': self.bias_decay,
             'sparsity_target': self.sparsity_target,
             'output_sparsity_target': self.output_sparsity_target,
+            'lambda_sparsity_target': self.lambda_sparsity_target,
+            'lambda_output_sparsity_target': self.lambda_output_sparsity_target,
             # Random number generators are ignored?
         }
 
@@ -349,11 +359,11 @@ class Autoencoder(BaseUnsupervisedModel):
                     * self.bias_decay
 
         if self.sparsity_target is not None:
-            cost += self._sparsity_cross_entropy(X)
+            cost += self.lambda_sparsity_target * self._sparsity_cross_entropy(X)
 
         if self.output_sparsity_target is not None:
             print 'Setting output sparsity target: {0}'.format(self.output_sparsity_target)
-            cost += self._output_sparsity_cross_entropy(X)
+            cost += self.lambda_output_sparsity_target * self._output_sparsity_cross_entropy(X)
 
         return cost
 

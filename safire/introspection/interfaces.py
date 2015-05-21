@@ -149,3 +149,4 @@ class EnumeratedTransformedCorpus(IndexedTransformedCorpus):
         else:
             raise TypeError('Invalid __getitem__ key specified: type {0}, key '
                             '{1}'.format(type(item), item))
+

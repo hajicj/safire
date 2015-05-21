@@ -35,7 +35,7 @@ import safire.data.sharded_corpus
 import safire.data.composite_corpus
 from safire.data.imagenetcorpus import ImagenetCorpus
 import safire.data.sharded_corpus
-from safire.data.word2vec_transformer import Word2VecTransformer
+import safire.data.word2vec_transformer
 import safire.datasets.dataset
 # from safire.utils import IndexedTransformedCorpus, freqdict
 import safire.utils
@@ -74,13 +74,16 @@ def get_id2word_obj(corpus):
     """Retrieves the valid id2word object that can handle ``__getitem__``
     requests on word IDs to return the words themselves."""
     # TODO: Move this mechanism into transformers themselves?
+    if hasattr(corpus, 'id2word'):
+        return corpus.id2word
     if isinstance(corpus, VTextCorpus):
         return corpus.dictionary
     elif isinstance(corpus, TransformedCorpus):
         if isinstance(corpus.obj, FrequencyBasedTransformer):
             return KeymapDict(get_id2word_obj(corpus.corpus),
                               corpus.obj.transformed2orig)
-        elif isinstance(corpus.obj, Word2VecTransformer):
+        elif isinstance(corpus.obj,
+                        safire.data.word2vec_transformer.Word2VecTransformer):
             return corpus.obj.id2word
         else:
             return get_id2word_obj(corpus.corpus)
@@ -873,10 +876,10 @@ def docnames2indexes(data, docnames):
 
         Currently only supports a non-recursive composite dataset.
 
-    :type data: safire.datasets.dataset.CompositeDataset
-    :param data: A composite dataset from which to extract indexing. (This will
+    :type data: safire.datasets.dataset.CompositeCorpus
+    :param data: A composite corpus from which to extract indexing. (This will
         be the dataset you then pass to FlattenDataset.) Currently only works
-        with
+        with non-recursive composite corpora.
 
     :type docnames: list[tuple[str]]
     :param docnames: A list of the document names that should be flattened into

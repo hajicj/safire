@@ -66,7 +66,7 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                  track_weights=False, track_weights_change=False,
                  monitoring=True, shuffle_batches=True,
                  plot_transformation=False, plot_weights=False,
-                 plot_every=10, plot_on_init=False):
+                 plot_every=10, plot_on_init=False, plot_data=False):
         """Initialize the learner.
 
         The parameters common to each learner are just the number of epochs.
@@ -118,7 +118,9 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
         :type plot_on_init: bool
         :param plot_on_init: Plot initial state of model/transformation/recons.
-        
+
+        :type plot_data: bool
+        :param plot_data: Plot a sample of the data at the beginning.
         """
         self.n_epochs = n_epochs
         self.b_size = b_size
@@ -141,6 +143,7 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
         #self.plot_every_batch = False
         self.plot_weights = plot_weights
         self.plot_on_init = plot_on_init
+        self.plot_data = plot_data
 
         # Saving options.
         self.saving = False
@@ -267,6 +270,14 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
         self.monitor = { 'training_cost' : [], 'validation_cost' : [] }
         self.monitor['validation_cost'].append([iteration, validation_loss])
 
+        if self.plot_data:
+            sample = data.train_X_batch(0, self.b_size)
+            safire.utils.heatmap_matrix(sample,
+                                        title='First batch of the data',
+                                        colormap='afmhot',
+                                        vmin=numpy.min(sample),
+                                        vmax=numpy.max(sample))
+
         if self.plot_on_init:
             self.plot_transformed_results(data, model_handle,
                                           backward_handle=backward_handle,
@@ -281,7 +292,7 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
             if self.shuffle_batches:
                 random.shuffle(batch_ordering)
 
-            for b_index in batch_ordering: # One uninterrupted run
+            for b_i, b_index in enumerate(batch_ordering): # One uninterrupted run
                                            # of SGD on train data
 
                 # Runs one iteration of training, based on model and dataset
@@ -305,8 +316,8 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                                                             validation_loss])
 
                     logging.info(
-                        'Epoch %d, minibatch %d/%d: v. error %f' % (
-                            epoch, b_index + 1, n_train_batches,
+                        'Epoch %d, minibatch %d/%d (%d): v. error %f' % (
+                            epoch, b_i + 1, n_train_batches, b_index,
                             validation_loss)
                                  )
 
@@ -327,8 +338,8 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
                         # Get corresponding test loss for logging purposes
                         test_loss = self.evaluate(model_handle, data)
-                        logging.info('Epoch %i, minibatch %i/%i: t. error %f'%(
-                                     epoch, b_index + 1, n_train_batches,
+                        logging.info('Epoch %i, minibatch %i/%i (%i): t. error %f'%(
+                                     epoch, b_i + 1, n_train_batches, b_index,
                                      test_loss))
 
                         if test_loss < best_test_loss:
@@ -751,6 +762,15 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                                         colormap='afmhot',
                                         vmin=numpy.min(reconstructed_data),
                                         vmax=numpy.max(reconstructed_data))
+
+            reconstruction_error = sample_data - reconstructed_data
+            safire.utils.heatmap_matrix(reconstruction_error,
+                                        title=title + 'REC.ERROR',
+                                        with_average=True,
+                                        colormap='afmhot',
+                                        vmin=numpy.min(reconstruction_error),
+                                        vmax=numpy.max(reconstruction_error))
+
 
         if plot_bias:
             if hasattr(model_handle.model_instance, 'b'):

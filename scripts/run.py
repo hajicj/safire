@@ -36,6 +36,10 @@ def main(args):
                  ''.format(args.configuration))
     outputs = builder.build()
 
+    if args.run_saving:
+        logging.info('Running saving...')
+        builder.run_saving()
+
     _end_time = time.clock()
     logging.info(
         'Exiting run.py. Total time: {0} s'.format(_end_time - _start_time))
@@ -52,6 +56,9 @@ def build_argument_parser():
     parser.add_argument('--clear', action='store_true',
                         help='If set, will set the \'clear\' configuration'
                              ' value in the _builder section to True.')
+    parser.add_argument('--run_saving', action='store_true',
+                        help='If set, will force re-saving all objects defined'
+                             ' in \'_persistence.\'')
 
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Turn on INFO logging messages.')

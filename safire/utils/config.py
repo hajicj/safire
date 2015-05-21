@@ -64,14 +64,16 @@ Note that the values are used *literally* as Python code. This means that all
 strings must be quoted.
 
 Generally, **everything that doesn't start with an underscore translates
-literally to Python code**.
+literally to Python code**. Things that do start with an undrscore usually
+do as well, but there are a few exceptions in the special sections (see below).
 
 Dependencies
 ------------
 
 The configuration parser and builder don't have the capability to determine
-the dependencies between the objects automatically. An alternative is specifying
-the objects on which a transformer depends in a ``_dependencies`` value::
+the dependencies between the objects automatically. This has to be done by
+specifying the objects on which a transformer depends in a ``_dependencies``
+value::
 
     [baz]
     _class=safire.Baz
@@ -79,7 +81,7 @@ the objects on which a transformer depends in a ``_dependencies`` value::
     inputs_1=foo
     inputs_2=bar
 
-In the future, we will add a Python parser to resolve the dependencies from the
+In the future, we might add a Python parser to resolve the dependencies from the
 object init args themselves.
 
 There is also a set of defined special sections that the ConfigBuilder
@@ -87,6 +89,24 @@ interprets differently. These all have names that start with an underscore.
 Objects corresponding to these sections (most often the ``_loader`` object)
 are always initialized before the non-special sections, so you do *not* have
 to explicitly mark dependencies on them.
+
+When a builder is building a pipeline from components that already have been
+saved, the dependencies of a persistent component will often be loaded as well.
+This is especially true for pipeline blocks that load the entire pipelines
+they head. While the objects themselves are loaded implicitly, as they are
+attributes (of an attribute of an attribute...) of the persistent object,
+the builder needs to have access to them specifically, because other objects
+that have yet to be initialized may depend on them, and therefore will need the
+builder to supply them in their ``locals()`` initialization namespace.
+
+The rules for accessing dependencies for pipeline blocks are simple: if the name
+is a block, then it will be accessed using the ``corpus`` attribute; otherwise,
+it will be accessed through the ``obj`` attribute. (This is a conscious design
+decision: TransformedCorpus and its dependents should never be created outside
+applying a transformer, with ``SwapoutCorpus`` being the notable -- and
+temporary -- exception.) However, rules for accessing dependencies of
+transformers practically cannot be written: transformers are very general.
+
 
 Assembling pipelines
 --------------------
@@ -382,6 +402,8 @@ def names_in_code(code_string, eval=True):
 
     :return: The set of names in the code string.
     """
+    #logging.debug('names_in_code: Evaluating code string: {0}'
+    #              ''.format(code_string))
     if isinstance(code_string, list):
         return set(itertools.chain(*[names_in_code(s, eval=eval) for s in code_string]))
     if isinstance(code_string, dict):
@@ -1251,6 +1273,8 @@ class ConfigBuilder(object):
         for obj_name, obj_label in self.configuration._persistence.items():
             if obj_name == 'loader' and 'loader' not in self.objects:
                 continue
+            logging.info('Running save for obj_name {0}, label {1}'
+                         ''.format(obj_name, obj_label))
             fname = self.get_loading_filename(obj_label)
             # print 'Saving object {0} to file {1}'.format(obj_name, fname)
             self.objects[obj_name].save(fname)

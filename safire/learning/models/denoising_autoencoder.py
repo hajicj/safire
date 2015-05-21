@@ -28,6 +28,7 @@ class DenoisingAutoencoder(Autoencoder):
                  corruption_level=0.3,
                  L1_norm=0.0, L2_norm=0.0, bias_decay=0.0,
                  sparsity_target=None, output_sparsity_target=None,
+                 lambda_sparsity_target=1.0, lambda_output_sparsity_target=1.0,
                  rng=numpy.random.RandomState(), 
                  theano_rng=None):
         """ Initialize the parameters of the Denoising Autoencoder.
@@ -126,6 +127,8 @@ class DenoisingAutoencoder(Autoencoder):
                                                    L1_norm, L2_norm, bias_decay,
                                                    sparsity_target,
                                                    output_sparsity_target,
+                                                   lambda_sparsity_target,
+                                                   lambda_output_sparsity_target,
                                                    rng,
                                                    theano_rng)
         self.corruption_level = corruption_level

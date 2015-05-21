@@ -18,7 +18,8 @@ class MultimodalClampedSampler(object):
     dataset used with the model.
     """
 
-    def __init__(self, model, dim_text, dim_img, heavy_debug=False):
+    def __init__(self, model, dim_text, dim_img, heavy_debug=False,
+                 starting_img_features=None):
         """Initialize the sampler.
 
         :type model: safire.learning.models.RestrictedBoltzmannMachine
@@ -36,6 +37,11 @@ class MultimodalClampedSampler(object):
         :param heavy_debug: If set, will compile the sampling functions in
             theano's ``MonitorMode`` with a detailed input/output/node printing
             function.
+
+        :type starting_img_features: numpy.ndarray
+        :param starting_img_features: The vector of the initial image features.
+            If set to ``None``, will initialize the images to zeros. Must be
+            of ``dim_img`` length.
         """
         if not hasattr(model, 'sample_vhv'):
             raise ValueError('Model is not sampleable (class: %s)' % str(
@@ -51,6 +57,16 @@ class MultimodalClampedSampler(object):
         # Common interface...
         self.n_in = dim_text
         self.n_out = dim_img
+
+        if starting_img_features is not None:
+            if starting_img_features.shape != (self.dim_img,):
+                raise ValueError('Supplied starting image features have shape'
+                                 ' {0}, do not match image dimension {1}.'
+                                 ''.format(starting_img_features.shape,
+                                           self.dim_img))
+            self.starting_img_features = starting_img_features
+        else:
+            self.starting_img_features = numpy.zeros(self.dim_img)
 
         logging.debug('Sampler dimensions: text %d, images %d' % (self.dim_text,
                                                                   self.dim_img))
@@ -159,5 +175,6 @@ class MultimodalClampedSampler(object):
 
     def get_img_init_features(self, text_features):
         """Returns the default image init features."""
-        image_init_features = numpy.zeros((len(text_features), self.dim_img))
+        image_init_features = numpy.zeros((len(text_features), self.dim_img)) \
+                              + self.starting_img_features
         return image_init_features

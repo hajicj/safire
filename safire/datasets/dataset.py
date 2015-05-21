@@ -387,7 +387,7 @@ class DatasetABC(safire.utils.IndexedTransformedCorpus):
         """Given the first index of a batch and batch size, builds the batch
         from the corpus.
         """
-        if lbound + batch_size >= len(self):
+        if lbound + batch_size > len(self):
             raise ValueError('Too high lbound + batch_size: {0} + {1} = {2} for dataset'
                              ' of length {3}, test_p={4}'.format(lbound,
                                                      batch_size,

@@ -16,17 +16,24 @@ class TfidfBasedTokensFilter(object):
     are retained for a word type is::
 
       int(10.0 * (f + 0.05))
+
+    The ``0.05`` term can be controlled by the ``freq_add`` init parameter.
     """
-    def __init__(self, tfidf_data):
+    def __init__(self, tfidf_data, freq_add=0.05):
         """
 
         :param tfidf_data: A pipeline/block that outputs tfidf-transformed
             data on the same corpus on which the filter should be applied,
             so that iids match.
+
+        :param freq_add: Add this much to tfidf output when rounding to nearest
+            lower integer.
         """
         self.tfidf_data = tfidf_data
         self.id2word = safire.utils.transcorp.get_id2word_obj(tfidf_data)
         self.word2id = self.id2word.token2id
+
+        self.freq_add = freq_add
 
         logging.info('Total id2word size: {0}'.format(len(self.id2word)))
         logging.info('Total word2id size: {0}'.format(len(self.word2id)))
@@ -92,5 +99,5 @@ class TfidfBasedTokensFilter(object):
         return output_tokens
 
     def freq_from_tfidf(self, tfidf_count):
-        return int(10.0 * (tfidf_count + 0.05))
+        return int(10.0 * (tfidf_count + self.freq_add))
 

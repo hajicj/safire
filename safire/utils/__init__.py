@@ -652,9 +652,9 @@ def add_header_image(image, header_image, header_size=(300,200), margin=20):
 # Matplotlib plotting
 
 
-def heatmap_matrix(matrix, title='', with_average=False,
+def heatmap_matrix(matrix, title='', with_average=False, save=None,
                    colormap='coolwarm', vmin=0.0, vmax=1.0,
-                   **kwargs):
+                   **colormesh_kwargs):
     """Creates and shows a heatmap of the given matrix. Optionally, will also
     plot column averages. Doesn't return anything; will show() the figure.
 
@@ -670,6 +670,10 @@ def heatmap_matrix(matrix, title='', with_average=False,
     :type with_average: bool
     :param with_average: If set, will plot column averages above the heatmap.
 
+    :type save: str
+    :param save: If given, will save the heatmap to this file instead of
+        ``show()``-ing it.
+
     :type colormap: str
     :param colormap: The colormap to use in colormesh. Passed directly to
         colormesh, so you can use anything you find in the corresponding
@@ -683,11 +687,11 @@ def heatmap_matrix(matrix, title='', with_average=False,
     :param vmax: The value in the ``matrix`` which should correspond to the
         "maximum" color in the heatmap.
 
-    :param kwargs: Other arguments to maptlotlib.pyplot.colormesh
+    :param colormesh_kwargs: Other arguments to maptlotlib.pyplot.colormesh
 
     """
     plt.figure(figsize=(matrix.shape[1]*0.002, matrix.shape[0]*0.02),
-               dpi=160,
+               dpi=300,
                facecolor='white')
     if with_average:
         gs = gridspec.GridSpec(2, 1, height_ratios=[1,2])
@@ -700,13 +704,13 @@ def heatmap_matrix(matrix, title='', with_average=False,
         # Sliding window average
         avg_windowsize = 20
         vscale = 2.0
-        wavgs = [ sum(avgs[i:i+avg_windowsize])*vscale / float(avg_windowsize)
-                 for i in xrange(matrix.shape[1] - avg_windowsize) ]
+        wavgs = [sum(avgs[i:i+avg_windowsize])*vscale / float(avg_windowsize)
+                 for i in xrange(matrix.shape[1] - avg_windowsize)]
         wavgs.extend([avgs[-1] for _ in xrange(avg_windowsize)])
 
         plt.title(title)
         plt.plot(avgs, 'r,')
-        #plt.plot(wavgs, 'b-')
+        # plt.plot(wavgs, 'b-')
 
         # Hide x-axis ticks
         frame1 = plt.gca()
@@ -714,16 +718,21 @@ def heatmap_matrix(matrix, title='', with_average=False,
             xlabel_i.set_visible(False)
             xlabel_i.set_fontsize(0.0)
 
-        #plt.xlim([0, matrix.shape[1]])
+        # plt.xlim([0, matrix.shape[1]])
         plt.subplot(gs[1])
 
     plt.xlim([0, matrix.shape[1]])
     plt.ylim([0, matrix.shape[0]])
-    plt.pcolormesh(matrix, cmap=colormap, vmin=vmin, vmax=vmax, **kwargs)
+    plt.pcolormesh(matrix, cmap=colormap, vmin=vmin, vmax=vmax,
+                   **colormesh_kwargs)
     if not with_average:
         plt.title(title)
         plt.colorbar()
-    plt.show()
+
+    if save is not None:
+        plt.savefig(save, bbox_inches='tight')
+    else:
+        plt.show()
 
 ##############################################################################
 

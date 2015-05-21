@@ -6,15 +6,101 @@ module way.
 Essentially, all stuff in here should be later refactored into
 ``introspection``. The functions here are shortcuts.
 """
+import codecs
 import collections
 import logging
 import operator
+import os
+import math
+import safire.introspection.html_utils as html_utils
 import safire.utils.transcorp as transcorp
 import safire.utils.matutils as matutils
 
 __author__ = "Jan Hajic jr."
 
 ###############################################################################
+
+
+class HtmlInteractiveWriter(object):
+    """The InteractiveWriter is intendend for situations when you are exploring
+    a finished pipeline and want to visualize whatever is on your mind.
+    The writer only provides an "open window" to a temporary html file and
+    expects you to provide the HTML code corresponding to things you want to
+    see. It will then provide the necessary boilerplate and paste your html
+    content there.
+
+    It doesn't inherit from the WriterABC because it does *not* involve any
+    corpus. It can stand perfectly separately.
+    """
+    def __init__(self, fname, imgs_root=None, id2word=None):
+        """The root is quite superficial here."""
+        self.fname = os.path.abspath(fname)
+        self.imgs_root = os.path.abspath(imgs_root)
+        self.id2word = id2word
+
+    def write(self, value):
+        header = self.get_html_header()
+        body = self.get_html_body(value)
+        footer = self.get_html_footer()
+
+        output = header + u'\n' + body + u'\n\n' + footer
+        with codecs.open(self.fname, 'w', 'utf-8') as output_handle:
+            output_handle.write(output + u'\n')
+
+    def doc_as_img(self, doc):
+        """Utility function for speeding up writing images."""
+        if self.imgs_root is not None:
+            img_fname = os.path.join(self.imgs_root, doc)
+        else:
+            img_fname = doc
+        img_url = html_utils.as_local_url(img_fname)
+        value = html_utils.as_image(img_url, width=300, height=180)
+        captioned_value = html_utils.as_table([[value], [doc]])
+        return captioned_value
+
+    def docs_as_imgs(self, docs):
+        """Utility function to write multiple images from their docnames."""
+        imgs = [self.doc_as_img(d) for d in docs]
+        row_length = int(math.sqrt(len(imgs) + 1))
+
+        n_dummy_imgs = row_length - (len(imgs) % row_length)
+        imgs.extend(['' for _ in xrange(n_dummy_imgs)])
+
+        tabulated_imgs = [imgs[start:start+row_length]
+                          for start in range(0,
+                                             len(imgs) - row_length,
+                                             row_length)]
+        value = html_utils.as_table(tabulated_imgs)
+        return value
+
+    def wids_to_vocabulary(self, wids):
+        """Utility function to write a list of wids as a vocabulary grid."""
+        tokens = [self.id2word[wid] for wid in wids]
+        return u'\n'.join(tokens)
+
+    def get_html_content(self, value):
+        """``value`` is already expected to be html code. Future interactive
+        writers may redefine this."""
+        return value
+
+    def get_html_body(self, value):
+        """Formats the content as the ``<body>`` element of an html file."""
+        content = self.get_html_content(value)
+        return html_utils.text_with_tag(content, 'body', newline=True)
+
+    @staticmethod
+    def get_html_header():
+        """Generates the constant part of the HTML output that comes *before*
+        the content."""
+        return unicode(html_utils.head)
+
+    @staticmethod
+    def get_html_footer():
+        """Generates the constant part of the HTML output that comes *after*
+        the content."""
+        return u'\n'.join(
+            [html_utils.as_comment(u'Generated using HtmlInteractiveWriter.'),
+             unicode(html_utils.foot)])
 
 
 def make_token_iid2word_fn(plain_token_corpus):
@@ -56,10 +142,10 @@ def get_token_word2iid_obj(iid2word, plain_token_corpus):
 
     :return: A defaultdict with words as keys and sets of iids as values.
     """
-    word2iid = collections.defaultdict(set)
+    word2iid = collections.defaultdict(list)
     for iid in xrange(len(plain_token_corpus)):
         word = iid2word(iid)
-        word2iid[word].add(iid)
+        word2iid[word].append(iid)
     return word2iid
 
 

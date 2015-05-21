@@ -9,6 +9,7 @@ from safire.data.filters.basefilter import BaseFilter
 import safire.datasets.dataset
 from safire.utils import IndexedTransformedCorpus
 from safire.utils.transcorp import get_doc2id_obj, get_id2doc_obj
+from safire.utils.transformers import ReorderingCorpus, ReorderingTransform
 
 
 __author__ = "Jan Hajic jr."
@@ -272,3 +273,23 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
             logging.error('Total items removed: {0}'.format(self.n_removed))
             raise
 
+    def clone_over_parallel(self, corpus):
+        """Copies the filtering/mapping over a given corpus. This serves
+        to synchronize parallel data flows where filtering is based on one
+        flow only, but you then need the same filtering for the other flow
+        as well while not necessarily flattening it.
+
+        Because the filter might not be applicable to the given parallel corpus
+        in the same way as to the original corpus to which it was applied (for
+        instance a filter based on a word2vec representation of tokens should
+        be clone-able to the original token stream as well), the cloning is
+        implemented through a ReorderingCorpus.
+        """
+        if len(self.corpus) != len(corpus):
+            logging.warn('The length of the original corpus ({0}) and given '
+                         'corpus ({1}) do not match, the reordering may not be '
+                         'applicable.'.format(len(self.corpus), len(corpus)))
+        reordering = [self.new2old[i] for i in sorted(self.new2old)]
+        reordering_transform = ReorderingTransform(reordering)
+        reordered_corpus = reordering_transform._apply(corpus)
+        return reordered_corpus

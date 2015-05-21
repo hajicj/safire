@@ -422,9 +422,6 @@ class VTextCorpus(TextCorpus):
         if self.positional_filter:
             flt_sentences = self._apply_positional_filter(flt_sentences)
 
-        if self.token_min_freq:
-            flt_sentences = self._apply_token_min_freq(flt_sentences)
-
         if self.tfidf_filter:
             if docno is None:
                 raise ValueError('Cannot use tfidf_filter with document iid'
@@ -432,6 +429,9 @@ class VTextCorpus(TextCorpus):
             flt_sentences = self._apply_tfidf_filter(flt_sentences,
                                                      docno,
                                                      sentences=True)
+
+        if self.token_min_freq:
+            flt_sentences = self._apply_token_min_freq(flt_sentences)
 
         document = list(itertools.chain(*flt_sentences))
 
@@ -444,7 +444,7 @@ class VTextCorpus(TextCorpus):
 
         If a sentence filter is specified, applies the sentence filter.
         """
-        logging.debug('Parsing sentences from handle %s' % str(doc_handle))
+        # logging.debug('Parsing sentences from handle %s' % str(doc_handle))
 
         filter_capital_regex = None
         if self.filter_capital:
@@ -675,7 +675,10 @@ class VTextCorpus(TextCorpus):
 
     def _apply_token_min_freq(self, flt_sentences):
         """Filters the given set of sentences so that tokens that appear
-        less than ``self.token_min_freq`` times are filtered out."""
+        less than ``self.token_min_freq`` times are filtered out.
+
+        If the document would be left empty after all the low-frequency tokens
+        are removed, doesn't filter."""
         freqs = freqdict(itertools.chain(*flt_sentences))
         throw_out = set()
         for token in freqs:
@@ -687,6 +690,12 @@ class VTextCorpus(TextCorpus):
                                  for token in sentence
                                  if token not in throw_out]
             filtered_sentences.append(filtered_sentence)
+        total_length = sum(len(fs) for fs in filtered_sentences)
+        if total_length == 0:
+            logging.debug('Document would be empty after min. freq. filter,'
+                          ' filter is not applied.')
+            filtered_sentences = flt_sentences
+
         flt_sentences = filtered_sentences
         return flt_sentences
 
