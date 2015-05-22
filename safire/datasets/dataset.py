@@ -484,6 +484,11 @@ class CompositeDataset(DatasetABC):
             initialization (and using indexes to flatten)!
 
         """
+        if not isinstance(data, safire.data.composite_corpus.CompositeCorpus):
+            logging.warn('Trying to initialize composite dataset with corpus'
+                         ' of class {0} instead of CompositeCorpus. May behave'
+                         ' very strangely.'.format(type(data)))
+
         self.aligned = aligned
         # Check lengths??
         self.length = len(data[0])  # TODO: This is very temporary.
