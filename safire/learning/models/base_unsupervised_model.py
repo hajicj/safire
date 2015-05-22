@@ -342,11 +342,9 @@ class BaseUnsupervisedModel(BaseModel):
                 the output dimension. In this case, ``n_out`` must be supplied
                 as a keyword argument here.
 
-        :rtype: ModelHandle
-        :returns: ``ModelHandle(model, train_f, validate_f, test_f)``
-            where ``model`` is the Model instance initialized during
-            :func:`setup` and the ``_func`` variables are compiled
-            theano.functions to use in a learner.
+        :rtype: tuple(ModelHandle, ModelHandle, ModelHandle, ModelHandle)
+        :returns: A tuple of model handles for training, validating, testing
+            and plain old running the model. Pass these to a learner.
 
         """
         index = TT.lscalar() # index of minibatch
@@ -449,6 +447,14 @@ class BaseUnsupervisedModel(BaseModel):
                                     outputs = model.outputs,
                                     allow_input_downcast=True)
         
+        train_handle = ModelHandle(model, train_model)
+        validate_handle = ModelHandle(model, validate_model)
+        test_handle = ModelHandle(model, test_model)
+        run_handle = ModelHandle(model, run_model)
 
-        return ModelHandle(model, train_model, validate_model, test_model,
-                           run_model)
+        handle_dict = {'train': train_handle,
+                       'validate': validate_handle,
+                       'test': test_handle,
+                       'run': run_handle}
+
+        return handle_dict

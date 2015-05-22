@@ -251,9 +251,11 @@ class FlattenedDatasetCorpus(IndexedTransformedCorpus):
             output = self.item2flat(retrieved, nostack=self.structured)
         else:
             if isinstance(item, list):
-                return [self[i] for i in item]
+                output = [self[i] for i in item]
+                return numpy.hstack(output)
             if isinstance(item, slice):
-                return [self[i] for i in xrange(*item.indices(len(self)))]
+                output = [self[i] for i in xrange(*item.indices(len(self)))]
+                return numpy.hstack(output)
 
             # Possibly inefficient
             # print 'Item: {0}'.format(item)

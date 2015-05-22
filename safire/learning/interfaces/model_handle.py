@@ -7,30 +7,29 @@ from safire.learning.interfaces.clamped_sampler import MultimodalClampedSampler
 
 
 class ModelHandle(object):
-    """Provides the train/validate/test handle for a learner class.
-    This is, so far, just a wrapper for the model plus output of
-    the ModelClass.setup() function.
+    """Provides the train/validate/test/... functionality for a learner class
+    through its ``run`` method. During model setup, a training handle is created
+    that ``run``s the theano function that performs one training step,
+    a validation handle gets the theano function for a validation batch, etc.
 
-    A handle is the "runnable" interface to a model.
+    A handle works like the "runnable" interface to a model. It is what makes
+    the model "do something". If the model itself had to provide all the actions
+    that one can do with it, the interface you would have to implement for each
+    new model would be very, very clumsy. This way, you can implement various
+    functionalities for a single model through various handles, depending on
+    how you define the handle's ``run()`` method.
 
-    Also, it provides save/load functionality for model persistence.
+    The handle keeps the reference to the underlying model and its class.
+
+    Also, a ModelHandle provides save/load functionality for model persistence.
     """
-    def __init__(self, model_instance, train, validate, test, run):
+    def __init__(self, model_instance, run):
         """Initializes the handle.
 
         :type model_instance: safire.learning.models.BaseModel
         :param model_instance: The model to which the handle provieds
                                access. Think about it as a read-only
                                thing.
-
-        :type train: theano.function
-        :param train: Theano function used to train the given model.
-
-        :type validate: theano.function
-        :param validate: Theano function used to test the given model.
-
-        :type test: theano.function
-        :param test: Theano function used to test the given model.
 
         :type run: theano.function
         :param run: Theano function used to run the model, i.e. transform
@@ -43,9 +42,6 @@ class ModelHandle(object):
         self.n_in = self.model_instance.n_in
         self.n_out = self.model_instance.n_out
 
-        self.train = train
-        self.validate = validate
-        self.test = test
         self.run = run
 
     def save(self, filename, protocol=-1):
@@ -123,22 +119,13 @@ class BackwardModelHandle(ModelHandle):
     and will compute the *visible* activation for the given model.
 
     """
-    def __init__(self, model_instance, train, validate, test, run,
+    def __init__(self, model_instance, run,
                  heavy_debug=False):
         """Initializes the handle. Assumes the model is sample-able.
 
         :type model_instance: safire.learning.models.BaseModel
         :param model_instance: The model to which the handle provides
             access. Think about it as a read-only thing.
-
-        :type train: theano.function
-        :param train: Theano function used to train the given model.
-
-        :type validate: theano.function
-        :param validate: Theano function used to test the given model.
-
-        :type test: theano.function
-        :param test: Theano function used to test the given model.
 
         :type run: theano.function
         :param run: Theano function used to run the model, i.e. transform
@@ -154,10 +141,10 @@ class BackwardModelHandle(ModelHandle):
         self.model_instance = model_instance
         self.model_class = model_instance.__class__
 
-        self.train = train
-        self.validate = validate
-        self.test = test
-
+        # self.train = train
+        # self.validate = validate
+        # self.test = test
+        #
         self.get_hidden = run
 
         self.heavy_debug = heavy_debug
@@ -216,9 +203,6 @@ class BackwardModelHandle(ModelHandle):
             run_fn = handle.run
 
         cl_handle = BackwardModelHandle(handle.model_instance,
-                                        handle.train,
-                                        handle.validate,
-                                        handle.test,
                                         run_fn)
         return cl_handle
 
@@ -229,15 +213,12 @@ class BackwardModelHandle(ModelHandle):
         """
         model_pickleable_obj = self.model_instance._export_pickleable_object()
 
-        init_args = { 'train' : self.train,
-                      'validate' : self.validate,
-                      'test' : self.test,
-                      'run' : self.get_hidden,
-                      'dim_text' : self.n_in,
-                      'dim_img' : self.n_out }
+        init_args = {'run': self.get_hidden,
+                     'dim_text': self.n_in,
+                     'dim_img': self.n_out}
 
-        save_dict = { 'model' : model_pickleable_obj,
-                      'init_args' : init_args }
+        save_dict = {'model': model_pickleable_obj,
+                     'init_args': init_args}
 
         return save_dict
 
@@ -270,7 +251,7 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
 
     """
 
-    def __init__(self, model_instance, train, validate, test, run,
+    def __init__(self, model_instance, run,
                  dim_text, dim_img, k=10,
                  sample_hidden=True, sample_visible=True):
         """Initializes the handle. Assumes the model is sample-able.
@@ -278,15 +259,6 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
         :type model_instance: safire.learning.models.BaseModel
         :param model_instance: The model to which the handle provides
             access. Think about it as a read-only thing.
-
-        :type train: theano.function
-        :param train: Theano function used to train the given model.
-
-        :type validate: theano.function
-        :param validate: Theano function used to test the given model.
-
-        :type test: theano.function
-        :param test: Theano function used to test the given model.
 
         :type run: theano.function
         :param run: Theano function used to run the model, i.e. transform
@@ -322,10 +294,6 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
         """
         self.model_instance = model_instance
         self.model_class = type(model_instance)
-
-        self.train = train
-        self.validate = validate
-        self.test = test
 
         self.sampler = MultimodalClampedSampler(self.model_instance,
                                                 dim_text=dim_text,
@@ -363,9 +331,6 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
             run_fn = handle.run
 
         cl_handle = MultimodalClampedSamplerModelHandle(handle.model_instance,
-                                                        handle.train,
-                                                        handle.validate,
-                                                        handle.test,
                                                         run_fn,
                                                         dim_text,
                                                         dim_img,
@@ -375,10 +340,11 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
     def run(self, text_features):
         """Runs the sampler on text features input. Returns image
         representation."""
-        img = self.sampler.t2i_run_chain_mean_last(text_features=text_features,
-                                                   k=self.k,
-                                                   sample_hidden=self.sample_hidden,
-                                                   sample_visible=self.sample_visible)
+        img = self.sampler.t2i_run_chain_mean_last(
+            text_features=text_features,
+            k=self.k,
+            sample_hidden=self.sample_hidden,
+            sample_visible=self.sample_visible)
         return img
 
     def _export_pickleable_obj(self):
@@ -388,16 +354,16 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
         """
         model_pickleable_obj = self.model_instance._export_pickleable_object()
 
-        init_args = { 'train' : self.train,
-                      'validate' : self.validate,
-                      'test' : self.test,
-                      'run' : self.get_hidden,
-                      'dim_text' : self.n_in,
-                      'dim_img' : self.n_out,
-                      'k' : self.k }
+        init_args = {'train': self.train,
+                     'validate': self.validate,
+                     'test': self.test,
+                     'run': self.get_hidden,
+                     'dim_text': self.n_in,
+                     'dim_img': self.n_out,
+                     'k': self.k}
 
-        save_dict = { 'model' : model_pickleable_obj,
-                      'init_args' : init_args }
+        save_dict = {'model': model_pickleable_obj,
+                     'init_args': init_args}
 
         return save_dict
 

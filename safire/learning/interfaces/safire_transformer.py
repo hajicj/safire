@@ -27,21 +27,23 @@ from safire.utils.transcorp import smart_apply_transcorp
 class SafireTransformer(TransformationABC):
     """Wraps a SAFIRE model into a gensim-style transformation object.
 
-    Initialized with a Model Handle, Dataset and Learner:
+    Initialized with a run-handle that runs the actual transformation and
+    optionally a set of model handles, a Dataset and a Learner for training:
 
     >>> dataset = loader.load()
-    >>> model_handle = MultilayerPerceptron.setup(dataset, ...)
+    >>> setup_handles = MultilayerPerceptron.setup(dataset, ...)
+    >>> run_handle = model_handles['run']
     >>> learner = BaseSGDLearner(n_epochs=3, b_size=100)
-    >>> transformer = SafireTransformer(model_handle, learner, dataset)
+    >>> transformer = SafireTransformer(run_handle, setup_handles, learner, dataset)
 
     *This initialization will run the training,* in line with other gensim
     transformers (models) that train on initialization.
 
     If you want to load a handle with an already trained model, initialize
-    the transformer without a Learner and Dataset:
+    the transformer without a Learner, Dataset and setup handles:
 
-    >>> model_handle = MultilayerPerceptron.setup(dataset, ...)
-    >>> model_handle.save('multilayerperceptron.mhandle')
+    >>> model_handles = MultilayerPerceptron.setup(dataset, ...)
+    >>> model_handles.save('multilayerperceptron.mhandle') # TODO: refactor load
     >>> loaded_model_handle = ModelHandle.load('multilayerperceptron.mhandle')
     >>> transformer = SafireTransformer(loaded_model_handle)
 
@@ -66,7 +68,8 @@ class SafireTransformer(TransformationABC):
     input and produce gensim output.
 
     """
-    def __init__(self, model_handle, dataset=None, learner=None,
+    def __init__(self, run_handle,
+                 setup_handles=None, dataset=None, learner=None,
                  eps=1e-09, chunksize=None, attempt_resume=False,
                  profile_training=False, dense_throughput=False):
         """Initializes the transformer. If necessary, performs model training
@@ -114,21 +117,28 @@ class SafireTransformer(TransformationABC):
             and (b) not convert output to sparse vectors.
         """
 
-        self.model_handle = model_handle
+        # model_handles=(train_handle, validate_handle, test_handle, run_handle)
+        self.setup_handles = setup_handles
+        self.run_handle = run_handle
 
-        if dataset is not None and learner is not None:
+        if dataset is not None and learner is not None \
+                and setup_handles is not None:
             logging.info('Training SAFIRE model...')
             if profile_training:
-                s, _ = profile_run(learner.run, self.model_handle, dataset,
+                s, _ = profile_run(learner.run,
+                                   self.setup_handles,
+                                   data=dataset,
                                    resume=attempt_resume)
                 print 'Profiling training:'
                 print s.getvalue()
             else:
-                learner.run(self.model_handle, dataset, resume=attempt_resume)
+                learner.run(self.setup_handles,
+                            data=dataset,
+                            resume=attempt_resume)
 
         # Shortcuts to dimension checking
-        self.n_in = self.model_handle.n_in
-        self.n_out = self.model_handle.n_out
+        self.n_in = self.run_handle.n_in
+        self.n_out = self.run_handle.n_out
 
         self.chunksize = chunksize
         self.eps = eps   # Using this is not implemented.
@@ -150,8 +160,13 @@ class SafireTransformer(TransformationABC):
         describe the transformer.
         """
         init_args = {
-            'handle': self.model_handle._export_pickleable_obj(),
-            'handle_class': self.model_handle.__class__, # Generality...
+            'run_handle': self.run_handle._export_pickleable_obj(),
+            'run_handle_class': self.run_handle.__class__,
+            # 'setup_handles': {name: handle._export_pickleable_obj()
+            #                   for name, handle in self.setup_handles.items()},
+            # 'setup_handle_classes': {name: handle.__class__
+            #                          for name, handle
+            #                          in self.setup_handles.items()},
             'chunksize': self.chunksize,
             'eps': self.eps
         }
@@ -211,7 +226,7 @@ class SafireTransformer(TransformationABC):
             dense_bow = numpy.atleast_2d(bow)
 
         # Run the model on the dense representation of input.
-        dense_out = self.model_handle.run(dense_bow)
+        dense_out = self.run_handle.run(dense_bow)
 
         if self.dense_throughput:
             out = dense_out
@@ -251,13 +266,16 @@ class SafireTransformer(TransformationABC):
     @classmethod
     def load(cls, fname):
         """Loads a SafireTransformer pickle dump created with the ``save()``
-        mehtod of a SafireTransformer instance."""
+        mehtod of a SafireTransformer instance. Upon loading, will NOT attempt
+        to re-train -- will currently ignore all setup_handles, data and learner.
+        """
 
         with open(fname, 'rb') as unpickle_handle:
             pickled_obj = cPickle.load(unpickle_handle)
 
-        handle_cls = pickled_obj['handle_class']
-        handle = handle_cls._load_from_save_dict(pickled_obj['handle'])
-        transformer = cls(handle)
+        # After refactoring handles to single-purpose
+        run_handle_class = pickled_obj['run_handle_class']
+        run_handle = run_handle_class._load_from_save_dict(pickled_obj['run_handle'])
+        transformer = cls(run_handle)
 
         return transformer

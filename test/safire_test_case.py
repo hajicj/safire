@@ -1,7 +1,7 @@
 import os
 import gensim
 import logging
-from safire.data import VTextCorpus
+from safire.data.vtextcorpus import VTextCorpus
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.layouts import clean_data_root, init_data_root
 from safire.data.loaders import MultimodalShardedDatasetLoader

@@ -238,6 +238,14 @@ class BaseSupervisedModel(BaseModel):
                             outputs = model.outputs,
                             allow_input_downcast=True)
 
-        return ModelHandle(model, train_model, validate_model, test_model,
-                           run_model)
+        train_handle = ModelHandle(model, train_model)
+        validate_handle = ModelHandle(model, validate_model)
+        test_handle = ModelHandle(model, test_model)
+        run_handle = ModelHandle(model, run_model)
 
+        handle_dict = {'train': train_handle,
+                       'validate': validate_handle,
+                       'test': test_handle,
+                       'run': run_handle}
+
+        return handle_dict

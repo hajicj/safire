@@ -27,8 +27,8 @@ from safire.datasets.word2vec_transformer import \
 from safire.introspection.interfaces import IntrospectionTransformer
 from safire.introspection.writers import HtmlVocabularyWriter, HtmlSimpleWriter, \
     HtmlStructuredFlattenedWriter, HtmlImageWriter, HtmlSimilarImagesWriter
-from safire.learning.interfaces import SafireTransformer, \
-    MultimodalClampedSamplerModelHandle
+from safire.learning.interfaces.safire_transformer import SafireTransformer
+from safire.learning.interfaces.model_handle import MultimodalClampedSamplerModelHandle
 from safire.learning.learners import BaseSGDLearner
 from safire.learning.models import DenoisingAutoencoder
 from safire.data.imagenetcorpus import ImagenetCorpus
@@ -44,7 +44,8 @@ from safire.datasets.dataset import Dataset, CompositeDataset, \
     CastPipelineAsDataset
 from safire.utils.transformers import LeCunnVarianceScalingTransform, \
     GeneralFunctionTransform, SimilarityTransformer, ItemAggregationTransform
-from safire.data import VTextCorpus, FrequencyBasedTransformer
+from safire.data.vtextcorpus import VTextCorpus
+from safire.data.frequency_based_transform import FrequencyBasedTransformer
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from test.safire_test_case import SafireTestCase
 
@@ -77,7 +78,7 @@ n_items_requested = 2
 class TestPipeline(SafireTestCase):
 
     @classmethod
-    def setUpClass(cls, clean_only=False, no_datasets=False):
+    def setUpClass(cls, clean_only=False, no_datasets=True):
         super(TestPipeline, cls).setUpClass(clean_only=clean_only,
                                             no_datasets=no_datasets)
 
@@ -208,13 +209,13 @@ class TestPipeline(SafireTestCase):
         print log_corpus_stack(flat_multimodal_dataset)
 
         print '--Creating model handle--'
-        self.model_handle = DenoisingAutoencoder.setup(flat_multimodal_dataset,
+        self.model_handles = DenoisingAutoencoder.setup(flat_multimodal_dataset,
             n_out=10,
             reconstruction='cross-entropy',
             heavy_debug=False)
 
         print 'Model weights shape: {0}'.format(
-            self.model_handle.model_instance.W.get_value(borrow=True).shape)
+            self.model_handles['run'].model_instance.W.get_value(borrow=True).shape)
 
         batch = flat_multimodal_dataset.train_X_batch(0, 1)
         print 'Batch shape: {0}'.format(batch.shape)
@@ -222,7 +223,8 @@ class TestPipeline(SafireTestCase):
         self.learner = BaseSGDLearner(3, 1, validation_frequency=4)
 
         print '--running learning--'
-        sftrans = SafireTransformer(self.model_handle,
+        sftrans = SafireTransformer(self.model_handles['run'],
+                                    self.model_handles,
                                     flat_multimodal_dataset,
                                     self.learner,
                                     dense_throughput=False)
@@ -244,7 +246,7 @@ class TestPipeline(SafireTestCase):
 
         print '--creating clamped sampling handle--'
         text2img_handle = MultimodalClampedSamplerModelHandle.clone(
-            sftrans.model_handle,
+            sftrans.run_handle,
             dim_text=get_composite_source(flat_multimodal_dataset, 'txt').dim,
             dim_img=get_composite_source(flat_multimodal_dataset, 'img').dim,
             k=10
@@ -329,7 +331,8 @@ class TestPipeline(SafireTestCase):
 
         print '--Creating flattened dataset--'
         flatten = FlattenComposite(multimodal_dataset,
-                                   indexes=t2i_indexes)
+                                   indexes=t2i_indexes,
+                                   structured=False)
         print '--applying flattened dataset--'
         flat_multimodal_corpus = flatten[multimodal_dataset]
 
@@ -340,14 +343,16 @@ class TestPipeline(SafireTestCase):
         print '\nCorpus stack before model setup:\n'
         print log_corpus_stack(flat_multimodal_dataset)
 
+        print '\nCorpus item before model setup: {0}'.format(flat_multimodal_dataset.train_X_batch(0, 2))
+
         print '--Creating model handle--'
-        self.model_handle = DenoisingAutoencoder.setup(flat_multimodal_dataset,
+        self.model_handles = DenoisingAutoencoder.setup(flat_multimodal_dataset,
             n_out=10,
             reconstruction='cross-entropy',
             heavy_debug=False)
 
         print 'Model weights shape: {0}'.format(
-            self.model_handle.model_instance.W.get_value(borrow=True).shape)
+            self.model_handles['run'].model_instance.W.get_value(borrow=True).shape)
 
         batch = flat_multimodal_dataset.train_X_batch(0, 1)
         print 'Batch shape: {0}'.format(batch.shape)
@@ -355,7 +360,8 @@ class TestPipeline(SafireTestCase):
         self.learner = BaseSGDLearner(3, 1, validation_frequency=4)
 
         print '--running learning--'
-        sftrans = SafireTransformer(self.model_handle,
+        sftrans = SafireTransformer(self.model_handles['run'],
+                                    self.model_handles,
                                     flat_multimodal_dataset,
                                     self.learner,
                                     dense_throughput=True)
@@ -376,7 +382,7 @@ class TestPipeline(SafireTestCase):
 
         print '--creating clamped sampling handle--'
         text2img_handle = MultimodalClampedSamplerModelHandle.clone(
-            sftrans.model_handle,
+            sftrans.run_handle,  # the run-handle
             dim_text=get_composite_source(flat_multimodal_dataset, 'txt').dim,
             dim_img=get_composite_source(flat_multimodal_dataset, 'img').dim,
             k=10
@@ -507,7 +513,8 @@ class TestPipeline(SafireTestCase):
         print 'Total token dataset length: {0}'.format(len(dataset))
 
         # Train a model over the combination.
-        self.model_handle = DenoisingAutoencoder.setup(dataset,
+        self.model_handles = DenoisingAutoencoder.setup(
+            dataset,
             n_out=200,
             activation=theano.tensor.tanh,
             backward_activation=theano.tensor.tanh,
@@ -519,7 +526,8 @@ class TestPipeline(SafireTestCase):
 
         print '--running training--'
         start = time.clock()
-        sftrans = SafireTransformer(self.model_handle,
+        sftrans = SafireTransformer(self.model_handles['run'],
+                                    self.model_handles,
                                     dataset,
                                     self.learner,
                                     dense_throughput=False)
@@ -692,7 +700,7 @@ class TestPipeline(SafireTestCase):
         # Train model
         print '-- training model --'
         dataset = Dataset(mm_pipeline)
-        self.model_handle = DenoisingAutoencoder.setup(
+        self.model_handles = DenoisingAutoencoder.setup(
             dataset,
             n_out=200,
             activation=theano.tensor.nnet.sigmoid,  # Sampleable activation
@@ -703,7 +711,8 @@ class TestPipeline(SafireTestCase):
         self.learner = BaseSGDLearner(5, 400, validation_frequency=4,
                                       plot_transformation=False)
 
-        sftrans = SafireTransformer(self.model_handle,
+        sftrans = SafireTransformer(self.model_handles['run'],
+                                    self.model_handles,
                                     dataset,
                                     self.learner,
                                     dense_throughput=False)
@@ -712,7 +721,7 @@ class TestPipeline(SafireTestCase):
         # Build clamped sampler
         print '-- building clamped sampler --'
         t2i_handle = MultimodalClampedSamplerModelHandle.clone(
-            self.model_handle,
+            self.model_handles['run'],
             dim_text=get_composite_source(mm_pipeline, 'txt').dim,
             dim_img=get_composite_source(mm_pipeline, 'img').dim,
             k=10,
