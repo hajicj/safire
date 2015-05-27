@@ -367,3 +367,50 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
 
         return save_dict
 
+
+class LasagneModelHandle(ModelHandle):
+    """An implementation of ModelHandle that deals with Lasagne models."""
+    def __init__(self, model_instance, run):
+        """Initializes the handle.
+
+        :type model_instance: lasagne.layers.base.Layer
+        :param model_instance: The model to which the handle provieds
+                               access. Think about it as a read-only
+                               thing.
+
+        :type run: theano.function
+        :param run: Theano function used to run the model, i.e. transform
+            inputs into outputs.
+        """
+        try:
+            import lasagne
+            if not isinstance(model_instance, lasagne.layers.base.Layer):
+                raise TypeError('Initializing LasagneHandle with non-Lasagne'
+                                ' model of type {0}.'
+                                ''.format(type(model_instance)))
+        except ImportError:
+            raise ImportError('Cannot use LasagneHandle without being able to'
+                              ' import Lasagne!')
+
+        self.model_instance = model_instance
+        self.model_class = type(model_instance)
+
+        # Lasagne initializes input/output shapes not only as dimension of one
+        # vector but also with minibatch size, because it always wants to use
+        # the ``givens`` mechanism of theano.function.
+        self.n_in = self.model_instance.input_shape[1]
+        self.n_out = self.model_instance.output_shape[1]
+
+        self.run = run
+
+    def _export_pickleable_obj(self):
+        """
+        Exports a dicitonary that can directly be pickled to sufficiently
+        describe the handle.
+        """
+        return self
+
+    @classmethod
+    def _load_from_save_dict(cls, save_dict):
+
+        return save_dict

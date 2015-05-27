@@ -408,8 +408,11 @@ class VTextCorpus(TextCorpus):
 
         end_time = time.clock()
         total_time = end_time - start_time
-        logger.info('Processing corpus took %f s (%f s per document).' % (
-            total_time, total_time / self.n_processed))
+        if self.n_processed > 0:
+            logger.info('Processing corpus took %f s (%f s per document).' % (
+                total_time, total_time / self.n_processed))
+        else:
+            logger.warn('Only processed 0 documents!')
 
     def parse_document_and_sentences(self, doc_handle, docno=None):
         """Parses the whole document. Returns both the sentences and the

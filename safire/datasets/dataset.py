@@ -553,7 +553,7 @@ class CompositeDataset(DatasetABC):
 
     @staticmethod
     def derive_dimension(data):
-        return tuple(d.dim for d in data)
+        return tuple(safire.utils.transcorp.dimension(d) for d in data)
 
 
 class SupervisedDataset(CompositeDataset):

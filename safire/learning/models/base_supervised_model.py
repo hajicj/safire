@@ -177,11 +177,9 @@ class BaseSupervisedModel(BaseModel):
                                   to the model constructor. See constructor
                                   argument documentation.
                                      
-        :returns: ``ModelHandle(model, train_f, validate_f, test_f)``
-                  where 'model' is the Model instance initialized during
-                  :func:`setup` and the ``_func`` variables are compiled
-                  theano.functions to use in a learner.                            
-
+        :rtype: dict(str => ModelHandle)
+        :returns: A dict of model handles for training, validating, testing
+            and plain old running the model. Pass these to a learner.
 
         """        
         index = TT.lscalar() # index of minibatch
