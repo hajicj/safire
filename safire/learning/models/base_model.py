@@ -449,3 +449,9 @@ class BaseModel(object):
             pickled_object = cPickle.load(unpickle_handle)
 
         return pickled_object
+
+    def __getstate__(self):
+        logging.debug('=== Pickling {0}:'.format(self.__class__.__name__))
+        for k in self.__dict__:
+            logging.debug('{0}: type {1}'.format(k, type(self.__dict__[k])))
+        return self.__dict__

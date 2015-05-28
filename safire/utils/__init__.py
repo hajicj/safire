@@ -19,6 +19,7 @@ import time
 from sys import getsizeof, stderr
 from itertools import chain
 from collections import deque
+import pickle
 
 from gensim.matutils import full2sparse, sparse2full, corpus2dense
 import itertools
@@ -26,6 +27,8 @@ import itertools
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import operator
+import os
+import pprint
 from pympler import asizeof
 
 try:
@@ -419,6 +422,76 @@ def merciless_print(i, node, fn):
         except TypeError:
             logging.debug('Couldn\'t check node for NaN/Inf: {0}'.format(node))
             #theano.printing.debugprint(node)
+
+
+# Debugging tools for pickle
+
+class VerbosePickler(pickle.Pickler):
+    def save(self, obj):
+        try:
+            pickle.Pickler.save(self, obj)
+        except pickle.PicklingError:
+            print 'Dumping object failed: {0}'.format(type(obj))
+            print 'Object in question: {0}'.format(obj)
+            raise
+        from theano.tensor import raw_random
+        from theano.tensor.shared_randomstreams import RandomStreams
+
+
+def test_pickleability(obj, test_pickle_fname='test-theano-fn-pickle.pkl',
+                       find_culprit=False, recursive=True):
+    """Tests whether the given object is pickle-able. Debugging tool."""
+    logging.debug('Pickling object of type {0}'.format(obj.__class__.__name__))
+    try:
+        with open(test_pickle_fname, 'wb') as phandle:
+            pickler = VerbosePickler(phandle, protocol=-1)
+            pickler.dump(obj)
+            logging.debug('Successfully pickled object {0}'.format(type(obj)))
+    except pickle.PicklingError:
+        logging.debug('Failed to pickle type {0}, object {1}.'.format(type(obj),
+                                                                      obj))
+        if find_culprit:
+            culprit, culprit_log = find_pickle_error_culprit(
+                obj,
+                test_pickle_fname=test_pickle_fname)
+            logging.debug('Culprit: {0}'.format(culprit_log))
+            if recursive:
+                logging.debug('Tracing culprit {0} recursively...'
+                              ''.format(culprit))
+                test_pickleability(culprit,
+                                   test_pickle_fname=test_pickle_fname,
+                                   find_culprit=True, recursive=True)
+        raise
+    finally:
+        try:
+            os.remove(test_pickle_fname)
+        except OSError:
+            # Could have been deleted from within find_pickle_error_culprit
+            # logging.debug('Pickleability test temp file {0} has already'
+            #               ' been removed.'.format(test_pickle_fname))
+            pass
+
+
+def find_pickle_error_culprit(obj, recursive=True,
+                              test_pickle_fname='test-theano-fn-pickle.pkl'):
+    """Attempts to find what is causing pickling trouble for an object.
+    If ``recursive`` is set, will try to catch the culprits recursively."""
+    try:
+        pdict = obj.__getstate__()
+    except AttributeError:
+        pdict = obj.__dict__
+
+    logging.debug('pdict: {0}'.format(pdict))
+    for k, v in pdict.items():
+        try:
+            test_pickleability(v, test_pickle_fname=test_pickle_fname,
+                               find_culprit=False)
+        except pickle.PicklingError:
+            culprit_log = 'pdict key {0}:\n\t\ttype: {1}\n\t\tvalue: {2}' \
+                          ''.format(k, type(v), v)
+            return v, culprit_log
+
+    return None, 'No culprit found in pdict.'
 
 
 def shuffle_together(*lists):

@@ -1435,7 +1435,9 @@ class ConfigBuilder(object):
                 imported_name, imported_obj = ConfigBuilder._execute_import(
                     imported)
                 current_locals[imported_name] = imported_obj
-
+        if '_exec' in obj:
+            obj = eval(obj['_exec'], globals(), current_locals)
+            return obj
         if '_init' in obj:
             init_expr = eval(obj['_init'], globals(), current_locals)
         elif '_class' in obj:

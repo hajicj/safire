@@ -151,8 +151,8 @@ class FlattenComposite(TransformationABC):
         id2doc = collections.defaultdict(tuple)
         src_id2docs = []
         for c in composite.corpus:
-            logging.debug('Getting id2doc object from corpus:\n{0}'
-                          ''.format(safire.utils.transcorp.log_corpus_stack(c)))
+            # logging.debug('Getting id2doc object from corpus:\n{0}'
+            #               ''.format(safire.utils.transcorp.log_corpus_stack(c)))
             i2d = safire.utils.transcorp.get_id2doc_obj(c)
             src_id2docs.append(i2d)
         for iid, idx in enumerate(indexes):

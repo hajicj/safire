@@ -8,7 +8,7 @@ class PretrainedSupervisedModelHandle(ModelHandle):
 
     A handle is the "runnable" interface to a model.
     """
-    def __init__(self, model_instance, train, validate, test, run, pretrain):
+    def __init__(self, model_instance, train, validate, test, run_expr, pretrain):
         """Initializes the handle.
 
         :type model_instance: safire.learning.models.BaseModel
@@ -25,8 +25,8 @@ class PretrainedSupervisedModelHandle(ModelHandle):
         :type test: theano.function
         :param test: Theano function used to test the given model.
 
-        :type run: theano.function
-        :param run: Theano function used to run the model, i.e. transform
+        :type run_expr: theano.function
+        :param run_expr: Theano function used to run the model, i.e. transform
             inputs into outputs.
 
         :type pretrain: list(theano.function)
@@ -36,6 +36,6 @@ class PretrainedSupervisedModelHandle(ModelHandle):
                                                               train, 
                                                               validate,
                                                               test,
-                                                              run)
+                                                              run_expr)
         
         self.pretrain = pretrain

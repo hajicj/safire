@@ -1,9 +1,11 @@
 import cPickle
 import gensim
 import logging
+import os
 import theano
 import safire
 from safire.learning.interfaces.clamped_sampler import MultimodalClampedSampler
+from safire.utils import test_pickleability
 
 
 class ModelHandle(object):
@@ -23,7 +25,7 @@ class ModelHandle(object):
 
     Also, a ModelHandle provides save/load functionality for model persistence.
     """
-    def __init__(self, model_instance, run):
+    def __init__(self, model_instance, run_expr):
         """Initializes the handle.
 
         :type model_instance: safire.learning.models.BaseModel
@@ -31,8 +33,8 @@ class ModelHandle(object):
                                access. Think about it as a read-only
                                thing.
 
-        :type run: theano.function
-        :param run: Theano function used to run the model, i.e. transform
+        :type run_expr: theano.function
+        :param run_expr: Theano function used to run the model, i.e. transform
             inputs into outputs.
         """
 
@@ -42,7 +44,20 @@ class ModelHandle(object):
         self.n_in = self.model_instance.n_in
         self.n_out = self.model_instance.n_out
 
-        self.run = run
+        # try:
+        # test_pickleability(run_expr, find_culprit=False, recursive=False)
+        # except cPickle.PicklingError:
+        #     logging.warn('The supplied run_expr is not pickleable!')
+        #     test_pickleability(run_expr, find_culprit=False, recursive=False)
+
+        self.run_expr = run_expr
+
+    def run(self, inputs):
+        """Calls the run_handle on the given inputs and returns the output.
+        Simply a wrapper so that the learners/transformers do not directly
+        work with the theano expression, to give some flexibility for
+        logging and debugging."""
+        return self.run_expr(inputs)
 
     def save(self, filename, protocol=-1):
         """Saves the handle. Uses the ``_init_arg_snapshot()`` method of the
@@ -59,15 +74,13 @@ class ModelHandle(object):
         Exports a dicitonary that can directly be pickled to sufficiently
         describe the handle.
         """
+        # logging.debug('self.__dict__ = {0}'.format(self.__dict__))
         if self.model_instance is not None:
             model_pickleable_obj = self.model_instance._export_pickleable_object()
         else:
             model_pickleable_obj = None
 
-        init_args = {'train': self.train,
-                     'validate': self.validate,
-                     'test': self.test,
-                     'run': self.run}
+        init_args = {'run_expr': self.run_expr}
 
         save_dict = {'model': model_pickleable_obj,
                      'init_args': init_args}
@@ -87,6 +100,8 @@ class ModelHandle(object):
     @classmethod
     def _load_from_save_dict(cls, save_dict):
 
+        logging.debug('Unpickling: {0}'.format(save_dict))
+
         if save_dict['model'] is not None:
             model_init_args = save_dict['model']['init_args']
             model_class = save_dict['model']['class']
@@ -102,6 +117,36 @@ class ModelHandle(object):
         model_handle = ModelHandle(model_instance=model, **handle_init_args)
 
         return model_handle
+
+    def __setstate__(self, save_dict):
+        #logging.debug('=== Unpickling {0}:'.format(self.__class__.__name__))
+        #for k in save_dict:
+        #    logging.debug('{0}: type {1}'.format(k, save_dict[k]))
+
+        handle = self._load_from_save_dict(save_dict)
+        #logging.debug('    Handle ID: {0}'.format(id(handle)))
+
+        self.__dict__.update(handle.__dict__)
+
+    def __getstate__(self):
+        pdict = self._export_pickleable_obj()
+
+        # logging.debug('=== Pickling {0}:'.format(self.__class__.__name__))
+        # for k in pdict:
+        #     logging.debug('{0}: type {1}'.format(k, pdict[k]))
+
+        return pdict
+        #
+        # pdict = {
+        #     'model_instance': self.model_instance,
+        #     'model_class': self.model_class,
+        #     'n_in': self.n_in,
+        #     'n_out': self.n_out,
+        #     'run': self.run_handle
+        # }
+        #
+        # return pdict
+        # return self.__dict__
 
 
 class AlternatingGibbsHandle(ModelHandle):
@@ -119,7 +164,7 @@ class BackwardModelHandle(ModelHandle):
     and will compute the *visible* activation for the given model.
 
     """
-    def __init__(self, model_instance, run,
+    def __init__(self, model_instance, run_expr,
                  heavy_debug=False):
         """Initializes the handle. Assumes the model is sample-able.
 
@@ -127,8 +172,8 @@ class BackwardModelHandle(ModelHandle):
         :param model_instance: The model to which the handle provides
             access. Think about it as a read-only thing.
 
-        :type run: theano.function
-        :param run: Theano function used to run the model, i.e. transform
+        :type run_expr: theano.function
+        :param run_expr: Theano function used to run the model, i.e. transform
             inputs into outputs. However, this function will not be used
             as the ``run`` member of the handle; it will remain as the more
             obscure ``get_hidden`` member.
@@ -145,7 +190,7 @@ class BackwardModelHandle(ModelHandle):
         # self.validate = validate
         # self.test = test
         #
-        self.get_hidden = run
+        self.get_hidden = run_expr
 
         self.heavy_debug = heavy_debug
 
@@ -200,7 +245,7 @@ class BackwardModelHandle(ModelHandle):
         if hasattr(handle, 'get_hidden'):
             run_fn = handle.get_hidden
         else:
-            run_fn = handle.run
+            run_fn = handle.run_expr
 
         cl_handle = BackwardModelHandle(handle.model_instance,
                                         run_fn)
@@ -213,7 +258,7 @@ class BackwardModelHandle(ModelHandle):
         """
         model_pickleable_obj = self.model_instance._export_pickleable_object()
 
-        init_args = {'run': self.get_hidden,
+        init_args = {'run_expr': self.get_hidden,
                      'dim_text': self.n_in,
                      'dim_img': self.n_out}
 
@@ -251,7 +296,7 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
 
     """
 
-    def __init__(self, model_instance, run,
+    def __init__(self, model_instance, run_expr,
                  dim_text, dim_img, k=10,
                  sample_hidden=True, sample_visible=True):
         """Initializes the handle. Assumes the model is sample-able.
@@ -260,8 +305,8 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
         :param model_instance: The model to which the handle provides
             access. Think about it as a read-only thing.
 
-        :type run: theano.function
-        :param run: Theano function used to run the model, i.e. transform
+        :type run_expr: theano.function
+        :param run_expr: Theano function used to run the model, i.e. transform
             inputs into outputs. However, this function will not be used
             as the ``run`` member of the handle; it will remain as the more
             obscure ``get_hidden`` member.
@@ -309,7 +354,7 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
         self.sample_visible = sample_visible
 
         # The 'run' function is implemented differently.
-        self.get_hidden = run
+        self.get_hidden = run_expr
 
     @classmethod
     def clone(cls, handle, dim_text, dim_img, **clamped_handle_kwargs):
@@ -328,7 +373,7 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
         if hasattr(handle, 'get_hidden'):
             run_fn = handle.get_hidden
         else:
-            run_fn = handle.run
+            run_fn = handle.run_expr
 
         cl_handle = MultimodalClampedSamplerModelHandle(handle.model_instance,
                                                         run_fn,
@@ -354,10 +399,7 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
         """
         model_pickleable_obj = self.model_instance._export_pickleable_object()
 
-        init_args = {'train': self.train,
-                     'validate': self.validate,
-                     'test': self.test,
-                     'run': self.get_hidden,
+        init_args = {'run_expr': self.get_hidden,
                      'dim_text': self.n_in,
                      'dim_img': self.n_out,
                      'k': self.k}
@@ -370,7 +412,7 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
 
 class LasagneModelHandle(ModelHandle):
     """An implementation of ModelHandle that deals with Lasagne models."""
-    def __init__(self, model_instance, run):
+    def __init__(self, model_instance, run_expr):
         """Initializes the handle.
 
         :type model_instance: lasagne.layers.base.Layer
@@ -378,8 +420,8 @@ class LasagneModelHandle(ModelHandle):
                                access. Think about it as a read-only
                                thing.
 
-        :type run: theano.function
-        :param run: Theano function used to run the model, i.e. transform
+        :type run_expr: theano.function
+        :param run_expr: Theano function used to run the model, i.e. transform
             inputs into outputs.
         """
         try:
@@ -401,7 +443,7 @@ class LasagneModelHandle(ModelHandle):
         self.n_in = self.model_instance.input_shape[1]
         self.n_out = self.model_instance.output_shape[1]
 
-        self.run = run
+        self.run_expr = run_expr
 
     def _export_pickleable_obj(self):
         """
