@@ -262,12 +262,13 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
         start_time = time.clock()
         last_epoch_time = start_time
 
-        # Validation init logging
-        validation_losses = [ self._validate_batch(validate_handle,
-                                                   data,
-                                                   vb_index)
-                              for vb_index in xrange(n_devel_batches)]
+        # Validation init logging  ### Disabled for debugging
+        validation_losses = [self._validate_batch(validate_handle,
+                                                  data,
+                                                  vb_index)
+                             for vb_index in xrange(n_devel_batches)]
 
+        print validation_losses
         validation_loss = numpy.mean(validation_losses)
 
         logging.info(
@@ -280,7 +281,7 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
         self.weights_snapshot(train_handle.model_instance)
 
         self.monitor = { 'training_cost' : [], 'validation_cost' : [] }
-        self.monitor['validation_cost'].append([iteration, validation_loss])
+        # self.monitor['validation_cost'].append([iteration, validation_loss])
 
         if self.plot_data:
             sample = data.train_X_batch(0, self.b_size)
@@ -676,6 +677,9 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
         model = model_handle.model_instance
         batch_loss = None
 
+        # TODO: Refactor Dataset so that it returns (train_X, train_y) and this
+        # if/else is redundant (the right dataset will always return the right
+        # inputs).
         if isinstance(model, BaseSupervisedModel):
             if not isinstance(dataset, SupervisedDataset):
                 raise TypeError('Attempting to validate supervised model'
@@ -692,6 +696,7 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
         elif isinstance(model, BaseUnsupervisedModel):
             devel_X = dataset.devel_X_batch(batch_index, self.b_size)
+            print 'X batch size: {0}'.format(devel_X.shape)  ### DEBUG
             batch_loss = model_handle.run(devel_X)
 
         return batch_loss
@@ -740,10 +745,14 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                                  with_orig=False, with_no_bias=False,
                                  plot_bias=False, backward_handle=None):
         """Plots a sample heatmap of how the dataset will be transformed."""
-        sample_size = min(1000, (len(dataset) - dataset._test_doc_offset))
+        sample_size = min(1000, (len(dataset) - dataset._test_doc_offset - 1))
         batch = 0  # Deterministic plotting.
-        #batch = random.randint(0, dataset.n_test_batches(sample_size))
-        #print 'Requesting test batch {0} with size {1}'.format(batch, sample_size)
+        # batch = random.randint(0, dataset.n_test_batches(sample_size))
+        if sample_size == -1:
+            logging.warn('Requesting a test batch sample size of -1,'
+                         ' have you set the test_p for the dataset?')
+        # print 'Requesting test batch {0} with size {1}'
+        #       ''.format(batch, sample_size)
         sample_data = dataset.test_X_batch(batch, sample_size)
         transformed_data = numpy.array(model_handle.run(sample_data))
 
