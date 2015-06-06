@@ -371,6 +371,7 @@ import pprint
 import operator
 import re
 from safire.data.pipeline import Pipeline
+from safire.data.serializer import Serializer
 
 __author__ = "Jan Hajic jr."
 
@@ -459,6 +460,112 @@ def build_pipeline(config_file, output_name):
     cbuilder.build()
     pipeline = cbuilder.export_pipeline(output_name)
     return pipeline
+
+# Dealing with artifacts (stuff that configurations leave behind).
+
+
+def _pln_artifacts(builder):
+    """Inside function to extract all pipeline block artifacts from a
+    ConfigBuilder. The public interface is to use :func:`pln_artifacts`
+    and call it with a configuration (that function initializes the builder
+    and calls this function)."""
+    plns = []
+    for obj, label in builder._persistence:
+        fname = builder.get_loading_filename(label)
+        plns.append(fname)
+    return plns
+
+
+def pln_artifacts(conf):
+    """Extract all ``*.pln`` artifact names created by the configuration.
+    (Assumes that all artifacts are created through the ``_persistence``
+    mechanism -- which they should be!)"""
+    builder = ConfigBuilder(conf)
+    return _pln_artifacts(builder)
+
+
+def _pls_artifacts(builder):
+    """Extract all ``*.pls`` artifact names from a ConfigBuilder. The public
+    interface is to use :func:`pls_artifacts`  and call it with a configuration
+    (that function initializes the builder and calls this function).
+
+    Currently only recognizes serializer objs that are subclasses of
+    :cls:`safire.data.serializer.Serializer` and have a ``fname`` kwarg that
+    defines the ``*.pls`` filename.
+    """
+    plss = []
+    loader = builder._loader
+
+    known_serializer_classes = [Serializer]
+
+    serializer_conf_objs = []
+
+    # Get all Serializer-class objects.
+    for conf_obj in builder.configuration.objects:
+        if '_class' in conf_obj:
+            _, cls = builder._execute_import(conf_obj['_class'])
+            for serializer_cls in known_serializer_classes:
+                if issubclass(cls, serializer_cls):
+                    serializer_conf_objs.append(conf_obj)
+
+    # Check each serializer conf obj for serialization target (fname attribute)
+    for conf_obj in serializer_conf_objs:
+        fname_attr = conf_obj['fname']  # Base class Serializer always has that
+        fname = eval(fname_attr, globals(), **builder.objects)
+        # Possible problem with locals -- we may need to take _import etc.
+        # into account.
+        plss.append(fname)
+
+    return plss
+
+
+def pls_artifacts(conf):
+    """Extract all ``*.pls`` artifact names created by the configuration.
+    These names correspond to calls of ``_loader.pipeline_serialization_target``
+    that are used in Serializer-class blocks during configuration building.
+
+    Note that while Serializer objects can be initialized through various object
+    creation mechanisms (``_class``, ``_init``, ``_exec``), only
+    ``_class``-based serializers will be discovered.
+    """
+    builder = ConfigBuilder(conf)
+    return _pls_artifacts(builder)
+
+
+def artifacts(conf):
+    """Finds out which *artifacts* the given configuration leaves behind when
+    it is fully built.
+
+    There are two types of artifacts: saved pipelines (``*.pln`` files) and
+    serialized data (``*.pls`` files). The individual shard files are assumed
+    to be under transparent control by the corresponding ``*.pls`` file, the
+    one to which the serializer class instance itself is saved.
+
+    The function returns a tuple of lists of artifact filenames.
+
+    .. note:
+
+        This function is the first step towards an indexing system.
+
+    To check for artifacts, the function uses the configuration's loader,
+
+    :type conf: safire.utils.config.Configuration
+    :param conf: The configuration to get artifacts from.
+
+    :rtype: tuple(list(str), list(str))
+    :returns: A tuple ``(plns, plss)`` of lists of saved pipeline names and
+        saved serialization targets.
+    """
+    # Pre-build the configuration to get its loader and dependency graph.
+    builder = ConfigBuilder(conf)
+
+    plns = _pln_artifacts(builder)  # Pipeline save objects
+    plss = _pls_artifacts(builder)  # Pipeline serialization objects
+
+    return plns, plss
+
+
+
 
 ###############################################################################
 
@@ -1386,6 +1493,9 @@ class ConfigBuilder(object):
             # name corresponding to that module, e.g. if imported was
             # safire.utils.transcorp, we put just 'safire' in the names.
             #  ... this has a problem with multiple 'safire...' imports, right?
+            #  ... wrong: the various safire-based modules get added to the
+            #      safire namespace, so they are both accessible through
+            #      safire.foo/safire.bar
             imported_levels = imported.split('.')
             imported_name = imported_levels[0]
             # if len(imported_levels) > 1:
