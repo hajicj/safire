@@ -2,6 +2,7 @@ import cPickle
 import gensim
 import logging
 import os
+import numpy
 import theano
 import safire
 from safire.learning.interfaces.clamped_sampler import MultimodalClampedSampler
@@ -203,6 +204,8 @@ class BackwardModelHandle(ModelHandle):
     def init_backward_run(self, sample_visible=False):
         """Creates the Theano function  to compute the backward mean."""
         h = theano.tensor.matrix('backward_h', dtype=theano.config.floatX)
+        h.tag.test_value = numpy.ones((10, self.model_instance.n_out),
+                                      dtype=theano.config.floatX) / 2.0
 
         if sample_visible:
             v = self.model_instance.sample_v_given_h(h)

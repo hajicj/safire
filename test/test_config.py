@@ -8,7 +8,8 @@ from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.loaders import MultimodalShardedDatasetLoader
 from safire.data.serializer import SwapoutCorpus
 from safire.introspection.interfaces import IntrospectionTransformer
-from safire.utils.config import ConfigParser, Configuration, ConfigBuilder
+from safire.utils.config import ConfigParser, Configuration, ConfigBuilder, \
+    pln_artifacts, _pln_artifacts, _pls_artifacts, pls_artifacts, artifacts
 from safire.utils.transcorp import dry_run, bottom_corpus, log_corpus_stack, \
     get_id2doc_obj, get_doc2id_obj
 
@@ -21,7 +22,7 @@ from test.safire_test_case import SafireTestCase
 class TestConfig(SafireTestCase):
 
     @classmethod
-    def setUpClass(cls, clean_only=False, no_datasets=False):
+    def setUpClass(cls, clean_only=True, no_datasets=True):
         super(TestConfig, cls).setUpClass(clean_only, no_datasets)
         cls.config_file = os.path.join(cls.data_root, 'test_config.ini')
         cls.complex_config_file = os.path.join(cls.data_root, 'test_complex_config.ini')
@@ -30,10 +31,18 @@ class TestConfig(SafireTestCase):
         cls.t2i_config_file = os.path.join(cls.data_root, 'test_t2i_config.ini')
 
     def setUp(self):
-        self.setUpClass(clean_only=False, no_datasets=False)
+        self.setUpClass(clean_only=True, no_datasets=True)
 
     def tearDown(self):
         init_data_root(self.data_root, overwrite=False)
+
+    def _init_build(self, fname):
+        cparser = ConfigParser()
+        with open(fname) as config_handle:
+            conf = cparser.parse(config_handle)
+
+        builder = ConfigBuilder(conf)
+        return conf, builder
 
     def test_parser(self):
         parser = ConfigParser()
@@ -46,11 +55,11 @@ class TestConfig(SafireTestCase):
 
         # All objects parsed?
         self.assertIsInstance(conf.objects, collections.OrderedDict)
-        self.assertEqual(len(conf.objects), 30)
+        self.assertEqual(len(conf.objects), 31)
 
         # Objects parsed as proper types?
         for name, obj in conf.objects.items():
-            self.assertTrue('_class' in obj or '_init' in obj)
+            self.assertTrue('_class' in obj or '_init' in obj or '_exec' in obj)
             if '_dependencies' in obj:
                 self.assertIsInstance(obj['_dependencies'], list)
             if '_access_deps' in obj:
@@ -285,6 +294,140 @@ class TestConfig(SafireTestCase):
             deps = builder2.deps_graph[obj_name]
             autodeps = builder2.autodetect_dependencies(obj)
             self.assertEqual(deps, autodeps)
+
+    def test__pln_artifacts(self):
+        conf, builder = self._init_build(self.t2i_config_file)
+        # Getting artifacts should work without building the config,
+        # an initialized builder should be sufficient.
+        plns = _pln_artifacts(builder)
+
+        expected_persistence_dict = {
+            '_img_serialized_': builder._loader.pipeline_name('image_source'),
+            '_w2v_serialized_': builder._loader.pipeline_name('w2v_source'),
+            '_joint_serialized_': builder._loader.pipeline_name('joint_w2v_and_img'),
+            '_t2i_': builder._loader.pipeline_name('test_t2i'),
+            '_similarities_': builder._loader.pipeline_name('test_similarities')
+        }
+        self.assertEqual(len(plns), len(expected_persistence_dict))
+
+        builder.build()
+
+        for pkey, pname in expected_persistence_dict.items():
+            self.assertTrue(pkey in plns)
+            self.assertEqual(expected_persistence_dict[pkey], pname)
+            self.assertTrue(os.path.isfile(plns[pkey]))
+
+    def test_pln_artifacts(self):
+        conf, builder = self._init_build(self.t2i_config_file)
+        plns = pln_artifacts(conf)
+
+        expected_persistence_dict = {
+            '_img_serialized_': builder._loader.pipeline_name('image_source'),
+            '_w2v_serialized_': builder._loader.pipeline_name('w2v_source'),
+            '_joint_serialized_': builder._loader.pipeline_name('joint_w2v_and_img'),
+            '_t2i_': builder._loader.pipeline_name('test_t2i'),
+            '_similarities_': builder._loader.pipeline_name('test_similarities')
+        }
+        self.assertEqual(len(plns), len(expected_persistence_dict))
+
+        builder.build()
+
+        for pkey, pname in expected_persistence_dict.items():
+            self.assertTrue(pkey in plns)
+            self.assertEqual(expected_persistence_dict[pkey], pname)
+            self.assertTrue(os.path.isfile(plns[pkey]))
+
+        _plns = _pln_artifacts(builder)
+
+        self.assertEqual(plns, _plns)
+
+    def test__pls_artifacts(self):
+        conf, builder = self._init_build(self.t2i_config_file)
+
+        plss = _pls_artifacts(builder)
+
+        ld = builder._loader
+        expected_pls_dict = {
+            'joint_serializer': ld.pipeline_serialization_target('.joint_data'),
+            'q_serializer': ld.pipeline_serialization_target('.query_t2i_data'),
+            'i_serializer': ld.pipeline_serialization_target('.image_source'),
+            'w2v_serializer': ld.pipeline_serialization_target('.w2v_data'),
+            'vtcorp_serializer': ld.pipeline_serialization_target('.text_data'),
+        }
+        self.assertEqual(len(plss), len(expected_pls_dict))
+
+        builder.build()
+
+        for pkey, pname in expected_pls_dict.items():
+            self.assertTrue(pkey in plss)
+            self.assertEqual(expected_pls_dict[pkey], pname)
+            self.assertTrue(os.path.isfile(plss[pkey]))
+
+    def test_pls_artifacts(self):
+        conf, builder = self._init_build(self.t2i_config_file)
+
+        plss = pls_artifacts(conf)
+
+        ld = builder._loader
+        expected_pls_dict = {
+            'joint_serializer': ld.pipeline_serialization_target('.joint_data'),
+            'q_serializer': ld.pipeline_serialization_target('.query_t2i_data'),
+            'i_serializer': ld.pipeline_serialization_target('.image_source'),
+            'w2v_serializer': ld.pipeline_serialization_target('.w2v_data'),
+            'vtcorp_serializer': ld.pipeline_serialization_target('.text_data'),
+        }
+        self.assertEqual(len(plss), len(expected_pls_dict))
+
+        builder.build()
+
+        for pkey, pname in expected_pls_dict.items():
+            self.assertTrue(pkey in plss)
+            self.assertEqual(expected_pls_dict[pkey], pname)
+            self.assertTrue(os.path.isfile(plss[pkey]))
+
+        _plss = _pls_artifacts(builder)
+
+        self.assertEqual(plss, _plss)
+
+    def test_artifacts(self):
+        conf, builder = self._init_build(self.t2i_config_file)
+
+        ar = artifacts(conf)
+
+        self.assertIsInstance(ar, tuple)
+        self.assertEqual(len(ar), 2)
+        self.assertIsInstance(ar[0], dict)
+        self.assertIsInstance(ar[1], dict)
+
+        builder.build()
+
+        ld = builder._loader
+        expected_persistence_dict = {
+            '_img_serialized_': ld.pipeline_name('image_source'),
+            '_w2v_serialized_': ld.pipeline_name('w2v_source'),
+            '_joint_serialized_': ld.pipeline_name('joint_w2v_and_img'),
+            '_t2i_': ld.pipeline_name('test_t2i'),
+            '_similarities_': ld.pipeline_name('test_similarities')
+        }
+        plns = ar[0]
+        for pkey, pname in expected_persistence_dict.items():
+            self.assertTrue(pkey in plns)
+            self.assertEqual(expected_persistence_dict[pkey], pname)
+            self.assertTrue(os.path.isfile(plns[pkey]))
+
+        expected_pls_dict = {
+            'joint_serializer': ld.pipeline_serialization_target('.joint_data'),
+            'q_serializer': ld.pipeline_serialization_target('.query_t2i_data'),
+            'i_serializer': ld.pipeline_serialization_target('.image_source'),
+            'w2v_serializer': ld.pipeline_serialization_target('.w2v_data'),
+            'vtcorp_serializer': ld.pipeline_serialization_target('.text_data'),
+        }
+        plss = ar[1]
+        for pkey, pname in expected_pls_dict.items():
+            self.assertTrue(pkey in plss)
+            self.assertEqual(expected_pls_dict[pkey], pname)
+            self.assertTrue(os.path.isfile(plss[pkey]))
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()

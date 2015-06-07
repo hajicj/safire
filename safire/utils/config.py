@@ -469,10 +469,11 @@ def _pln_artifacts(builder):
     ConfigBuilder. The public interface is to use :func:`pln_artifacts`
     and call it with a configuration (that function initializes the builder
     and calls this function)."""
-    plns = []
-    for obj, label in builder._persistence:
-        fname = builder.get_loading_filename(label)
-        plns.append(fname)
+    plns = {}
+    for obj, label in builder.configuration._persistence.items():
+        if obj != 'loader' and not obj.startswith('__'):
+            fname = builder.get_loading_filename(label)
+            plns[obj] = fname
     return plns
 
 
@@ -493,28 +494,28 @@ def _pls_artifacts(builder):
     :cls:`safire.data.serializer.Serializer` and have a ``fname`` kwarg that
     defines the ``*.pls`` filename.
     """
-    plss = []
-    loader = builder._loader
+    plss = {}
 
     known_serializer_classes = [Serializer]
 
-    serializer_conf_objs = []
+    serializer_conf_objs = {}
 
     # Get all Serializer-class objects.
-    for conf_obj in builder.configuration.objects:
+    for conf_obj_name, conf_obj in builder.configuration.objects.items():
         if '_class' in conf_obj:
             _, cls = builder._execute_import(conf_obj['_class'])
             for serializer_cls in known_serializer_classes:
                 if issubclass(cls, serializer_cls):
-                    serializer_conf_objs.append(conf_obj)
+                    serializer_conf_objs[conf_obj_name] = conf_obj
 
     # Check each serializer conf obj for serialization target (fname attribute)
-    for conf_obj in serializer_conf_objs:
+    for conf_obj_name, conf_obj in serializer_conf_objs.items():
         fname_attr = conf_obj['fname']  # Base class Serializer always has that
-        fname = eval(fname_attr, globals(), **builder.objects)
+        fname = eval(fname_attr, globals(), builder.objects)
         # Possible problem with locals -- we may need to take _import etc.
         # into account.
-        plss.append(fname)
+        # TODO: The eval should fail gracefully.
+        plss[conf_obj_name] = fname
 
     return plss
 
@@ -552,9 +553,12 @@ def artifacts(conf):
     :type conf: safire.utils.config.Configuration
     :param conf: The configuration to get artifacts from.
 
-    :rtype: tuple(list(str), list(str))
-    :returns: A tuple ``(plns, plss)`` of lists of saved pipeline names and
-        saved serialization targets.
+    :rtype: tuple(dict(str => str), dict(str => str))
+    :returns: A tuple ``(plns, plss)`` of dicts of saved pipeline names and
+        saved serialization targets. The pipeline savenames are labeled
+        according to the ``_persistence`` keys, the serialization targets are
+        named according to their respective Serializer *transformer* conf
+        sections.
     """
     # Pre-build the configuration to get its loader and dependency graph.
     builder = ConfigBuilder(conf)
