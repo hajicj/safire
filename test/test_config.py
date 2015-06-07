@@ -428,6 +428,8 @@ class TestConfig(SafireTestCase):
             self.assertEqual(expected_pls_dict[pkey], pname)
             self.assertTrue(os.path.isfile(plss[pkey]))
 
+    def test_required_artifacts(self):
+        conf, builder = self._init_build(self.t2i_config_file)
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()

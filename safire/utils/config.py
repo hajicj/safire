@@ -13,11 +13,12 @@ as pseudocode, which an interpreter will "translate" into Python code.
 The complex part of thus interpreting an experiment configuration is the fact
 that parts of the pipeline depend on each other. Not only are pipeline blocks
 connected to their previous block, some transformers are initialized using the
-output of the pipeline on which they are applied. In other words, there are
+output of the pipeline on which they are applied, or they use helper objects
+which are neither blocks, nor transformers. In other words, there are many
 dependencies to resolve when building a pipeline from a configuration.
 
 We can actually think about the configuration as a directed acyclic graph of a
-comptation. The vertices of the graph are individual objects of the pipeline.
+computation. The vertices of the graph are individual objects of the pipeline.
 Settings of these objects are like attributes of the vertex. The edges in this
 graph are dependencies between these pipeline components. The computation then
 consists of initializing each of these objects in the right order, so that all
@@ -38,7 +39,8 @@ safire-specific extras. We'll illustrate on a toy example::
 
     [foo]
     _class=safire.Foo
-    _label='foo_1234'
+    _dependencies=bar
+    label='foo_1234'
     some_property=True
     link=bar
 
@@ -67,52 +69,109 @@ Generally, **everything that doesn't start with an underscore translates
 literally to Python code**. Things that do start with an undrscore usually
 do as well, but there are a few exceptions in the special sections (see below).
 
-Dependencies
-------------
+Initializing objects
+^^^^^^^^^^^^^^^^^^^^
 
-The configuration parser and builder don't have the capability to determine
-the dependencies between the objects automatically. This has to be done by
-specifying the objects on which a transformer depends in a ``_dependencies``
-value::
+In the example, we've seen that objects can be initialized through the
+``_class`` special attribute. However, that is not the only way to initialize
+objects (although it is most intuitive: an object correponds to an instance
+of a class, so we initialize it by calling a class's ``__init__``).
 
-    [baz]
-    _class=safire.Baz
-    _dependencies=foo,bar
-    inputs_1=foo
-    inputs_2=bar
+Sometimes, we need to call a different function than ``__init__``: look for
+example at the test configuration for training
+(``test/test-data/test_training_config.ini``), which needs to call
+``DenoisingAutoencoder.setup()`` to initialize the ``model_handles`` object.
+This is achieved using the ``_init`` special attribute::
 
-In the future, we might add a Python parser to resolve the dependencies from the
-object init args themselves.
+    [model_handles]
+    _import=safire.learning.models.denoising_autoencoder.DenoisingAutoencoder,theano
+    _init=DenoisingAutoencoder.setup
+    data=Dataset(_2_)
+    n_out=200
+    activation=theano.tensor.nnet.sigmoid
+    backward_activation=theano.tensor.tanh
+    reconstruction='mse'
+    heavy_debug=False
 
-There is also a set of defined special sections that the ConfigBuilder
-interprets differently. These all have names that start with an underscore.
-Objects corresponding to these sections (most often the ``_loader`` object)
-are always initialized before the non-special sections, so you do *not* have
-to explicitly mark dependencies on them.
+Essentially, the ``_class`` mechanism is a special case of ``_init`` when the
+function to call is ``__init__()``. The following are equivalent:
 
-When a builder is building a pipeline from components that already have been
-saved, the dependencies of a persistent component will often be loaded as well.
-This is especially true for pipeline blocks that load the entire pipelines
-they head. While the objects themselves are loaded implicitly, as they are
-attributes (of an attribute of an attribute...) of the persistent object,
-the builder needs to have access to them specifically, because other objects
-that have yet to be initialized may depend on them, and therefore will need the
-builder to supply them in their ``locals()`` initialization namespace.
+* _class=safire.learning.models.denoising_autoencoder.DenoisingAutoencoder
+* _init=safire.learning.models.denoising_autoencoder.DenoisingAutoencoder.__init__
 
-The rules for accessing dependencies for pipeline blocks are simple: if the name
-is a block, then it will be accessed using the ``corpus`` attribute; otherwise,
-it will be accessed through the ``obj`` attribute. (This is a conscious design
-decision: TransformedCorpus and its dependents should never be created outside
-applying a transformer, with ``SwapoutCorpus`` being the notable -- and
-temporary -- exception.) However, rules for accessing dependencies of
-transformers practically cannot be written: transformers are very general.
+A third, yet more general way is available. The ``_exec`` mechanism just tells
+the builder to evaluate the given expression and use the result as the
+initialized object. From the same file::
 
+    [run_handle]
+    _dependencies=model_handles
+    _exec=model_handles['run']
+
+This will simply execute the following code::
+
+    >>> run_handle = model_handles['run']
+
+Note that if you initialize something from ``_exec``, it's pointless to use
+any initialization attributes. You could theoreticaly do this::
+
+   [foo]
+   _exec=bar.func(arg1='xyz', arg2='abc')
+
+instead of::
+
+    [foo]
+    _init=bar.func
+    arg1='xyz'
+    arg2='abc'
+
+Initialization namespace
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+You may need to use classes and functions that are not immediately available to
+the builder using initialization. Also, you will often use previously
+initialized blocks. In order to properly evaluate the initialization statement,
+all these names have to be available to the ``eval()`` namespace.
+
+The configuration builder will automatically pass all its special objects and
+all the objects that have already been initialized to object initialization.
+Also, initialization through ``_class`` automatically imports the required
+class. However, in case you need something that is not in this automatically
+constructed namespace, you will need to specify the import manually.
+
+Imports on a global basis can be specified in the ``_import`` special attribute
+of the ``[_builder]`` section. These names will be included in each local
+namespace during object initialization. If you want some names to be available
+only to a specific object, you can use the ``_import`` special attribute of that
+object's section.
+
+Imports will first attempt to resolve as ``from x.y.z import last`` and if that
+fails, as ``import x.y.z.last``. In the first case, the available name will be
+``last``. In the second case, you will need to use ``x.y.z.last``. The
+``from ... import ...`` pattern works only if ``last`` is a class.
+
+An example::
+
+    [joint_serializer]
+    _import=safire.data.sharded_corpus.ShardedCorpus
+    _class=safire.data.serializer.Serializer
+    corpus=_joint_data_
+    serializer_class=ShardedCorpus
+    fname=_loader.pipeline_serialization_target('.joint_data')
+    overwrite=True
+
+The Serializer needs to specify a class that will be used for writing/accessing
+the data. However, this class needs to be imported first, so the section imports
+it for itself. The class is then available using ``ShardedCorpus`` only, as
+the import was resolved as
+``from safire.data.sharded_corpus import ShardedCorpus``. (This is also the
+underlying mechanism for ``_class``: first, the given class gets locally
+imported and then initialized using the section's attributes as kwargs.)
 
 Assembling pipelines
 --------------------
 
 However, while the ``bar`` object is used in initializing ``foo``, this is not
-a pipeline, these are only the building blocks. To assemble a pipeline, we need
+a pipeline -- these are only the building blocks. To assemble a pipeline, we need
 to apply the blocks. To this end, there's the special ``[_assembly]`` section::
 
     [_assembly]
@@ -130,6 +189,9 @@ If we wanted to save the resultant pipeline, we'd need to set
 ``_builder.save=True``. Then, the following code would execute::
 
     >>> pipeline.save(builder.savename)
+
+Filenames
+---------
 
 For integrating with Safire's default experiment layouts, you should define
 a ``loader`` section::
@@ -157,6 +219,61 @@ interleaves transformer initialization with pipeline application.
 
 This is *always* a concern for Serializers and very often for other transformers
  -- more or less anything that is trained.
+
+Dependencies
+------------
+
+The configuration parser and builder don't have the capability to determine
+the dependencies between the objects automatically. This has to be done by
+specifying the objects on which a transformer depends in a ``_dependencies``
+value::
+
+    [baz]
+    _class=safire.Baz
+    _dependencies=foo,bar
+    inputs_1=foo
+    inputs_2=bar
+
+(In the future, we might add a Python parser to resolve the dependencies from
+the object init args themselves.)
+
+There is also a set of defined special sections that the ConfigBuilder
+interprets differently. These all have names that start with an underscore.
+Objects corresponding to these sections (most often the ``_loader`` object)
+are always initialized before the non-special sections, so you do *not* have
+to explicitly mark dependencies on them.
+
+Block dependencies do not need to be declared, as long as the convention of
+keeping unique block names (ideally starting and ending with an underscore) is
+observed.
+
+Accessing dependencies
+^^^^^^^^^^^^^^^^^^^^^^
+
+When a builder is building a pipeline from components that already have been
+saved, the dependencies of a persistent component will often be loaded as well.
+This is especially true for pipeline blocks that load the entire pipelines
+they head. While the objects themselves are loaded implicitly, as they are
+attributes (of an attribute of an attribute...) of the persistent object,
+the builder needs to have access to them specifically, because other objects
+that have yet to be initialized may depend on them, and therefore will need the
+builder to supply them in their ``locals()`` initialization namespace.
+
+The rules for accessing dependencies for pipeline blocks are simple: if the name
+is a block, then it will be accessed using the ``corpus`` attribute; otherwise,
+it will be accessed through the ``obj`` attribute. (This is a conscious design
+decision: TransformedCorpus and its dependents should never be created outside
+applying a transformer, with ``SwapoutCorpus`` being the notable -- and
+temporary -- exception.)
+
+However, rules for accessing dependencies of transformers cannot be written:
+transformers are very general and may require various helper objects that may
+or may not remain accessible after the transformer is initialized. Because
+extracting the access expressions automatically is thus practically impossible,
+the access expressions for accessible dependencies must be supplied explicitly.
+To this end, there is an ``_access_deps`` special key that complements the
+``_dependencies`` special key.
+
 
 
 A full example
@@ -253,13 +370,15 @@ attribute is saved like any other, so the save action propagates down the
 pipeline, and the transformers associated with each pipeline stage are saved as
 well through the ``obj`` attribute.) The only thing tricky about saving
 pipelines is that you have to be careful about your own pipeline blocks: they
-all have to be ``cPickle``-able.
+all have to be ``cPickle``-able. (This can be helped by implementing your
+own ``__getstate__`` and ``__setstate__`` methods.)
 
 Serializing pipelines is a little trickier. Instead of calling a function over
 the pipeline, serialization - and efficient reading of serialized data - is
 handled using a special :class:`Serializer` transformer. Applying the Serializer
 to a pipeline creates a special :class:`SwapoutCorpus` block that reads data
-from the Serializer instead of the previous pipeline block.
+from the Serializer instead of the previous pipeline block. For writing and
+reading the serialized data, Safire provides the :class:`ShardedCorpus` class.
 
 Saving intermediate pipelines
 -----------------------------
@@ -291,13 +410,7 @@ So far, we have talked about saving and serializing pipelines in code.
 Now we will describe how these mechanisms are leveraged in configuring
 experiments.
 
-Saving the finished pipeline is handled through ``[_builder]`` arguments
-``save`` and ``savename``: unless ``save`` is set to ``False``, the finihsed
-pipeline will be saved under the ``savename`` name. (When using Safire data
-layouts, it's recommended to define ``savename`` using a Loader's
-``generate_pipeline_name()`` method.)
-
-For more fine-grained control over which stages of the pipeline should be saved,
+For control over which stages of the pipeline should be saved,
 you can define a special ``[_persistence]`` section that defines the savename
 for each stage at which you wish to save the pipeline::
 
@@ -311,12 +424,13 @@ interpreted as labels for the loader's ``get_pipeline_name()`` method::
 
     [_persistence]
     loader=_loader
-    _1_=vtcorp
-    _2_=tfidf
-    _3_=serialized_tfidf
+    _1_=.vtcorp
+    _2_=.tfidf
+    _3_=.serialized_tfidf
 
-Note that saving ``_3_`` is redundant when the ``builder.save`` flag is set to
-True; if the supplied names do not match, the pipeline is simply saved twice.
+Serialization is not handled separately by the configuration mechanism: all you
+need to do is define a Serializer block in your config and the data will be
+serialized accordingly.
 
 Using saved pipelines in a configuration
 ----------------------------------------
@@ -324,7 +438,7 @@ Using saved pipelines in a configuration
 When a configuration is built, the builder first checks whether a pipeline can
 be loaded under the ``savename`` attribute. If yes, it simply loads the
 pipeline. This behavior can be disabled using the ``no_default_load=True``
-builder setting.
+builder setting. [NOT IMPLEMENTED]
 
 If the ``[_persistence]`` section is defined (and loading the entire pipeline
 failed or was disabled), the builder then attempts to load individual stages
@@ -337,7 +451,99 @@ to load blocks #3 and onward.
 
 When a block is loaded, the config builder will assume that all blocks
 accessible from the loaded block have been loaded. This implies that if you
-wish to re-run an experiment with different settings, you'll have to disable
+wish to re-run an experiment with different settings, you'll either have to use
+different names, or clear all the saved objects before building the pipeline.
+This can be achieved by setting ``clear=True`` in the ``[_builder]`` section.
+(The ``run.py`` script that builds a config also has a ``--clear`` flag for
+convenience.) This deletes *all* persisted blocks. (Therefore, it may not be
+ideal to use when you are changing settings for some of the blocks that only
+come later in the pipeline, as you'd have to build the unchanged blocks over
+and over. The current suggestion is to split your configuration in two: the
+unchanged part, which you do not touch, and the changing part, where you fiddle
+with settings and use ``--clear``.)
+
+
+Artifacts
+=========
+
+The things left behind when a Safire configuration is built are called
+*artifacts*. There are functions provided to resolve which artifacts will be
+created by building a configuration and which artifacts a configuration needs
+in order to be built.
+
+[WIP]
+
+Miscellany and caveats
+======================
+
+The configuration mechanism in Safire is quite flexible, but by no means
+perfect. There are several common use-cases that are not yet implemented
+satisfactorily.
+
+Single pipeline split into multiple configs
+-------------------------------------------
+
+In complex cases, you may wish to operate with several configurations that
+adjoin one another. For instance, a configuration for preprocessing, then one
+for training, then one for evaluation. This situation isn't currently handled
+very well in Safire, although it is possible to link pipelines from different
+configurations manually.
+
+You can extend a previously ``_persist``ed pipeline in another configuration
+using the ``_exec`` or ``_init`` mechanisms. Suppose the following is an excerpt
+from ``first.ini``::
+
+  [_assembly]
+  _1_=SwapoutCorpus(data_source, data_source)
+  _2_=transformer[_1_]
+  _3_=serializer[_2_]
+
+  [_persistence]
+  _3_=.first_transformed
+
+and the following form ``second.ini``:
+
+  [_builder]
+  _import=gensim.utils.SaveLoad
+
+  [_assembly]
+  _1_=output_of_first
+  _2_=transformer[_1_]
+  _3_=serializer[_3_]
+
+  [_persistence]
+  _3_=.second_retransformed
+
+  [output_of_first]
+  _init=SaveLoad.load
+  fname=_loader.pipeline_name('.first_transformed')
+
+Now, if we export a pipeline from ``second.ini``::
+
+  >>> # Build the first configuration
+  >>> conf1 = ConfigParser().parse('first.ini')
+  >>> builder1 = ConfigBuilder(conf1)
+  >>> builder1.build()
+  >>> # Now build the second configuration and export a pipeline
+  >>> conf2 = ConfigParser().parse('second.ini')
+  >>> builder = ConfigBuilder(conf2)
+  >>> builder.build()
+  >>> pipeline = builder.export_pipeline('_3_')
+
+we can, through the recursive ``.corpus`` mechanism of blocks, access the blocks
+built and persisted by ``first.ini``::
+
+  >>> isinstance(pipeline.output.corpus.corpus.corpus.corpus, SwapoutCorpus)
+  True
+
+although in the pipeline's ``objects`` dict, we can only access objects that are
+named in ``second.ini`` -- the blocks built from ``first.ini`` are currently
+"hidden" from the pipeline built from ``second.ini``.
+
+More principled linking of pipelines is a feature that will be added.
+
+Also, there is currently no mechanism to keep track of your
+serialized data (which label did I use for the preprocessed text..? etc.)
 
 
 The configuration builder
@@ -462,6 +668,7 @@ def build_pipeline(config_file, output_name):
     return pipeline
 
 # Dealing with artifacts (stuff that configurations leave behind).
+# Important for keeping track of what is available where.
 
 
 def _pln_artifacts(builder):
@@ -569,7 +776,59 @@ def artifacts(conf):
     return plns, plss
 
 
+def list_artifacts(confs):
+    """Gather all artifacts of the given list of configurations. Returns
+    plns/plss dicts like the function :func:`artifacts`.
 
+    :param confs: A list of Configurations.
+    """
+    plns = dict()
+    plss = dict()
+
+    for conf in confs:
+        c_plns, c_plss = artifacts(conf)
+        plns.update(c_plns)
+        plss.update(c_plss)
+
+    return plns, plss
+
+
+def required_artifacts(conf):
+    """This function detects what artifacts a configuration will require to be
+    successfully built. Due to the flexibility of Safire, this
+    detection is far from perfect: it can only detect stuff that gets loaded
+    from the ``_loader`` attribute using :meth:`pipeline_name` or
+    :meth:`pipeline_serialization_target`. Also, the discovery cannot currently
+    deal with parentheses inside the ``pipeline_name`` and
+    ``pipeline_serialization_target`` calls and cannot deal with more than one
+    call per object key/value.
+
+    :returns: A tuple of ``(plns, plss)`` dicts. The dict keys are the artifact
+        filenames, the values are the object names that need the artifact.
+    """
+    builder = ConfigBuilder(conf)
+
+    plns_regex = re.compile('_loader\.pipeline_name\([^\)].*\)')
+    plss_regex = re.compile('_loader\.pipeline_serialization_target\([^\)].*\)')
+
+    req_plns = dict()
+    req_plss = dict()
+
+    for c_obj_name, c_obj in conf.objects:
+        for key, value in c_obj.items():
+            pln_match = plns_regex.search(value)
+            if pln_match:
+                artifact_expr = pln_match.group(0)
+                fname = eval(artifact_expr, globals(), builder.objects)
+                req_plns[fname] = c_obj_name
+
+            pls_match = plss_regex.search(value)
+            if pls_match:
+                artifact_expr = pls_match.group(0)
+                fname = eval(artifact_expr, globals(), builder.objects)
+                req_plss[fname] = c_obj_name
+
+    return req_plns, req_plss
 
 ###############################################################################
 
@@ -788,7 +1047,8 @@ class ConfigBuilder(object):
                                              _assembly=self._assembly)
 
         # IMPORTANT: a dictionary of all available objects. When a dependency
-        # is requested, it is taken from here.
+        # is requested, it is taken from here. This dict also gets always
+        # passed as the locals() environment to eval() calls.
         self.objects = {'_info': self._info,
                         '_loader': self._loader,
                         '_builder': self,

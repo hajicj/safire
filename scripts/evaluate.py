@@ -26,6 +26,13 @@ import logging
 
 __author__ = 'Jan Hajic jr.'
 
+# For evaluation:
+#  - build/load t2i pipeline
+#  - export data from a SimilarityTransformer-ending pipeline into a t2i file
+#  - run this script on the t2i files
+#
+# The first two steps: a separate script? pipeline2vtext-image-map.py
+
 
 def parse_t2i_csv(handle, image_delimiter=';'):
     """Returns a dictionary. Keys are texts, values are lists images.
@@ -38,6 +45,7 @@ def parse_t2i_csv(handle, image_delimiter=';'):
         output[text] = images.split(image_delimiter)
 
     return output
+
 
 def parse_results_csv(handle, image_delimiter=';'):
     """Returns a dictionary. Keys are texts, values are lists images.
@@ -52,6 +60,7 @@ def parse_results_csv(handle, image_delimiter=';'):
 
     return output
 
+
 def parse_vtext_image_map(handle):
     """Like parse_t2i_csv, but from vtext-image-map, not eval results file."""
     output = {}
@@ -62,6 +71,7 @@ def parse_vtext_image_map(handle):
         else:
             output[text] = [image]
     return output
+
 
 def main(args):
     logging.info('Executing evaluate.py...')
@@ -95,7 +105,8 @@ def main(args):
                 total_texts_skipped += 1
                 continue
             else:
-                raise ValueError('Cannot measure performance, missing text in true: %s' % t)
+                raise ValueError('Cannot measure performance, missing text in'
+                                 ' true: %s' % t)
 
         predicted = prediction[t]
         to_hit = set(true[t])

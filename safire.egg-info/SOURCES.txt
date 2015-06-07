@@ -44,6 +44,7 @@ safire/datasets/word2vec_transformer.py
 safire/learning/__init__.py
 safire/learning/interfaces/__init__.py
 safire/learning/interfaces/clamped_sampler.py
+safire/learning/interfaces/lasagne_integration.py
 safire/learning/interfaces/model_handle.py
 safire/learning/interfaces/pretrained_supervised_model_handle.py
 safire/learning/interfaces/pretraining_model_handle.py
@@ -85,6 +86,7 @@ scripts/generate_corpora.py
 scripts/icorp2index.py
 scripts/img_index_explorer.py
 scripts/normalize_img_dataset.py
+scripts/pipeline2vtext-image-map.py
 scripts/pretrain.py
 scripts/pretrain_multimodal.py
 scripts/remove_duplicate_images.py
@@ -106,6 +108,7 @@ test/test_handle_saveload.py
 test/test_introspection.py
 test/test_item_aggregation.py
 test/test_item_splitting.py
+test/test_lasagne_integration.py
 test/test_layouts.py
 test/test_model_loader.py
 test/test_model_saveload.py

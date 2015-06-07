@@ -159,10 +159,10 @@ class LasagneSetup(object):
 
         if heavy_debug:
             fn_kwargs['mode'] = theano.compile.MonitorMode(
-                        post_func=safire.utils.detect_nan).excluding(
-                                            'local_elemwise_fusion', 'inplace')
+                post_func=safire.utils.detect_nan).excluding(
+                'local_elemwise_fusion', 'inplace')
 
-        print 'LasagneSetup.setup(): Compiling train_fn'
+        logging.debug('LasagneSetup.setup(): Compiling train_fn')
         _fn_compile_clock = time.clock()
         train_fn = theano.function(
             loss_inputs, loss_expr,
@@ -170,21 +170,21 @@ class LasagneSetup(object):
             allow_input_downcast=True,
             **fn_kwargs
         )
-        print 'Finished in: {0:.2f} s'.format(time.clock() - _fn_compile_clock)
+        logging.debug('Finished in: {0:.2f} s'.format(time.clock() - _fn_compile_clock))
 
         if monitor_expr is None:
             monitor_expr = loss_expr
         if monitor_inputs is None:
             monitor_inputs = loss_inputs
 
-        print 'LasagneSetup.setup(): Compiling monitor_fn'
+        logging.debug('LasagneSetup.setup(): Compiling monitor_fn')
         _fn_compile_clock = time.clock()
         monitor_fn = theano.function(
             monitor_inputs, monitor_expr,
             allow_input_downcast=True,
             **fn_kwargs
         )
-        print 'Finished in: {0:.2f} s'.format(time.clock() - _fn_compile_clock)
+        logging.debug('Finished in: {0:.2f} s'.format(time.clock() - _fn_compile_clock))
 
         validate_fn = monitor_fn
         test_fn = monitor_fn
@@ -210,16 +210,16 @@ class LasagneSetup(object):
         else:
             _run_inputs = run_inputs
 
-        print 'LasagneSetup.setup(): Compiling run_fn'
+        logging.debug('LasagneSetup.setup(): Compiling run_fn')
         _fn_compile_clock = time.clock()
         run_fn = theano.function(
             _run_inputs, run_expr,
             allow_input_downcast=True,
             **fn_kwargs
         )
-        print 'Finished in: {0:.2f} s'.format(time.clock() - _fn_compile_clock)
+        logging.debug('Finished in: {0:.2f} s'.format(time.clock() - _fn_compile_clock))
 
-        print 'LasagneSetup.setup(): assembling setup_handles dict'
+        logging.debug('LasagneSetup.setup(): assembling setup_handles dict')
         train_handle = LasagneModelHandle(model, train_fn)
         validate_handle = LasagneModelHandle(model, validate_fn)
         test_handle = LasagneModelHandle(model, test_fn)
