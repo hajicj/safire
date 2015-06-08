@@ -696,7 +696,7 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
         elif isinstance(model, BaseUnsupervisedModel):
             devel_X = dataset.devel_X_batch(batch_index, self.b_size)
-            print 'X batch size: {0}'.format(devel_X.shape)  ### DEBUG
+            # print 'X batch size: {0}'.format(devel_X.shape)  ### DEBUG
             batch_loss = model_handle.run(devel_X)
 
         return batch_loss

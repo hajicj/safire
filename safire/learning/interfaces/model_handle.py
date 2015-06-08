@@ -115,7 +115,7 @@ class ModelHandle(object):
             model = save_dict['model']
 
         handle_init_args = save_dict['init_args']
-        model_handle = ModelHandle(model_instance=model, **handle_init_args)
+        model_handle = cls(model_instance=model, **handle_init_args)
 
         return model_handle
 

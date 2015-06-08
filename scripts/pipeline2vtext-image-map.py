@@ -37,13 +37,20 @@ def main(args):
     logging.info('Starting retrieval and vtext-image map generation...')
     _ret_start_time = time.clock()
     with open(args.output, 'w') as output_handle:
-        for text_iid, ret in pipeline:
+        for text_iid, ret in enumerate(pipeline):
             # Text id2doc mapping doesn't have to be initialized prior to
             # extracting retrieval results.
-            text_doc = id2doc(pipeline, text_iid)
+            if text_iid % 100 == 0:
+                current_time = time.clock() - _ret_start_time
+                logging.info('Total processed: {0} in {1:.2f} s ({2:.5f} s'
+                             ' per item)'.format(text_iid,
+                                                 current_time,
+                                                 current_time / float(text_iid)))
+
+            text_doc = id2doc(pipeline.output, text_iid)
             img_docs = [img_id2doc[iid] for iid, sim in ret]
             for img_doc in img_docs:
-                output_handle.write('\t'.join([text_doc, img_doc] + '\n'))
+                output_handle.write('\t'.join([text_doc, img_doc]) + '\n')
 
     logging.info('Retrieval and vtext-image map generation done in {0:.2f} s'
                  ''.format(time.clock() - _ret_start_time))
