@@ -79,19 +79,20 @@ class SafireTestCase(unittest.TestCase):
         # a SafireTestCase
         init_data_root(cls.data_root, overwrite=True)
 
+        cls.loader = MultimodalShardedDatasetLoader(cls.data_root,
+                                                    'test-data')
+        cls.vtlist = os.path.join(cls.loader.root, cls.loader.layout.vtlist)
+
         cls._clean_only = clean_only
         if cls._clean_only:
             return
 
         # Re-generate the default corpora/datasets.
-        cls.loader = MultimodalShardedDatasetLoader(cls.data_root,
-                                                    'test-data')
         cls.loader.build_default_text_corpora(serializer=gensim.corpora.MmCorpus)
         cls.loader.build_default_image_corpora(
             serializer=gensim.corpora.MmCorpus)
 
-        vtlist = os.path.join(cls.loader.root, cls.loader.layout.vtlist)
-        cls.vtcorp = VTextCorpus(vtlist, input_root=cls.loader.root)
+        cls.vtcorp = VTextCorpus(cls.vtlist, input_root=cls.loader.root)
         cls.vtcorp_name = cls.loader.pipeline_name('')
         cls.vtcorp.save(cls.vtcorp_name)
 

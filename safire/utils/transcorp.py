@@ -154,6 +154,18 @@ def doc2id_to_id2doc(doc2id):
     return id2doc
 
 
+def token_iid2word(token_iid, vtcorp, id2word):
+    """Given an indexable token vtcorp (preferrably serialized) and an id2word
+    mapping, will return the actual word corresponding to the token on the
+    given token iid position in vtcorp. This function is here for a lack of
+    better placement, as it is not very general and tightly connected to the
+    notion of the token VTextCorpus."""
+    item = vtcorp[token_iid]
+    wid = item[0][0]
+    word = id2word[wid]
+    return word
+
+
 def bottom_corpus(pipeline):
     """Jumps through a stack of TransformedCorpus or Dataset
     objects all the way to the bottom corpus."""

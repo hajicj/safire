@@ -189,6 +189,9 @@ class GeneralFunctionTransform(gensim.interfaces.TransformationABC):
         C = self.add
         return [(i, oK * self._fn(K * x + C) + oC) for i, x in bow]
 
+    def _apply(self, corpus, chunksize=None):
+        return safire.utils.transcorp.smart_apply_transcorp(self, corpus,
+                                                            chunksize=chunksize)
 
 class LeCunnVarianceScalingTransform(gensim.interfaces.TransformationABC):
     """Transforms features so that they all have the same "variance" defined
@@ -294,17 +297,21 @@ class RandomProjectionTransformer(gensim.interfaces.TransformationABC):
 
         self.dim = self.k
 
-    def __getitem__(self, item):
-        if isinstance(item, numpy.ndarray):
-            return item[:, self.features]
-        elif isinstance(item, scipy.sparse.csr_matrix):
-            return item[:, self.features]
+    def __getitem__(self, bow):
+        is_corpus, bow = gensim.utils.is_corpus(bow)
+        if is_corpus:
+            return self._apply(bow, chunksize=None)
+
+        if isinstance(bow, numpy.ndarray):
+            return bow[:, self.features]
+        elif isinstance(bow, scipy.sparse.csr_matrix):
+            return bow[:, self.features]
         else:
             # Gensim single vector
-            if safire.utils.is_gensim_batch(item):
-                return [self[v] for v in item]
+            if safire.utils.is_gensim_batch(bow):
+                return [self[v] for v in bow]
             else:
-                return [(self.f_old2new(f), v) for f, v in item
+                return [(self.f_old2new(f), v) for f, v in bow
                         if f in self.f_old2new]
 
     def _apply(self, corpus, chunksize=None):
@@ -415,6 +422,100 @@ class SimilarityTransformer(gensim.interfaces.TransformationABC):
     def _apply(self, corpus, chunksize=None):
 
         return safire.utils.transcorp.smart_apply_transcorp(self, corpus)
+
+
+class W2IMappingTransformer(gensim.interfaces.TransformationABC):
+    """The W2IMappingTransformer takes a vector of token iids and any values
+    and returns a vector of ``(img_iid, count)`` entries. For each token, the
+    image iids associated with that token are returned, with a count for each.
+    There are two count strategies available: ``'hard'``, which just adds 1
+    per hit, and ``'soft'``, which multiplies this number by the value for the
+    respective token, thus taking into account token weights.
+    """
+    def __init__(self, t2i_mapping, aggregation='hard', runtime_id2word=None):
+        """Initializes the transformer. The ``t2i_mapping`` is a dict or other
+        structure that will produce on ``__getitem__`` call a list of image
+        iids.
+
+        The keys of the t2i mapping can be either ``wid``s, or tokens
+        themselves. If we use ``wid``s, we need to keep the word2id mapping
+        consistent between the corpus we used to create the mapping and the
+        corpus from which the items to transform will come. On the other hand,
+        if we use token strings, we will need to translate the ``wid``s to
+        tokens, which will be slower: both during initialization and during
+        runtime. Nevertheless, the additional flexibility means that we will
+        stick with token keys.
+
+        To build the t2i mapping, you will need a token corpus, an image corpus
+        and the t2i_indexes that map tokens to images. Additionaly, to convert
+        token wids to actual token strings, you'll need a conversion from
+        ``iid`` in the token corpus to the individual tokens. (This is handled
+        by taking the serialized bottom vtcorp for tokens, calling
+        __getitem__(iid) and applying the bottom vtcorp's id2word on the output
+        wid from the (wid, 1) freq pair. It is also somewhat slow, as it needs
+        to iterate over the entire corpus.)
+
+        Alternately, you can use a document vtcorp and extract all tokens from
+        each document. Anyway, this class is not concerned with *how* you obtain
+        the t2i mapping.
+        """
+        self.t2i_mapping = t2i_mapping
+
+        if aggregation not in ['hard', 'soft']:
+            raise ValueError('Invalid aggregation mode requested: {0} (Use '
+                             'either \'hard\', or \'soft\').'
+                             ''.format(aggregation))
+        self.aggregation = aggregation
+
+        if runtime_id2word is None:
+            logging.warn('No id2word provided for runtime wid --> token '
+                         'transformation, make sure you supply it before '
+                         'running the transformation!')
+        self.runtime_id2word = runtime_id2word
+
+    def __getitem__(self, item):
+
+        is_corpus, item = gensim.utils.is_corpus(item)
+        if is_corpus:
+            return self._apply(item, chunksize=None)
+
+        if self.runtime_id2word is None:
+            raise ValueError('Cannot run __getitem__ without supplying a '
+                             'runtime id2word object! (Use the set_id2word_obj'
+                             'method.)')
+
+        if isinstance(item, numpy.ndarray):
+            raise TypeError('W2IMappingTransformer cannot currently deal with'
+                            ' dense inputs, only gensim sparse vectors.')
+
+        output_dict = collections.defaultdict(float)
+        for wid, f in item:
+            word = self.runtime_id2word[wid]
+            # TODO: normalize word before querying t2i mapping?
+            # May not be necessary, if the t2i mapping is built from data using
+            # the same tokenization strategy.
+            img_iids = self.t2i_mapping[word]
+            for iid in img_iids:
+                if self.aggregation == 'hard':
+                    output_dict[iid] += 1
+                elif self.aggregation == 'soft':
+                    output_dict[iid] += f
+                else:
+                    raise ValueError('Invalid aggregation mode: {0} (Use either'
+                                     ' \'hard\', or \'soft\').'
+                                     ''.format(self.aggregation))
+        out = sorted(output_dict.items(), key=operator.itemgetter(0))
+        return out
+
+    def _apply(self, corpus, chunksize=None):
+        return safire.utils.transcorp.smart_apply_transcorp(self, corpus,
+                                                            chunksize=chunksize)
+
+    def set_id2word(self, runtime_id2word):
+        """Use this function to manually re-set the id2word mapping. Recommended
+        before applying to a corpus (just call :func:`get_id2word_obj` on the
+        input corpus)."""
+        self.runtime_id2word = runtime_id2word
 
 
 class ItemAggregationTransform(gensim.interfaces.TransformationABC):
