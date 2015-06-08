@@ -271,6 +271,47 @@ class StandardScalingTransformer(gensim.interfaces.TransformationABC):
         self.squared_sums = numpy.zeros(safire.utils.transcorp.dimension(corpus))
 
 
+class RandomProjectionTransformer(gensim.interfaces.TransformationABC):
+    """This transformer randomly chooses a subset of features which to retain
+    and discards all others."""
+    def __init__(self, k, dim_or_corpus):
+        self.k = k
+        if isinstance(dim_or_corpus, int):
+            self.d = dim_or_corpus
+        else:
+            self.d = safire.utils.transcorp.dimension(dim_or_corpus)
+
+        if self.k > self.d:
+            raise ValueError('Cannot choose {0} features from only '
+                             '{1}-dimensional data!'.format(self.k, self.d))
+
+        # Choose the random subset
+        self.features = sorted(numpy.random.choice(self.k, range(self.d),
+                                                   replace=False))
+
+        self.f_old2new = {f: i for i, f in enumerate(self.features)}
+        self.f_new2old = {i: f for i, f in enumerate(self.features)}
+
+        self.dim = self.k
+
+    def __getitem__(self, item):
+        if isinstance(item, numpy.ndarray):
+            return item[:, self.features]
+        elif isinstance(item, scipy.sparse.csr_matrix):
+            return item[:, self.features]
+        else:
+            # Gensim single vector
+            if safire.utils.is_gensim_batch(item):
+                return [self[v] for v in item]
+            else:
+                return [(self.f_old2new(f), v) for f, v in item
+                        if f in self.f_old2new]
+
+    def _apply(self, corpus, chunksize=None):
+        return safire.utils.transcorp.smart_apply_transcorp(self, corpus,
+                                                            chunksize=chunksize)
+
+
 class Corpus2Dense(gensim.interfaces.TransformationABC):
 
     def __init__(self, corpus=None, dim=None,

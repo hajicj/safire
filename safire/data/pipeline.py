@@ -52,6 +52,11 @@ class Pipeline(object):
     def __len__(self):
         return len(self.output)
 
+    def __iter__(self):
+        for item in self.output:
+            yield item
+        # Should add batch mode iteration.
+
     def log_corpus_stack(self, with_length=True):
         safire.utils.transcorp.log_corpus_stack(self.output,
                                                 with_length=with_length)
