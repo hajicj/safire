@@ -190,10 +190,15 @@ class MultimodalDatasetLoader(object):
                                                  '\n'.join(files)))
 
         if self.layout.image_vectors not in files:
-            raise ValueError('Image vectors %s missing in dataset root (%s), available:\n%s' % (
+            if self.layout.source_image_vectors in files and self.layout.image_docnames in files:
+                logging.info('No image vectors {0} in dataset root, will have to '
+                             'initialize ImagenetCorpora through the '
+                             'include/exclude_docnames mechanism.')
+            else:
+                raise ValueError('Image vectors %s missing in dataset root (%s), available:\n%s' % (
                                                  self.layout.image_vectors,
                                                  self.root,
-                                                 '\n'.join(files)))
+                                                 '\n'.join(sorted(files))))
 
         if self.layout.textdoc2imdoc not in files:
             raise ValueError('Vtlist %s missing in dataset root (%s), available:\n%s' % (

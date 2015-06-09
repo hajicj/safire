@@ -155,14 +155,17 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
         Note that every time __iter__ is called, the corpus is re-set."""
         #print '\n\n   Starting document filter corpus iteration...\n\n'
         self.reset()
+
         docid_iterator = iter(list(iter(self.persistent_id2doc)))
         # This causes a problem with a StopIteration when the underlying corpus
         # has not been iterated over.
         # Also: needs ordering???
-        logging.debug('{0}'.format(self.persistent_id2doc[6330]))
+
         logging.debug('{0}'.format(self.persistent_id2doc[0]))
-        logging.debug('{0}'.format(self.persistent_id2doc[6331]))
-        logging.debug('{0}'.format(self.persistent_id2doc[1]))
+        logging.debug('{0}'.format(self.persistent_id2doc[65]))
+        logging.debug('{0}'.format(self.persistent_doc2id[self.persistent_id2doc[65]]))
+        logging.debug('{0}'.format(self.corpus.corpus[65]))
+        logging.debug('{0}'.format(self.corpus.corpus.corpus.corpus.id2doc[65]))
         logging.debug('self.corpus length: {0}'.format(len(self.corpus)))
         if self.chunksize is not None:
             logging.debug('Using chunksize.')
@@ -206,6 +209,7 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
                 #                         self.persistent_id2doc[persistent_docid]))
                 # logging.debug('  Available doc2id: {0}'
                 #               ''.format(self.persistent_doc2id[self.persistent_id2doc[persistent_docid]]))
+
                 transformed = self.obj[doc]
                 if transformed:
                     # Update new <=> old mapping
@@ -262,7 +266,7 @@ class DocumentFilterCorpus(IndexedTransformedCorpus):
             self.n_removed += 1
             del self.persistent_id2doc[docid]
         except KeyError:
-            logging.error('persistent_doc2id[{0}] = {1}' \
+            logging.error('persistent_doc2id[{0}] = {1}'
                           ''.format(docname, self.persistent_doc2id[docname]))
             logging.error('len(self.persistent_doc2id) = {0}'
                           ''.format(len(self.persistent_doc2id)))

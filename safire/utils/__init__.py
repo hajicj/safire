@@ -9,6 +9,7 @@ import cProfile
 import codecs
 import collections
 import copy
+import inspect
 import logging
 import math
 import StringIO
@@ -493,6 +494,17 @@ def find_pickle_error_culprit(obj, recursive=True,
             return v, culprit_log
 
     return None, 'No culprit found in pdict.'
+
+
+def call_stack_report(maxlevels=None):
+    """Helper function for debugging: prints the call stack for the containing
+    function."""
+    curframe = inspect.currentframe()
+    outframes = inspect.getouterframes(curframe, 2)
+    fnames = [frame[3] for frame in outframes]
+    if maxlevels is not None:
+        fnames = fnames[:min(len(fnames, maxlevels))]
+    return u'  Call stack: {0}'.format(' <-- '.join(fnames))
 
 
 def shuffle_together(*lists):

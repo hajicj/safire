@@ -19,7 +19,7 @@ import itertools
 from safire.data.filters.tfidf_token_filter import TfidfBasedTokensFilter
 
 import filters.positional_filters as pfilters
-from safire.utils import freqdict
+from safire.utils import freqdict, call_stack_report
 
 logger = logging.getLogger(__name__)
 
@@ -193,6 +193,7 @@ class VTextCorpus(TextCorpus):
         if id2doc is None:
             id2doc = collections.defaultdict(str)
 
+        # logging.debug('vtcorp: id2doc at init: {0}'.format(id2doc))
         self.doc2id = doc2id
         self.id2doc = id2doc
 
@@ -300,6 +301,9 @@ class VTextCorpus(TextCorpus):
         resolved and the document <==> id mapping is constructed.
         """
         logging.info('VTextCorpus: entering get_texts.')
+        # logging.debug('id2doc at this point: {0}.'.format(self.id2doc))
+        # logging.debug('{0}'.format(call_stack_report()))
+
         batch_no = 1
         timed_batch_size = 1000
         start_time = time.clock()  # Logging time
@@ -351,7 +355,9 @@ class VTextCorpus(TextCorpus):
                     if self.locked and token not in self.dictionary.token2id:
                         continue
                     self.doc2id[docid].add(total_yielded)
-                    # print u'Adding token {2} to id2doc[{0}]: {1}'.format(len(self.id2doc), docid, token)
+                    ### DEBUG
+                    #if total_yielded < 10 and len(self.id2doc) < 100:
+                    #    logging.debug(u'Adding token {2} to id2doc[{0}]: {1}, id2doc: {3}'.format(len(self.id2doc), docid, token, self.id2doc))
                     self.id2doc[len(self.id2doc)] = docid
                     total_yielded += 1
                     self.n_processed += 1

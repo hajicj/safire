@@ -52,7 +52,7 @@ class TfidfBasedTokensFilter(object):
         tfidf = self.tfidf_data[doc_iid]
         tfidf_dict = dict(tfidf)
 
-        logging.debug(u'Recieved tokens: {0}'.format(pformat(tokens)))
+        # logging.debug(u'Recieved tokens: {0}'.format(pformat(tokens)))
 
         if sentences:
             all_tokens = itertools.chain(*tokens)

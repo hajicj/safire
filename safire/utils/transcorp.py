@@ -544,11 +544,6 @@ def log_corpus_stack(corpus, with_length=False):
             r += ' and length {0}'.format(len(corpus))
         return '\n'.join([r, log_corpus_stack(corpus.corpus,
                                               with_length=with_length)])
-    elif isinstance(corpus, gensim.corpora.TextCorpus):
-        r = 'Type: {0}\n\tinput: {1}\n\tfirst item: {2}'.format(
-            type(corpus), corpus.input, corpus.__iter__().next()
-        )
-        return '\n'.join([r, '=== STACK_END ===\n'])
     else:
         r = 'Type: %s' % (type(corpus))
         return '\n'.join([r, '=== STACK END ===\n'])

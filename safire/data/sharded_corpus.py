@@ -197,7 +197,7 @@ class ShardedCorpus(IndexedCorpus):
 
         # print 'Total length: {0}'.format(len(self))
         logging.info('Total size of serialized data on disk: {0}'
-                     ''.format(self.size_on_disk()))
+                     ''.format(safire.utils.pformat_nbytes(self.size_on_disk())))
 
     def init_shards(self, output_prefix, corpus, shardsize=4096,
                     dtype=_default_dtype):

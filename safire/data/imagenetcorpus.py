@@ -104,8 +104,8 @@ class ImagenetCorpus(CorpusABC):
             self.exclude_docnames = exclude_docnames
 
         ### DEBUG
-        print 'Include_docnames: {0}'.format(self.include_docnames)
-        print 'Exclude_docnames: {0}'.format(self.exclude_docnames)
+        # logging.debug('Include_docnames: {0}'.format(self.include_docnames))
+        # logging.debug('Exclude_docnames: {0}'.format(self.exclude_docnames))
 
         self.n_processed = 0
 
@@ -174,7 +174,8 @@ class ImagenetCorpus(CorpusABC):
             input_handle.close()
 
         ### DEBUG
-        print 'Total processed: {0}'.format(self.n_processed)
+        logging.debug('ImagenetCorpus total processed: {0}'
+                      ''.format(self.n_processed))
 
     def __len__(self):
         return self.n_processed
