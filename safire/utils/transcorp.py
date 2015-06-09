@@ -87,9 +87,13 @@ def get_id2word_obj(corpus):
         elif isinstance(corpus.obj,
                         safire.data.word2vec_transformer.Word2VecTransformer):
             return corpus.obj.id2word
-        # The duck typing variant:
-        elif hasattr(corpus.obj, 'id2word'):
-            return corpus.obj.id2word
+        # The duck typing variant: untested, introduced bug in test_config.py
+        # with a safire.utils.transformers.TfIdfModel transformer obj
+        # elif hasattr(corpus.obj, 'id2word'):
+        #     print 'Getting id2word from corpus.obj at corpus stack:\n{0}' \
+        #           ''.format(log_corpus_stack(corpus))
+        #     print 'id2word:'
+        #     return corpus.obj.id2word
         else:
             return get_id2word_obj(corpus.corpus)
     if isinstance(corpus, safire.datasets.dataset.DatasetABC):

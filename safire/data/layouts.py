@@ -141,8 +141,15 @@ class DataDirLayout(object):
         # Master files.
         self.vtlist = self.name + '.vtlist'
         self.image_vectors = self.name + '.' 'im.ftrs.csv'
-        # self.image_vectors used to be without the self.name; may cause
-        # somewhere yet...
+        # Alternate way of reading image vectors: instead of keeping different
+        # subsets of the vectors themselves, only keep one file with *all* the
+        # image vectors for various datasets over the same source data and
+        # use lists of image docnames to generate individual datasets.
+        # This is enabled by the include/exclude_docnames feature of
+        # ImagenetCorpus.
+        self.source_image_vectors = 'im.ftrs.csv'
+        self.image_docnames = self.name + '.img-docnames'
+
         self.textdoc2imdoc = self.name + '.' + 'vtext-image-map.csv'
         self.imgid2imgfile = self.name + '.' + 'img.ids2files.csv'
 

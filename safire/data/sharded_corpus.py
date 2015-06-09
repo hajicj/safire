@@ -564,6 +564,8 @@ class ShardedCorpus(IndexedCorpus):
         """As opposed to getitem, this one only accepts ints as offsets."""
         if offset < 0:
             offset += len(self)
+        ### DEBUG
+        # print self.output_prefix, len(self), offset
         self._ensure_shard(offset)
         # Deep copy so that there is no reference to the numpy array containing
         # the shard (that way, working with one row of the data would hog the

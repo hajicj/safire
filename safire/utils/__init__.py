@@ -6,6 +6,7 @@ For example ``tile_raster_images`` helps in generating a easy to grasp
 image from a set of samples or weights.
 """
 import cProfile
+import codecs
 import collections
 import copy
 import logging
@@ -1092,15 +1093,6 @@ def print_freqdict(freqdict, top_n=10):
     ])
 
 
-def lines_as_stream(lines):
-    """Pushes the given set of strings into a StrngIO buffer. A use case is
-    to simulate a file input for a gensim TextCorpus."""
-    buffer = StringIO.StringIO()
-    for line in lines:
-        buffer.write(unicode(line + '\n'))
-    return buffer
-
-
 def pformat_nbytes(n_bytes):
     """Formats the number of bytes "nicely", in human-readable format (kB, MB,
     ...).
@@ -1123,6 +1115,26 @@ def pformat_nbytes(n_bytes):
         return '{0:.2f} MB'.format(n_bytes / (1024.0 ** 2))
     else:
         return '{0:.2f} GB'.format(n_bytes / (1024.0 ** 3))
+
+
+def lines_as_stream(lines):
+    """Pushes the given set of strings into a StrngIO buffer. A use case is
+    to simulate a file input for a gensim TextCorpus."""
+    buffer = StringIO.StringIO()
+    for line in lines:
+        if not line.endswith('\n'):
+            line += '\n'
+        buffer.write(unicode(line))
+    return buffer
+
+
+def file_lines_as_set(fname):
+    """Loads the given file as a set of stripped lines."""
+    # Originally created to help config deal with the ImagenetCorpus featues
+    # include_docnames and exclude_docnames.
+    with codecs.open(fname, 'r', 'utf-8') as handle:
+        output = {l.strip() for l in handle}
+    return output
 
 
 class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):
