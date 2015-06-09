@@ -32,6 +32,14 @@ def main(args):
                      ''.format(args.draw_configuration))
         builder.draw_dependency_graph(args.draw_configuration)
 
+    if args.draw_only:
+        if not args.draw_configuration:
+            logging.warn('Ran run.py with --draw_only without requesting a'
+                         ' config graph! Exiting.')
+            return
+        logging.info('Only drew configuration graph, exiting.')
+        return
+
     logging.info('Building configuration {0}: running build...'
                  ''.format(args.configuration))
     outputs = builder.build()
@@ -59,6 +67,9 @@ def build_argument_parser():
     parser.add_argument('--run_saving', action='store_true',
                         help='If set, will force re-saving all objects defined'
                              ' in \'_persistence.\'')
+    parser.add_argument('--draw_only', action='store_true',
+                        help='If set, will stop after drawing the configuration'
+                             ' graph.')
 
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Turn on INFO logging messages.')

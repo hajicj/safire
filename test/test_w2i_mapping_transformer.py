@@ -10,7 +10,7 @@ from safire.data.vtextcorpus import VTextCorpus
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.utils.transcorp import compute_docname_flatten_mapping, \
     get_id2word_obj, token_iid2word, get_id2doc_obj
-from safire.utils.transformers import W2IMappingTransformer, \
+from safire.utils.transformers import W2IMappingTransform, \
     GeneralFunctionTransform
 from test.safire_test_case import SafireTestCase
 
@@ -81,14 +81,14 @@ class TestW2IMappingTransformer(SafireTestCase):
 
         # We now need the token_iid --> token map.
         id2word = get_id2word_obj(self.vtcorp_serialized)
-        t2i_mapping = {}
+        w2i_mapping = {}
         for token_iid, img_iids in t2i_indexes_dict.items():
             # Here is why we needed to serialize the vtcorp:
             token = token_iid2word(token_iid, self.vtcorp_serialized, id2word)
-            t2i_mapping[token] = img_iids
+            w2i_mapping[token] = img_iids
 
-        self.w2i = W2IMappingTransformer(t2i_mapping, aggregation='hard')
-        self.w2i_soft = W2IMappingTransformer(t2i_mapping, aggregation='soft')
+        self.w2i = W2IMappingTransform(w2i_mapping, aggregation='hard')
+        self.w2i_soft = W2IMappingTransform(w2i_mapping, aggregation='soft')
 
     def test_init(self):
 
@@ -105,18 +105,16 @@ class TestW2IMappingTransformer(SafireTestCase):
 
         print output
         print output_soft
-        word = self.w2i.runtime_id2word[query_vtcorp[0][0][0]]
+        word = self.w2i.id2word[query_vtcorp[0][0][0]]
         qv_id2doc = get_id2doc_obj(query_vtcorp)
         for i, x in enumerate(query_vtcorp):
-            if self.w2i.runtime_id2word[x[0][0]] == word:
+            if self.w2i.id2word[x[0][0]] == word:
                 print 'Found {0} in doc {1}'.format(word, qv_id2doc[i])
 
         icorp_id2doc = get_id2doc_obj(self.icorp)
         for i, x in output:
             icorp_doc = icorp_id2doc[i]
             print 'Found {0} with image {1}'.format(word, icorp_doc)
-
-
 
         self.assertEqual(len(output), len(output_soft))
 

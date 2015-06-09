@@ -1092,6 +1092,15 @@ def print_freqdict(freqdict, top_n=10):
     ])
 
 
+def lines_as_stream(lines):
+    """Pushes the given set of strings into a StrngIO buffer. A use case is
+    to simulate a file input for a gensim TextCorpus."""
+    buffer = StringIO.StringIO()
+    for line in lines:
+        buffer.write(unicode(line + '\n'))
+    return buffer
+
+
 def pformat_nbytes(n_bytes):
     """Formats the number of bytes "nicely", in human-readable format (kB, MB,
     ...).
@@ -1126,7 +1135,7 @@ class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):
             raise TypeError('Corpus {0} of type {1} is not indexable (does not'
                             'respond to __getitem__ call, raises TypeError)'
                             .format(corpus, type(corpus)))
-        except ValueError:
+        except (ValueError, KeyError):
             raise TypeError('Corpus {0} of type {1} has zero length.'
                             ' Corpus stack.'.format(corpus, type(corpus)))
 
@@ -1149,3 +1158,29 @@ class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):
         # logging.debug('  ITrCorp Output: {0}'.format(output))
 
         return output
+
+
+class SimpleTokenizeTextCorpus(gensim.corpora.TextCorpus):
+    """A TextCorpus that tokenizes only on whitespace. Other than that, is
+    exactly like the default TextCorpus implementation."""
+    def get_texts(self):
+        """
+        Iterate over the collection, yielding one document at a time. A document
+        is a sequence of words (strings) that can be fed into `Dictionary.doc2bow`.
+
+        Override this function to match your input (parse input files, do any
+        text preprocessing, lowercasing, tokenizing etc.). There will be no further
+        preprocessing of the words coming out of this function.
+        """
+        length = 0
+        with self.getstream() as lines:
+            for lineno, line in enumerate(lines):
+                length += 1
+                yield self.tokenize(line)
+        self.length = length
+
+    @staticmethod
+    def tokenize(line):
+        """Strips and splits the line on whitespace."""
+        for w in line.strip().split(' '):
+            yield w

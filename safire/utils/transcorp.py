@@ -73,21 +73,26 @@ def id2word(corpus, wid):
 def get_id2word_obj(corpus):
     """Retrieves the valid id2word object that can handle ``__getitem__``
     requests on word IDs to return the words themselves."""
-    # TODO: Move this mechanism into transformers themselves?
+    # Move this mechanism into transformers themselves? ...no: duck typing!
     if hasattr(corpus, 'id2word'):
         return corpus.id2word
     if isinstance(corpus, VTextCorpus):
         return corpus.dictionary
-    elif isinstance(corpus, TransformedCorpus):
+    if isinstance(corpus, gensim.corpora.TextCorpus):
+        return corpus.dictionary
+    if isinstance(corpus, TransformedCorpus):
         if isinstance(corpus.obj, FrequencyBasedTransformer):
             return KeymapDict(get_id2word_obj(corpus.corpus),
                               corpus.obj.transformed2orig)
         elif isinstance(corpus.obj,
                         safire.data.word2vec_transformer.Word2VecTransformer):
             return corpus.obj.id2word
+        # The duck typing variant:
+        elif hasattr(corpus.obj, 'id2word'):
+            return corpus.obj.id2word
         else:
             return get_id2word_obj(corpus.corpus)
-    elif isinstance(corpus, safire.datasets.dataset.DatasetABC):
+    if isinstance(corpus, safire.datasets.dataset.DatasetABC):
         return get_id2word_obj(corpus.data)
 
     raise NotImplementedError('get_id2word_obj() not implemented for corpus '
@@ -164,6 +169,68 @@ def token_iid2word(token_iid, vtcorp, id2word):
     wid = item[0][0]
     word = id2word[wid]
     return word
+
+
+def build_w2i_mapping_tokencorp(tcorp, icorp, t2i_file):
+    """Creates the default t2i mapping object from two corpora and their
+    mapping file, the same way you would build flattening indexes. Expects the
+    tcorp to return tokens (vtcorp with ``tokens=True``).
+
+    Note that the token_tcorp must be fully indexable.
+
+    :returns: A dict that maps words to sorted lists of image IIDs.
+    """
+    mmcorp = safire.data.composite_corpus.CompositeCorpus(
+        (tcorp, icorp), names=('txt', 'img'), aligned=False
+    )
+    t2i_indexes = compute_docname_flatten_mapping(mmcorp, t2i_file)
+    t2i_indexes_dict = collections.defaultdict(list)
+    for t, i in t2i_indexes:
+        t2i_indexes_dict[t].append(i)
+    # In the t2i_indexes_dict, we have for each token index a list of all images
+    # it appeared with. However, multiple token iids may yet be of the same
+    # token.
+
+    _id2word = get_id2word_obj(tcorp)
+    w2i_mapping = collections.defaultdict(set)
+    for token_iid, img_iids in t2i_indexes_dict.items():
+        word = token_iid2word(token_iid, tcorp, _id2word)
+        w2i_mapping[word].update(img_iids)
+
+    w2i_mapping = {w: sorted(list(iids)) for w, iids in w2i_mapping.items()}
+
+    return w2i_mapping
+
+
+def build_w2i_mapping_doccorp(tcorp, icorp, t2i_file):
+    """Creates the default t2i mapping object from two corpora and their
+    mapping file, the same way you would build flattening indexes. Expects the
+    tcorp to return documents (vtcorp with ``tokens=False``).
+
+    Note that the doc tcorp must be fully indexable and return gensim sparse
+    vectors.
+
+    :returns: A dict that maps words to sorted lists of image IIDs.
+    """
+    mmcorp = safire.data.composite_corpus.CompositeCorpus(
+        (tcorp, icorp), names=('txt', 'img'), aligned=False
+    )
+    t2i_indexes = compute_docname_flatten_mapping(mmcorp, t2i_file)
+    t2i_indexes_dict = collections.defaultdict(list)
+    for t, i in t2i_indexes:
+        t2i_indexes_dict[t].append(i)
+
+    _id2word = get_id2word_obj(tcorp)
+    w2i_mapping = collections.defaultdict(set)
+    for doc_iid, img_iids in t2i_indexes_dict.items():
+        doc = tcorp[doc_iid]
+        for wid, f in doc:
+            word = _id2word[wid]
+            w2i_mapping[word].update(img_iids)
+
+    w2i_mapping = {w: sorted(list(iids)) for w, iids in w2i_mapping.items()}
+
+    return w2i_mapping
 
 
 def bottom_corpus(pipeline):
@@ -473,6 +540,11 @@ def log_corpus_stack(corpus, with_length=False):
             r += ' and length {0}'.format(len(corpus))
         return '\n'.join([r, log_corpus_stack(corpus.corpus,
                                               with_length=with_length)])
+    elif isinstance(corpus, gensim.corpora.TextCorpus):
+        r = 'Type: {0}\n\tinput: {1}\n\tfirst item: {2}'.format(
+            type(corpus), corpus.input, corpus.__iter__().next()
+        )
+        return '\n'.join([r, '=== STACK_END ===\n'])
     else:
         r = 'Type: %s' % (type(corpus))
         return '\n'.join([r, '=== STACK END ===\n'])

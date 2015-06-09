@@ -578,6 +578,7 @@ import operator
 import re
 from safire.data.pipeline import Pipeline
 from safire.data.serializer import Serializer
+import safire.utils.transcorp
 
 __author__ = "Jan Hajic jr."
 
@@ -1145,6 +1146,8 @@ class ConfigBuilder(object):
                 self.init_object(item,
                                  self.configuration.objects[item],
                                  **self.objects)
+            logging.debug('Initialized:\n{0}'
+                          ''.format(safire.utils.transcorp.log_corpus_stack(self.objects[item])))
             if item in self.configuration._persistence:
                 label = self.configuration._persistence[item]
                 fname = self.get_loading_filename(label)
@@ -1820,7 +1823,7 @@ class ConfigBuilder(object):
             init_expr = getattr(__import__(modulename, fromlist=[classname]),
                                 classname)
         else:
-            raise ValueError('Cannot initialize without _class or _init'
+            raise ValueError('Cannot initialize without _class, _init or _exec'
                              ' given! (Passed obj: {0})'.format(obj))
 
         init_args_as_kwargs = {k: eval(v, globals(), current_locals)
@@ -1828,6 +1831,7 @@ class ConfigBuilder(object):
         ### DEBUG
         # pprint.pprint((init_expr, init_args_as_kwargs))
         initialized_object = init_expr(**init_args_as_kwargs)
+
         return initialized_object
 
     @staticmethod

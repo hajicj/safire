@@ -184,7 +184,7 @@ class Word2VecTransformer(TransformationABC):
             self.emptydocs += 1
 
         self.total_processed += len(bow)
-        self.oov_rate = self.oov / self.total_processed
+        self.oov_rate = self.oov / max(1, self.total_processed)
 
         # Combining the embeddings.
         output_embeddings = self.combine_words(embeddings)
@@ -203,6 +203,8 @@ class Word2VecTransformer(TransformationABC):
         :type corpus: gensim.interfaces.CorpusABC
         :param corpus: The corpus to transform.
         """
+        # TODO: Remake to smart_apply_corpus()?
+        # TODO: Automatically extract id2word object?
         # if not isinstance(corpus, TextCorpus):
         #     logging.warn('Word2VecTransformer applied on non-text' +
         #                  ' corpus; returning TransformedCorpus.')
