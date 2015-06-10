@@ -16,7 +16,8 @@ from gensim.similarities import Similarity
 import numpy
 import scipy.sparse
 import safire.datasets.dataset
-from safire.utils import gensim2ndarray, IndexedTransformedCorpus
+from safire.utils import gensim2ndarray, IndexedTransformedCorpus, \
+    is_gensim_vector
 from safire.utils.matutils import sum_gensim_columns
 import safire.utils.transcorp
 
@@ -433,7 +434,8 @@ class W2IMappingTransform(gensim.interfaces.TransformationABC):
     per hit, and ``'soft'``, which multiplies this number by the value for the
     respective token, thus taking into account token weights.
     """
-    def __init__(self, w2i_mapping, aggregation='hard', runtime_id2word=None):
+    def __init__(self, w2i_mapping, dim, aggregation='hard',
+                 runtime_id2word=None):
         """Initializes the transformer. The ``w2i_mapping`` is a dict or other
         structure that will produce on ``__getitem__`` call a list of image
         iids.
@@ -461,8 +463,19 @@ class W2IMappingTransform(gensim.interfaces.TransformationABC):
         the w2i mapping. You can use a handy default method from
         ``transcorp.py``: :meth:`build_w2i_mapping_tokencorp` or
          :meth:`build_w2i_mapping_doccorp`
+
+        Dimension of the transformer is described by the total number of iamges
+        in the image corpus. This has to be supplied externally, as there is no
+        guarantee that the images in the mapping are all the images that were
+        available and we should keep the transformed space consistent as the
+        space of all available images, because we will be using the source image
+        corpus to translate the image dimensions in the image similarity space
+        to the docnames of the actual images. (This is the equivalent of
+        a vocabulary in the similarity corpus: the WIDs are the iids of the
+        original corpus, the words are the image docnames.)
         """
         self.w2i_mapping = w2i_mapping
+        self.dim = dim
 
         if aggregation not in ['hard', 'soft']:
             raise ValueError('Invalid aggregation mode requested: {0} (Use '
@@ -524,6 +537,36 @@ class W2IMappingTransform(gensim.interfaces.TransformationABC):
         before applying to a corpus (just call :func:`get_id2word_obj` on the
         input corpus)."""
         self.id2word = runtime_id2word
+
+
+class RetainTopTransform(gensim.interfaces.TransformationABC):
+    """This transformer retains top K highest values from the given item.
+    (This does NOT change the dimensionality of the pipeline.)
+    """
+    def __init__(self, k):
+        """Initializes the transformer.
+
+        :param k: Retain this many highest values.        """
+        self.k = k
+
+    def __getitem__(self, item):
+        is_corpus, _ = gensim.utils.is_corpus(item)
+        if is_corpus:
+            return self._apply(item)
+
+        if not safire.utils.is_gensim_vector(item):
+            raise TypeError('RetainTopTransform currently cannot deal with'
+                            ' {0}, please convert to gensim.'
+                            ''.format(type(item)))
+        sorted_by_value = sorted(item, key=operator.itemgetter(1), reverse=True)
+        output_items = sorted_by_value[:self.k]
+        output = sorted(output_items, key=operator.itemgetter(0))
+        return output
+
+    def _apply(self, corpus, chunksize=None):
+        return safire.utils.transcorp.smart_apply_transcorp(self,
+                                                            corpus,
+                                                            cunksize=None)
 
 
 class ItemAggregationTransform(gensim.interfaces.TransformationABC):

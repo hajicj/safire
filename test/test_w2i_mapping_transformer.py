@@ -9,7 +9,7 @@ from safire.data.sharded_corpus import ShardedCorpus
 from safire.data.vtextcorpus import VTextCorpus
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.utils.transcorp import compute_docname_flatten_mapping, \
-    get_id2word_obj, token_iid2word, get_id2doc_obj
+    get_id2word_obj, token_iid2word, get_id2doc_obj, dimension
 from safire.utils.transformers import W2IMappingTransform, \
     GeneralFunctionTransform
 from test.safire_test_case import SafireTestCase
@@ -87,8 +87,12 @@ class TestW2IMappingTransformer(SafireTestCase):
             token = token_iid2word(token_iid, self.vtcorp_serialized, id2word)
             w2i_mapping[token] = img_iids
 
-        self.w2i = W2IMappingTransform(w2i_mapping, aggregation='hard')
-        self.w2i_soft = W2IMappingTransform(w2i_mapping, aggregation='soft')
+        self.w2i = W2IMappingTransform(w2i_mapping,
+                                       dim=len(self.icorp),
+                                       aggregation='hard')
+        self.w2i_soft = W2IMappingTransform(w2i_mapping,
+                                            dim=len(self.icorp),
+                                            aggregation='soft')
 
     def test_init(self):
 

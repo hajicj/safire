@@ -130,6 +130,7 @@ test/test_similarity_transformer.py
 test/test_text_browser.py
 test/test_utils.py
 test/test_vtextcorpus.py
+test/test_w2i_mapping_transformer.py
 test/test_word2vec_dataset_transformer.py
 test/test_zipper.py
 test/test-data/.introspection..html
@@ -161,6 +162,7 @@ test/test-data/serialized.i.shcorp.0
 test/test-data/test-data.edict.pkl
 test/test-data/test-data.emtr.pkl
 test/test-data/test-data.im.ftrs.csv
+test/test-data/test-data.img-docnames
 test/test-data/test-data.vtext-image-map.csv
 test/test-data/test-data.vtlist
 test/test-data/test_complex_config.ini

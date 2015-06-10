@@ -766,7 +766,7 @@ class ShardedCorpus(IndexedCorpus):
     def _getitem_format(self, s_result):
         if self.gensim_serialization:
             if self.gensim_retrieval:
-                if isinstance(s_result[0], tuple):
+                if len(s_result) == 0 or isinstance(s_result[0], tuple):
                     return s_result
                 else:
                     # cast as a generator

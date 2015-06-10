@@ -31,7 +31,17 @@ def main(args):
     #  - find its corpus,
     #  - get id2doc obj from its corpus
     # The auto-resolve is not yet implemented, though.
-    img_id2doc = get_id2doc_obj(pipeline.get_object(args.img_id2doc_source))
+    if args.img_id2doc_configuration:
+        img_id2doc_configuration = args.img_id2doc_configuration
+    else:
+        img_id2doc_configuration = args.configuration
+    if args.img_id2doc_pipeline:
+        img_id2doc_pipeline = build_pipeline(args.img_id2doc_configuration,
+                                             args.img_id2doc_pipeline)
+    else:
+        img_id2doc_pipeline = pipeline
+    retrieved_id2doc_source = img_id2doc_pipeline.get_object(args.img_id2doc_source)
+    img_id2doc = get_id2doc_obj(retrieved_id2doc_source)
 
     # Now run through the retrieval results and output t2i
     logging.info('Starting retrieval and vtext-image map generation...')
@@ -78,6 +88,18 @@ def build_argument_parser():
                         help='Get the image id2doc mapping from this pipeline'
                              ' object. (Should be the corpus from which the'
                              ' similarity index used for retrieval was built.)')
+    parser.add_argument('--img_id2doc_pipeline',
+                        help='If set, will extract this blockname as the '
+                             'pipeline from which to get the '
+                             '--img_id2doc_source object. This is useful when '
+                             'the image corpus is not accessible as a part '
+                             'of the pipeline loaded to get results.')
+    parser.add_argument('--img_id2doc_configuration',
+                        help='If set, will extract this blockname as the '
+                             'configuration from which to get the '
+                             '--img_id2doc_pipeline object. This is useful when '
+                             'the image corpus is not accessible from the '
+                             'configuration loaded to get results.')
 
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Turn on INFO logging messages.')
