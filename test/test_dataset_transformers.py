@@ -1,3 +1,4 @@
+import collections
 import os
 from safire.data import VTextCorpus
 from safire.data.sharded_corpus import ShardedCorpus
@@ -11,8 +12,9 @@ __author__ = 'Lenovo'
 import numpy
 import unittest
 
-from safire.datasets.transformations import FlattenComposite, FlattenedDatasetCorpus, \
-    docnames2indexes
+from safire.datasets.transformations import FlattenComposite, FlattenedDatasetCorpus
+from safire.utils.transcorp import docnames2indexes, get_id2doc_obj, \
+    get_doc2id_obj
 from safire.data.serializer import Serializer
 
 
@@ -109,6 +111,14 @@ class TestDatasetTransformers(SafireTestCase):
         batch = multimodal_flat[:4]
 
         self.assertEqual(batch.shape[1], tdata.dim + idata.dim)
+
+        id2doc = get_id2doc_obj(multimodal_flat)
+        print id2doc[0]
+        print id2doc[12]
+        doc2id = get_doc2id_obj(multimodal_flat)
+        print doc2id[id2doc[0][0]]
+        print doc2id[id2doc[0][1]]
+        self.assertIsInstance(id2doc, collections.defaultdict(tuple).__class__)
 
 
 

@@ -136,12 +136,20 @@ class DataDirLayout(object):
         self.index_dir = 'indexes'
         self.learner_dir = 'learners'
         self.temp_dir = 'tmp'
+        self.introspection_dir = 'introspection'
 
         # Master files.
         self.vtlist = self.name + '.vtlist'
         self.image_vectors = self.name + '.' 'im.ftrs.csv'
-        # self.image_vectors used to be without the self.name; may cause
-        # somewhere yet...
+        # Alternate way of reading image vectors: instead of keeping different
+        # subsets of the vectors themselves, only keep one file with *all* the
+        # image vectors for various datasets over the same source data and
+        # use lists of image docnames to generate individual datasets.
+        # This is enabled by the include/exclude_docnames feature of
+        # ImagenetCorpus.
+        self.source_image_vectors = 'im.ftrs.csv'
+        self.image_docnames = self.name + '.img-docnames'
+
         self.textdoc2imdoc = self.name + '.' + 'vtext-image-map.csv'
         self.imgid2imgfile = self.name + '.' + 'img.ids2files.csv'
 
@@ -150,6 +158,11 @@ class DataDirLayout(object):
 
         self.img_corpname = '.img'
         self.text_corpname = '.vt'
+
+         # Pipeline names should be agnostic to text vs. images (user handles
+         # the naming).
+        self.pipeline_suffix = '.pln'
+        self.pipeline_serialization_suffix = '.pls'
 
         self.mm_corp_suffix = '.mmcorp'
         self.mm_index_suffix = '.mmcorp.index'
@@ -386,6 +399,7 @@ def clean_data_root(root, force=True):
     learner_dir = os.path.join(layout.name, layout.learner_dir)
     index_dir = os.path.join(layout.name, layout.index_dir)
     temp_dir = os.path.join(layout.name, layout.temp_dir)
+    introspection_dir = os.path.join(layout.name, layout.introspection_dir)
 
     clean_dir(corpus_dir, force=force)
     clean_dir(dataset_dir, force=force)
@@ -393,6 +407,7 @@ def clean_data_root(root, force=True):
     clean_dir(learner_dir, force=force)
     clean_dir(index_dir, force=force)
     clean_dir(temp_dir, force=force)
+    #clean_dir(introspection_dir, force=force)
 
 
 def init_data_root(path, overwrite=False):
@@ -435,6 +450,11 @@ def init_data_root(path, overwrite=False):
     if not os.path.exists(temp_dir):
         is_already_root = False
         os.makedirs(temp_dir)
+
+    introspection_dir = os.path.join(layout.name, layout.introspection_dir)
+    if not os.path.exists(introspection_dir):
+        is_already_root = False
+        os.makedirs(introspection_dir)
 
     if is_already_root:
         logging.warn('Directory already is a safire data root.')

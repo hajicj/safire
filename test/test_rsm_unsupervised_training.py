@@ -57,7 +57,7 @@ class TestRSMUnsupervisedTraining(SafireTestCase):
         self.assertNotEqual(param_before, param_after)
 
         test_batch = dataset.test_X_batch(0, 1)
-        output = self.model_handle.run(test_batch)
+        output = self.model_handle.run_expr(test_batch)
 
         print type(output)
 

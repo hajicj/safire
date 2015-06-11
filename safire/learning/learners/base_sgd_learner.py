@@ -66,7 +66,7 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                  track_weights=False, track_weights_change=False,
                  monitoring=True, shuffle_batches=True,
                  plot_transformation=False, plot_weights=False,
-                 plot_every=10, plot_on_init=False):
+                 plot_every=10, plot_on_init=False, plot_data=False):
         """Initialize the learner.
 
         The parameters common to each learner are just the number of epochs.
@@ -118,7 +118,9 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
         :type plot_on_init: bool
         :param plot_on_init: Plot initial state of model/transformation/recons.
-        
+
+        :type plot_data: bool
+        :param plot_data: Plot a sample of the data at the beginning.
         """
         self.n_epochs = n_epochs
         self.b_size = b_size
@@ -141,6 +143,7 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
         #self.plot_every_batch = False
         self.plot_weights = plot_weights
         self.plot_on_init = plot_on_init
+        self.plot_data = plot_data
 
         # Saving options.
         self.saving = False
@@ -176,15 +179,17 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
         return updates
 
-    def run(self, model_handle, data, resume=False, force_resume=False):
+    def run(self, setup_handles,
+            data, resume=False, force_resume=False):
         """Runs the learner. Returns the model handle.
 
         Intermediate result saving and progress logging depends on how the
         learner has been set up (see :meth:`set_saving`).
 
-        :type model_handle: ModelHandle
-        :param model_handle: A model handle that came out of a ``setup``
-            classmethod of a model.
+        :type setup_handles: dict(str => ModelHandle)
+        :param setup_handles: A dict of model handles output by a Model.setup()
+            classmethod. Expected members are ``'train'``, ``'validate'``,
+            ``'test'`` and ``'run'``.
 
         :type data: Dataset
         :param data: A dataset on which the learner should run.
@@ -198,6 +203,15 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
             ``ValueError``. If set to ``False`` and resuming fails, will warn
             and train from scratch.
         """
+        if self.n_epochs == 0:
+            logging.warn('No training requested from learner: zero epochs!'
+                         ' Returning unmodified handles.')
+            return setup_handles
+
+        train_handle = setup_handles['train']
+        validate_handle = setup_handles['validate']
+        test_handle = setup_handles['test']
+        run_handle = setup_handles['run']
 
         # Attempting to resume model training.
         resume_successful = False
@@ -213,11 +227,14 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                 # TODO: There should be a sanity check here!
                 # Also, the loading could use TIDs - which would require,
                 # however, a ModelLoader.
-                # XXX: WTF are TIDs?
-                model_handle.model_instance = resuming_instance
+                # XXX: WTF are TIDs? Infixes for models?
+                train_handle.model_instance = resuming_instance
+                validate_handle.model_instance = resuming_instance
+                test_handle.model_instance = resuming_instance
 
         try:
-            backward_handle = BackwardModelHandle.clone(model_handle)
+            # TODO: refactor this!
+            backward_handle = BackwardModelHandle.clone(run_handle)
         except AttributeError:
             backward_handle = None
 
@@ -245,10 +262,13 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
         start_time = time.clock()
         last_epoch_time = start_time
 
-        # Validation init logging
-        validation_losses = [ self._validate_batch(model_handle, data, vb_index)
-                              for vb_index in xrange(n_devel_batches)]
+        # Validation init logging  ### Disabled for debugging
+        validation_losses = [self._validate_batch(validate_handle,
+                                                  data,
+                                                  vb_index)
+                             for vb_index in xrange(n_devel_batches)]
 
+        print validation_losses
         validation_loss = numpy.mean(validation_losses)
 
         logging.info(
@@ -258,13 +278,21 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
         #if self.track_weights_change:
             #print self.report_weights(model_handle.model_instance)
 
-        self.weights_snapshot(model_handle.model_instance)
+        self.weights_snapshot(train_handle.model_instance)
 
         self.monitor = { 'training_cost' : [], 'validation_cost' : [] }
-        self.monitor['validation_cost'].append([iteration, validation_loss])
+        # self.monitor['validation_cost'].append([iteration, validation_loss])
+
+        if self.plot_data:
+            sample = data.train_X_batch(0, self.b_size)
+            safire.utils.heatmap_matrix(sample,
+                                        title='First batch of the data',
+                                        colormap='afmhot',
+                                        vmin=numpy.min(sample),
+                                        vmax=numpy.max(sample))
 
         if self.plot_on_init:
-            self.plot_transformed_results(data, model_handle,
+            self.plot_transformed_results(data, run_handle,
                                           backward_handle=backward_handle,
                                           with_orig=True,
                                           title='After init, before training')
@@ -277,12 +305,12 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
             if self.shuffle_batches:
                 random.shuffle(batch_ordering)
 
-            for b_index in batch_ordering: # One uninterrupted run
+            for b_i, b_index in enumerate(batch_ordering): # One uninterrupted run
                                            # of SGD on train data
 
                 # Runs one iteration of training, based on model and dataset
                 # type.
-                training_cost = self._train_batch(model_handle, data, b_index)
+                training_cost = self._train_batch(train_handle, data, b_index)
                 self.monitor['training_cost'].append([iteration+1, training_cost])
 
                 #if self.plot_every_batch:
@@ -291,7 +319,7 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                 if (self.validation_frequency
                     and (iteration + 1) % self.validation_frequency == 0):
 
-                    validation_losses = [ self._validate_batch(model_handle,
+                    validation_losses = [ self._validate_batch(validate_handle,
                                                                data, vb_index)
                                           #/ float(self.b_size)
                                           for vb_index in xrange(n_devel_batches)]
@@ -301,17 +329,17 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                                                             validation_loss])
 
                     logging.info(
-                        'Epoch %d, minibatch %d/%d: v. error %f' % (
-                            epoch, b_index + 1, n_train_batches,
+                        'Epoch %d, minibatch %d/%d (%d): v. error %f' % (
+                            epoch, b_i + 1, n_train_batches, b_index,
                             validation_loss)
                                  )
 
                     if self.track_weights_change:
-                        print self.report_max_weight_change(model_handle.model_instance)
-                        self.weights_snapshot(model_handle.model_instance)
+                        print self.report_max_weight_change(train_handle.model_instance)
+                        self.weights_snapshot(train_handle.model_instance)
 
                     if self.track_weights:
-                        print self.report_weights(model_handle.model_instance)
+                        print self.report_weights(train_handle.model_instance)
 
                     # Update algorithm based on improved validation score
                     if validation_loss < (best_validation_loss
@@ -322,9 +350,9 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                         best_validation_loss = validation_loss
 
                         # Get corresponding test loss for logging purposes
-                        test_loss = self.evaluate(model_handle, data)
-                        logging.info('Epoch %i, minibatch %i/%i: t. error %f'%(
-                                     epoch, b_index + 1, n_train_batches,
+                        test_loss = self.evaluate(test_handle, data)
+                        logging.info('Epoch %i, minibatch %i/%i (%i): t. error %f'%(
+                                     epoch, b_i + 1, n_train_batches, b_index,
                                      test_loss))
 
                         if test_loss < best_test_loss:
@@ -336,7 +364,7 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
                 if self.patience <= iteration:
                     done_looping = True
-                    break # from cycle over minibatches, not cycle over epochs
+                    break  # from cycle over minibatches, not cycle over epochs
 
             # Epoch logging
             epoch_time = time.clock()
@@ -356,28 +384,29 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
             if self.saving and epoch % self.save_every == 0:
                 # Saves an intermediate model.
-                self.save_intermediate(model_handle.model_instance, str(epoch))
+                self.save_intermediate(train_handle.model_instance, str(epoch))
                 self.last_saved_epoch = epoch
 
             if self.plot_transform_per_epoch and epoch % self.plot_every == 0:
                 self.plot_transformed_results(dataset=data,
-                                              model_handle=model_handle,
+                                              model_handle=run_handle,
                                               backward_handle=backward_handle,
                                               plot_bias=True,
                                               title='Test batch transformed after epoch %d' % epoch)
 
             if self.plot_weights and epoch % self.plot_every == 0:
-                W = self._get_weights_from_model(model_handle.model_instance)
+                W = self._get_weights_from_model(train_handle.model_instance)
                 weights = W.get_value(borrow=True)
-                safire.utils.heatmap_matrix(weights,
-                                    title='Weights heatmap af epoch %d' % epoch,
-                                    with_average=False,
-                                    colormap='coolwarm',
-                                    vmin=0.9 * numpy.min(weights),
-                                    vmax=0.9 * numpy.max(weights))
+                safire.utils.heatmap_matrix(
+                    weights,
+                    title='Weights heatmap af epoch %d' % epoch,
+                    with_average=False,
+                    colormap='coolwarm',
+                    vmin=0.9 * numpy.min(weights),
+                    vmax=0.9 * numpy.max(weights))
 
                 W_diff = weights - self.W_snapshot
-                self.weights_snapshot(model_handle.model_instance)
+                self.weights_snapshot(train_handle.model_instance)
                 safire.utils.heatmap_matrix(W_diff,
                                             title='Diff of W from prev. epoch',
                                             with_average=False,
@@ -401,28 +430,29 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
         if self.plot_transform:
             self.plot_transformed_results(dataset=data,
-                                          model_handle=model_handle,
+                                          model_handle=run_handle,
                                           backward_handle=backward_handle,
                                           title='Test batch after training.',
                                           plot_bias=True)
         if self.plot_weights:
-            W = self._get_weights_from_model(model_handle.model_instance)
+            W = self._get_weights_from_model(train_handle.model_instance)
             weights = W.get_value(borrow=True)
-            safire.utils.heatmap_matrix(weights,
-                                    title='Weights heatmap af epoch %d' % epoch,
-                                    with_average=False,
-                                    colormap='coolwarm',
-                                    vmin=0.9 * numpy.min(weights),
-                                    vmax=0.9 * numpy.max(weights))
+            safire.utils.heatmap_matrix(
+                weights,
+                title='Weights heatmap af epoch %d' % epoch,
+                with_average=False,
+                colormap='coolwarm',
+                vmin=0.9 * numpy.min(weights),
+                vmax=0.9 * numpy.max(weights))
 
             W_diff = weights - self.W_snapshot
-            self.weights_snapshot(model_handle.model_instance)
+            self.weights_snapshot(train_handle.model_instance)
             safire.utils.heatmap_matrix(W_diff,
-                                            title='Diff of W from prev. epoch',
-                                            with_average=False,
-                                            colormap='coolwarm',
-                                            vmin=0.9 * numpy.min(weights),
-                                            vmax=0.9 * numpy.max(weights))
+                                        title='Diff of W from prev. epoch',
+                                        with_average=False,
+                                        colormap='coolwarm',
+                                        vmin=0.9 * numpy.min(weights),
+                                        vmax=0.9 * numpy.max(weights))
 
         return best_validation_loss
 
@@ -609,20 +639,19 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
 
         if isinstance(model, BaseSupervisedModel):
             if not isinstance(dataset, SupervisedDataset):
-                raise TypeError('Attempting to train supervised model without'+
-                                 ' a supervised dataset (dataset type: %s) ' % (
-                                     str(type(dataset))))
+                raise TypeError('Attempting to train supervised model without'
+                                ' a supervised dataset (dataset type: {0})'
+                                ''.format( str(type(dataset))))
             train_X = dataset.train_X_batch(batch_index, self.b_size)
             train_y = dataset.train_y_batch(batch_index, self.b_size)
 
-            logging.debug('Train batch: %s' % train_X)
+            logging.debug('Train batch: {0}'.format(train_X))
 
-            batch_loss = model_handle.train(train_X, train_y)
+            batch_loss = model_handle.run(train_X, train_y)
 
         elif isinstance(model, BaseUnsupervisedModel):
             train_X = dataset.train_X_batch(batch_index, self.b_size)
-
-            batch_loss = model_handle.train(train_X)
+            batch_loss = model_handle.run(train_X)
 
         return batch_loss
 
@@ -648,6 +677,9 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
         model = model_handle.model_instance
         batch_loss = None
 
+        # TODO: Refactor Dataset so that it returns (train_X, train_y) and this
+        # if/else is redundant (the right dataset will always return the right
+        # inputs).
         if isinstance(model, BaseSupervisedModel):
             if not isinstance(dataset, SupervisedDataset):
                 raise TypeError('Attempting to validate supervised model'
@@ -660,11 +692,12 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
             devel_X = dataset.devel_X_batch(batch_index, self.b_size)
             devel_y = dataset.devel_y_batch(batch_index, self.b_size)
 
-            batch_loss = model_handle.validate(devel_X, devel_y)
+            batch_loss = model_handle.run(devel_X, devel_y)
 
         elif isinstance(model, BaseUnsupervisedModel):
             devel_X = dataset.devel_X_batch(batch_index, self.b_size)
-            batch_loss = model_handle.validate(devel_X)
+            # print 'X batch size: {0}'.format(devel_X.shape)  ### DEBUG
+            batch_loss = model_handle.run(devel_X)
 
         return batch_loss
 
@@ -698,12 +731,12 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
             train_X = dataset.test_X_batch(batch_index, self.b_size)
             train_y = dataset.test_y_batch(batch_index, self.b_size)
 
-            batch_loss = model_handle.test(train_X, train_y)
+            batch_loss = model_handle.run(train_X, train_y)
 
         elif isinstance(model, BaseUnsupervisedModel):
             train_X = dataset.test_X_batch(batch_index, self.b_size)
 
-            batch_loss = model_handle.test(train_X)
+            batch_loss = model_handle.run(train_X)
 
         return batch_loss
 
@@ -712,9 +745,14 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                                  with_orig=False, with_no_bias=False,
                                  plot_bias=False, backward_handle=None):
         """Plots a sample heatmap of how the dataset will be transformed."""
-        sample_size = min(1000, (len(dataset) - dataset._test_doc_offset))
-        batch = 0 # Deterministic plotting.
-        #batch = random.randint(0, dataset.n_test_batches(sample_size))
+        sample_size = min(1000, (len(dataset) - dataset._test_doc_offset - 1))
+        batch = 0  # Deterministic plotting.
+        # batch = random.randint(0, dataset.n_test_batches(sample_size))
+        if sample_size == -1:
+            logging.warn('Requesting a test batch sample size of -1,'
+                         ' have you set the test_p for the dataset?')
+        # print 'Requesting test batch {0} with size {1}'
+        #       ''.format(batch, sample_size)
         sample_data = dataset.test_X_batch(batch, sample_size)
         transformed_data = numpy.array(model_handle.run(sample_data))
 
@@ -746,6 +784,15 @@ class BaseSGDLearner(gensim.utils.SaveLoad):
                                         colormap='afmhot',
                                         vmin=numpy.min(reconstructed_data),
                                         vmax=numpy.max(reconstructed_data))
+
+            reconstruction_error = sample_data - reconstructed_data
+            safire.utils.heatmap_matrix(reconstruction_error,
+                                        title=title + 'REC.ERROR',
+                                        with_average=True,
+                                        colormap='afmhot',
+                                        vmin=numpy.min(reconstruction_error),
+                                        vmax=numpy.max(reconstruction_error))
+
 
         if plot_bias:
             if hasattr(model_handle.model_instance, 'b'):

@@ -200,7 +200,8 @@ class BaseModel(object):
     
     def _init_bias(self, name, length, rng = numpy.random.RandomState()):
         """Initialize a bias parameter. The bias values are set to
-        zero (default behavior).
+        0.001 (default behavior to avoid some NaN's in first iteration of
+        training).
         
         :type name: str
         :param name: The name of the bias parameter. Used in naming
@@ -217,9 +218,9 @@ class BaseModel(object):
         :rtype: theano.tensor.sharedvar.TheanoSharedVariable
         :returns: The initialized bias vector.
         """
-        b = theano.shared(value = numpy.zeros((length,),
-                          dtype = theano.config.floatX),
-                          name = name)
+        b = theano.shared(value=numpy.zeros((length,),
+                                            dtype=theano.config.floatX) + 0.001,
+                          name=name)
         return b
         
 
@@ -448,3 +449,9 @@ class BaseModel(object):
             pickled_object = cPickle.load(unpickle_handle)
 
         return pickled_object
+
+    def __getstate__(self):
+        logging.debug('=== Pickling {0}:'.format(self.__class__.__name__))
+        for k in self.__dict__:
+            logging.debug('{0}: type {1}'.format(k, type(self.__dict__[k])))
+        return self.__dict__

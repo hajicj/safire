@@ -6,8 +6,10 @@ For example ``tile_raster_images`` helps in generating a easy to grasp
 image from a set of samples or weights.
 """
 import cProfile
+import collections
 import copy
 import logging
+import math
 import StringIO
 import pdb
 import pstats
@@ -18,14 +20,12 @@ from sys import getsizeof, stderr
 from itertools import chain
 from collections import deque
 
-#try:
-#    from reprlib import repr
-#except ImportError:
-#    pass
-
+from gensim.matutils import full2sparse, sparse2full, corpus2dense
+import itertools
 
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
+import operator
 
 
 try:
@@ -34,10 +34,10 @@ except ImportError:
     from PIL import Image
 
 import numpy
+import numpy.random
 import theano
 import theano.ifelse
-
-import math
+import gensim.interfaces
 
 
 def check_kwargs(kwargs, names):
@@ -261,7 +261,7 @@ def profile_run(function, *args, **kwargs):
     s = StringIO.StringIO()
     sortby = 'tottime'
     ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-    ps.print_stats(.33)
+    ps.print_stats(.50)
 
     return s, retval
 
@@ -364,12 +364,13 @@ def detect_nan(i, node, fn):
                 pdb.set_trace()
                 raise ValueError('Found NaN in computation!')
         except TypeError:
-            print 'Couldn\'t check node for NaN:'
-            theano.printing.debugprint(node)
+            logging.debug('Couldn\'t check node for NaN: {0}'.format(node))
+            #theano.printing.debugprint(node)
 
 
 def merciless_print(i, node, fn):
-    """Debugging theano. Prints inputs and outputs at every point."""
+    """Debugging theano. Prints inputs and outputs at every point.
+    In case NaN, Inf or -Inf is detected, fires up the pdb debugger."""
     print ''
     print '-------------------------------------------------------'
     print 'Node %s' % str(i)
@@ -394,8 +395,8 @@ def merciless_print(i, node, fn):
                 pdb.set_trace()
                 raise ValueError('Found Inf in computation!')
         except TypeError:
-            print 'Couldn\'t check node for NaN/Inf:'
-            theano.printing.debugprint(node)
+            logging.debug('Couldn\'t check node for NaN/Inf: {0}'.format(node))
+            #theano.printing.debugprint(node)
 
 
 def shuffle_together(*lists):
@@ -403,8 +404,6 @@ def shuffle_together(*lists):
     zipped_lists = zip(*lists)
     random.shuffle(zipped_lists)
     unzipped_lists = map(list, zip(*zipped_lists))
-
-    print unzipped_lists
 
     return unzipped_lists
 
@@ -426,6 +425,28 @@ def iter_sample_fast(iterable, samplesize):
     if len(results) < samplesize:
         raise ValueError("Sample larger than population.")
     return results
+
+
+def flatten_composite_item(item):
+    """Unrolls a (recursive) tuple of ndarrays. Is a generator,
+    so you have to use ``list(flatten_composite_item(item))``.
+
+    >>> x = numpy.array([1, 2, 3, 4])
+    >>> y = numpy.array([-1, -3, -5, -7])
+    >>> z = numpy.array([[10, 20], [11, 21], [12, 22], [13, 23]])
+    >>> item = (x, (y, z))
+    >>> list(flatten_composite_item(item))
+    [array([1, 2, 3, 4]), array([-1, -3, -5, -7]), array([[10, 20],
+           [11, 21],
+           [12, 22],
+           [13, 23]])]
+    """
+    for i in item:
+        if isinstance(i, tuple):
+            for j in flatten_composite_item(i):
+                yield j
+        else:
+            yield i
 
 
 def uniform_steps(iterable, k):
@@ -740,5 +761,260 @@ def check_malformed_unicode(string):
             raise
 
 
+def mock_data_row(dim=1000, prob_nnz=0.5, lam=1.0):
+    """Creates a random gensim sparse vector. Each coordinate is nonzero with
+    probability ``prob_nnz``, each non-zero coordinate value is drawn from
+    a Poisson distribution with parameter lambda equal to ``lam``."""
+    nnz = numpy.random.uniform(size=(dim,))
+    data = [(i, float(numpy.random.poisson(lam=lam) + 1.0))
+            for i in xrange(dim) if nnz[i] < prob_nnz]
+    return data
 
 
+def mock_data(n_items=1000, dim=1000, prob_nnz=0.5, lam=1.0):
+    """Creates a mock gensim-style corpus (a list of lists of tuples (int,
+    float) to use as a mock corpus.
+    """
+    data = [mock_data_row(dim=dim, prob_nnz=prob_nnz, lam=lam)
+            for _ in xrange(n_items)]
+    return data
+
+
+# Conversions: ndarray2gensim, gensim2ndarray
+def ndarray2gensim(array):
+    """Convert a numpy ndarray into a gensim-style generator of lists of
+    tuples."""
+    return (full2sparse(row) for row in array)
+
+
+def gensim2ndarray(corpus, dim, num_docs=None, dtype=numpy.float32):
+    """Convert a gensim-style list of list of tuples into a numpy ndarray
+    with documents as rows. Can now also deal with a single sparse vector.
+
+    Mirror function to ``ndarray2gensim``."""
+    # Checking for single-vector.
+    # print 'Corpus: {0}'.format(corpus)
+    if isinstance(corpus[0], tuple):
+        return sparse2full(corpus, dim)
+    return corpus2dense(corpus, dim, num_docs=num_docs, dtype=dtype).T
+
+
+# Checks list of gensim sparse vectors vs. list of lists of gensim sparse
+# vectors
+def is_gensim_vector(data, strict=False):
+    """Checks whether the given data is a gensim sparse vector."""
+    if not isinstance(data, list):
+        return False
+    if not len(data) > 0:
+        return True
+    if strict:
+        for d in data:
+            if not (isinstance(d, tuple) and len(d) == 2):
+                return False
+            if not isinstance(d[0], int):
+                return False
+            if not (isinstance(d[1], int) or isinstance(d[1], float)):
+                return False
+    else:
+        if not isinstance(data[0], tuple):
+            return False
+    return True
+
+
+def is_gensim_batch(data, strict=False):
+    """Checks whether the given data is a gensim batch (list of gensim sparse
+    vectors).
+
+    >>> data = [[(0, 1), (1, 1), (2, 4)], [(1, 1), (3, 2), (5, 1)]]
+    >>> is_gensim_batch(data)
+    True
+    >>> other_data = [[[(0, 1), (1, 1), (2, 4)]], [[(1, 1), (3, 2), (5, 1)]]]
+    >>> is_gensim_batch(other_data)
+    False
+
+    Note that unless ``strict`` is set, the function does not check that each
+    member of each (potential) sparse vector is a gensim ``(key, value)`` pair,
+    it will only check the first member of each row. (Using ``strict`` should
+    not be necessary when checking the output of a safire pipeline.)
+
+    >>> data = [[(0, 1), 'a']]
+    >>> is_gensim_batch(data)
+    True
+    >>> is_gensim_batch(data, strict=True)
+    False
+
+    :param data: Some data to verify.
+
+    :param strict: When set, will check each individual (key, value) pair in
+        the given batch. This can be very slow and is usually not necessary if
+        the input data is an output of a safire pipeline.
+
+    :return: ``True`` or ``False``.
+    """
+    if not isinstance(data, list):
+        return False
+    for row in data:
+        if not isinstance(row, list):
+            return False
+        if len(row) > 0:
+            if strict is True:
+                for item in row:
+                    if not isinstance(item, tuple) or not len(item) == 2:
+                        return False
+                    if not isinstance(item[0], int):
+                        return False
+                    if not isinstance(item[1], int) or isinstance(item[1], float):
+                        return False
+            else:
+                if not isinstance(row[0], tuple) or not len(row[0]) == 2:
+                    return False
+    return True
+
+
+def is_list_of_gensim_batches(data, strict=False):
+    """Checks that the given data is a list of gensim batches (where a gensim
+    batch is defined as an object that passes the ``is_gensim_batch()`` check).
+
+    Useful in safire for detecting an "over-batched" output: in a situation
+    where we are iterating one by one over a pipeline that produces a batch even
+    for requests of size 1 and storing these length-1 batches in a list.
+
+    >>> data = [[(0, 1), (1, 1), (2, 4)], [(1, 1), (3, 2), (5, 1)]]
+    >>> is_list_of_gensim_batches(data)
+    False
+    >>> other_data = [[[(0, 1), (1, 1), (2, 4)]], [[(1, 1), (3, 2), (5, 1)]]]
+    >>> is_list_of_gensim_batches(other_data)
+    True
+
+    :param data: Some data to verify.
+
+    :param strict: If set, will check elements of ``data`` for being strict
+        gensim batches.
+
+    :return: True or False
+    """
+    if not isinstance(data, list):
+        return False
+    for item in data:
+        if not is_gensim_batch(item, strict=strict):
+            return False
+    return True
+
+
+def compact_list_of_gensim_batches(data, strict_verify=False):
+    """Combines a list of gensim batches into a single gensim batch.
+
+    >>> data = [[[(0, 1), (1, 1), (2, 4)]], [[(1, 1), (3, 2), (5, 1)]]]
+    >>> is_list_of_gensim_batches(data)
+    True
+    >>> compact_list_of_gensim_batches(data)
+    [[(0, 1), (1, 1), (2, 4)], [(1, 1), (3, 2), (5, 1)]]
+
+    :param data: A list of gensim batches.
+
+    :param strict_verify: Set to True if you want a strict verification that the
+        input is a gensim batch.
+
+    :return: A gensim batch
+    """
+    if not is_list_of_gensim_batches(data, strict=strict_verify):
+        raise ValueError('Input is not a list of gensim batches. Input:\n{0}'
+                         ''.format(data))
+    batch = list(itertools.chain(*data))
+    return batch
+
+
+def gensim_batch_nth_member(data, n):
+    """Returns the n-th element in a gensim batch.
+
+    >>> data = [[(0, 1), (1, 1), (2, 4)], [(1, 1), (3, 2), (5, 1)]]
+    >>> gensim_batch_nth_member(data, 3)
+    (1, 1)
+
+    If ``n`` is larger than available data, will raise an IndexError, just as
+    a list.
+    """
+    remaining = n
+    total = 0
+    for row in data:
+        rlen = len(row)
+        total += rlen
+        if rlen > remaining:
+            return row[remaining]
+        else:
+            remaining -= rlen
+    if n > 0:
+        raise IndexError('Too high index specified: {0}, total: {1}'
+                         ''.format(n, total))
+    raise ValueError('Wrong input (negative?): {0}'.format(n))
+
+
+# Parsing some elementary data files
+def parse_textdoc2imdoc_map(textdoc2imdoc):
+    """Given a file with tab-separated docname/imagename pairs, returns
+    a dict with docname keys and list of imagenames values.
+    """
+    if textdoc2imdoc is None:
+        return None
+
+    t2i_map = {}
+
+    with open(textdoc2imdoc) as t2i_handle:
+
+        for i, line in enumerate(t2i_handle):
+            text, img = line.strip().split('\t')
+            if text not in t2i_map:
+                t2i_map[text] = [img]
+            else:
+                t2i_map[text].append(img)
+
+    return t2i_map
+
+
+def freqdict(iterable):
+    """Computes a frequency dictionary from the items in the iterable.
+    """
+    freqs = collections.defaultdict(int)
+    for item in iterable:
+        freqs[item] += 1
+    return freqs
+
+
+def print_freqdict(freqdict, top_n=10):
+    print u'\n'.join([
+        u'{0}: {1}'.format(w, f) for w, f in sorted(
+            freqdict.items(), key=operator.itemgetter(1), reverse=True
+        )[:top_n]
+    ])
+
+
+class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):
+    """Adds __getitem__ functionality to a TransformedCorpus interface.
+    Expects an indexable ``corpus`` object."""
+    def __init__(self, obj, corpus, chunksize=None):
+        try:
+            _ = corpus[0]
+        except TypeError:
+            raise TypeError('Corpus {0} of type {1} is not indexable (does not'
+                            'respond to __getitem__ call, raises TypeError)'
+                            .format(corpus, type(corpus)))
+
+        super(IndexedTransformedCorpus, self).__init__(obj, corpus, chunksize)
+
+    def __getitem__(self, item):
+
+        # logging.debug('  ITrCorpAccessing item: {0}'.format(item))
+        if isinstance(item, list):
+            # logging.debug('  ...processing as list.')
+            return [self[i] for i in item]
+        if isinstance(item, slice):
+            # logging.debug('  ...processing as slice.')
+            return [self[i] for i in xrange(*item.indices(len(self)))]
+
+        retrieved = self.corpus[item]
+        # logging.debug('  ITrCorp Retrieved: {0}'.format(retrieved))
+
+        output = self.obj[retrieved]
+        # logging.debug('  ITrCorp Output: {0}'.format(output))
+
+        return output

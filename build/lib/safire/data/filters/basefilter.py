@@ -7,6 +7,7 @@ from gensim.utils import SaveLoad
 
 logger = logging.getLogger(__name__)
 
+
 class BaseFilter(SaveLoad):
 
     def __call__(self, fields):
@@ -20,7 +21,6 @@ class BaseFilter(SaveLoad):
             directly.
         """
         return self.passes(fields)
-
 
     def passes(self, fields):
         """Based on the fields, returns True (passes filter)

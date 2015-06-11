@@ -66,7 +66,6 @@ class ImageBrowser(object):
 
         return ids2files, files2ids
 
-
     def __getitem__(self, id_or_filename):
         """Gets the image file name, incl. path to root, if an ID is given.
         If a filename is given (relative to the root), returns the corresponding
@@ -224,7 +223,7 @@ class ImageBrowser(object):
             caption_height = 40
             caption_font = ImageFont.truetype('DejaVuSans.ttf', 25)
             caption_color = (190, 190, 190)
-            caption_offset = (10,5)
+            caption_offset = (10, 5)
 
             if len(similarities) != len(images):
                 raise ValueError('Inconsistent number of image IDs and similarities (%d vs. %d)!' % (
@@ -235,7 +234,7 @@ class ImageBrowser(object):
                 new_img = Image.new('RGB',
                                     (img.size[0], img.size[1]+caption_height),
                                     (30, 30, 30))
-                new_img.paste(img,(0,0))
+                new_img.paste(img, (0,0))
                 sim_text = str(similarity)[:9]
                 sim_text_position = (caption_offset[0],
                                      img.size[1] + caption_offset[1])
@@ -252,6 +251,5 @@ class ImageBrowser(object):
                 captioned_images.append(new_img)
 
             images = captioned_images
-
 
         return images

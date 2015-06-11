@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!c:\users\lenovo\canopy\user\scripts\python.exe
 # -*- coding: utf-8 -*-
 import cPickle
 import os
@@ -8,36 +8,34 @@ import time
 
 from gensim import corpora
 from gensim.models import TfidfModel
+from gensim.utils import SaveLoad
 import numpy
+from safire.data import VTextCorpus
+from safire.data.document_filter import DocumentFilterTransform
+from safire.data.filters.frequency_filters import zero_length_filter
 
 from safire.data.imagenetcorpus import ImagenetCorpus
+from safire.data.serializer import Serializer, SwapoutCorpus
+from safire.data.sharded_corpus import ShardedCorpus
+from safire.datasets.dataset import Dataset, CompositeDataset
 from safire.datasets.sharded_dataset import ShardedDataset
 from safire.datasets.sharded_multimodal_dataset import \
     UnsupervisedShardedVTextCorpusDataset
 from safire.data.word2vec_transformer import Word2VecTransformer
+from safire.datasets.transformations import FlattenComposite
 import safire.utils
-from safire.data.loaders import MultimodalShardedDatasetLoader
+from safire.utils import profile_run
+from safire.data.loaders import MultimodalShardedDatasetLoader, IndexLoader
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.data.frequency_based_transform import FrequencyBasedTransformer
 from safire.utils.transcorp import get_id2word_obj, \
-    log_corpus_stack
+    log_corpus_stack, dimension, compute_docname_flatten_mapping, \
+    convert_to_gensim
 from safire.utils.transformers import GlobalUnitScalingTransform, \
     LeCunnVarianceScalingTransform, GeneralFunctionTransform, \
-    NormalizationTransform, CappedNormalizationTransform
+    NormalizationTransform, CappedNormalizationTransform, SimilarityTransformer
 
 
-description="""
-Given a vtlist, serializes the dataset using gensim.corpora.MmCorpus.serialize
-and saves the VTextCorpus used for reading the vtlist.
-
-Usage:
-
-   dataset2corpus -l dataset.vtlist -r path/to/dataset/root [-s] [-g]
-                  -o dataset.mmcorp -c dataset.vtcorp
-
-The difference between the -o and -c option is that -o serializes the
-data themselves, while -c exports the corpus object around the data.
-"""
 #logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -52,10 +50,10 @@ def _create_transformer(*args, **kwargs):
 
 def build_argument_parser():
 
-    parser = argparse.ArgumentParser(description=description, add_help=True)
+    parser = argparse.ArgumentParser(description=__doc__, add_help=True)
 
     parser.add_argument('-r', '--root', action='store', default=None,
-                        required=True, help='The path to'+
+                        required=True, help='The path to' +
                          ' the directory which is the root of a dataset.'+
                          ' (Will be passed to a Loader as a root.)')
     parser.add_argument('-n', '--name', help='The dataset name passed to the'+
@@ -65,19 +63,37 @@ def build_argument_parser():
                         help='Consider' +
                          'each sentence of a vtext file as a separate ' +
                          'document (default behavior is document per file)')
+    parser.add_argument('-t', '--tokens', action='store_true',
+                        help='Consider each token a separate document. All '
+                             'token filters apply.')
+
     parser.add_argument('-i', '--input_label', action='store', default=None,
                         help='For image processing, which is time-consuming: '
                              'use this label to process the given *input*'
                              ' corpus. (Useful for layering tanh, UCov., etc.)')
     parser.add_argument('-l', '--label', action='store',
-                         help='The corpus label. This is to help distinguish '+
-                         'corpora made with different filtering & transformat'+
-                         'ion options. Also controls saving names.')
+                        help='The corpus label. This is to help distinguish '
+                             'corpora made with different filtering & transform'
+                             'ation options. Also controls saving names.')
 
     parser.add_argument('--images', action='store_true',
                         help='If set, will create an image corpus instead of'
                              ' a text corpus. Note that the script currently '
                              'only supports creating the default image corpus.')
+
+    parser.add_argument('--flatten', action='store_true',
+                        help='Will use this t2i file to flatten the provided '
+                             'text and image datasets. '
+                             'If set, will expect the --f_text and -f_images '
+                             'labels to be provided. The provided pipelines'
+                             'will then be flattened and serialized with the'
+                             ' -l infix. (No futher transformations will be'
+                             ' applied.)')
+    parser.add_argument('--f_text', action='store', default=None,
+                        help='The label of the text pipeline to flatten.')
+    parser.add_argument('--f_images', action='store', default=None,
+                        help='The label of the image pipeline to flatten.')
+
     parser.add_argument('--scale', action='store', type=float, default=None,
                         help='Will scale the image dataset to the unit interval'
                              'with the given number as the cutoff for 1.0 after'
@@ -98,10 +114,6 @@ def build_argument_parser():
                         help='If set, will normalize each data item to sum to '
                              'the maximum possible number so that no value in '
                              'the corpus will be higher than the given number.')
-    parser.add_argument('--dataset_only', action='store_true',
-                        help='If set, will assume the tcorp/icorp and mmcorp for the '
-                             'given label have already been initialized and will'
-                             ' only create the dataset. Will overwrite.')
     parser.add_argument('--shardsize', type=int, default=4096,
                         help='The output sharded dataset will have this shard '
                              'size.')
@@ -159,11 +171,15 @@ def build_argument_parser():
                              'DatasetTransformer on the dataset before the'
                              'dataset object is saved. [NOT IMPLEMENTED]')
 
-    parser.add_argument('--no_shdat', action='store_true',
-                        help='If set, will NOT automatically create the '
-                             'sharded dataset with the given label.')
-    parser.add_argument('--no_overwrite_shdat', action='store_true',
-                        help='If set, will overwrite an existing dataset.')
+    parser.add_argument('--w2v_filter_empty', action='store_true',
+                        help='If set, will filter out all tokens that are not '
+                             'in the vocabulary of the word2vec transformer. '
+                             'Only applicable if --tokens is also set.')
+
+    parser.add_argument('--no_overwrite', action='store_true',
+                        help='If set, will not overwrite an existing serialized'
+                             ' dataset, printing a warning and quitting before '
+                             '.')
     parser.add_argument('--no_save_corpus', action='store_true',
                         help='If set, will not save the corpus object. ONLY'
                              'for very limited use cases -- normally, in order'
@@ -173,24 +189,37 @@ def build_argument_parser():
                              'without saving the processed corpora in the '
                              'process.)')
 
-    parser.add_argument('--serializer', action='store', help='Which '+
-                        'gensim serializer to use: Mm, SvmLight, Blei, Low')
+    parser.add_argument('--index', action='store_true',
+                        help='If set, will build a similarity index on top of '
+                             'the pipeline and save it. The similarity index '
+                             'can then be retrieved when running the text to '
+                             'image transformation.')
 
     parser.add_argument('-c', '--clear', action='store_true', help='If given,'+
                         'instead of creating a corpus, will attempt to clear '+
                         'all corpora in the dataset with the infix given by '+
-                        'the --label argument.')
+                        'the --label argument. [NOT IMPLEMENTED]')
+
+    parser.add_argument('--profile_main', action='store_true',
+                        help='If set, will profile the main() function.')
     parser.add_argument('--profile_serialization', action='store_true',
                         help='If given, will profile the serialization.')
     parser.add_argument('--profile_transformation', action='store_true',
                         help='If given, will profile frequency-based '
                              'transformation initialization time.')
 
-
     parser.add_argument('-v', '--verbose', action='store_true', help='Turn on'+
                         ' INFO logging messages.')
     parser.add_argument('--debug', action='store_true', help='Turn on debug '+
                         'prints.')
+
+    parser.add_argument('--serialization_format', action='store',
+                        default='dense',
+                        help='One of the following: \'dense\', \'sparse\' '
+                             'and \'gensim\'. Defines the format in which the '
+                             'data will be serialized: numpy ndarray, scipy '
+                             'CSR matrix or gensim sparse vectors. Default '
+                             'value is \'dense\'.')
 
     return parser
 
@@ -198,129 +227,82 @@ def build_argument_parser():
 def main(args):
 
     _starttime = time.clock()
+    if args.root == 'test':
+        args.root = safire.get_test_data_root()
+        args.name = 'test-data'
     logging.info('Initializing dataset loader with root %s, name %s' % (args.root, args.name))
     loader = MultimodalShardedDatasetLoader(args.root, args.name)
 
     if args.clear:
+        raise NotImplementedError('Cleaning not implemented properly through'
+                                  ' a loader/layout object.')
 
-        fnames = loader.layout.required_text_corpus_names(args.label)
-        logging.info('Clearing corpora with label %s' % args.label)
+    if args.flatten:
+        if args.f_text is None or args.f_images is None:
+            raise argparse.ArgumentError('Must provide --f_text and --f_images'
+                                         ' when attempting to flatten.')
 
-        for name in fnames:
-            full_name = os.path.join(loader.root, loader.layout.corpus_dir,
-                                     name)
+        logging.info('Loading text pipeline and casting to dataset...')
+        t_pipeline_name = loader.pipeline_name(args.f_text)
+        t_pipeline = SaveLoad.load(t_pipeline_name)
+        t_data = Dataset(t_pipeline)
 
-            logging.debug('Attempting to clear file %s' % full_name)
-            if os.path.isfile(full_name):
-                os.remove(full_name)
+        logging.info('Loading image pipeline and casting to dataset...')
+        i_pipeline_name = loader.pipeline_name(args.f_images)
+        i_pipeline = SaveLoad.load(i_pipeline_name)
+        i_data = Dataset(i_pipeline)
 
-        # TODO: Clear dataset
-        output_prefix = loader.output_prefix(args.label)
+        logging.info('Creating composite dataset...')
+        mm_data = CompositeDataset((t_data, i_data), names=('text', 'img'),
+                                   aligned=False)
 
-        return
+        logging.info('Flattening dataset...')
+        t2i_file = os.path.join(loader.root,
+                                loader.layout.textdoc2imdoc)
+        flatten_indexes = compute_docname_flatten_mapping(mm_data, t2i_file)
+        flatten = FlattenComposite(mm_data, indexes=flatten_indexes)
+        flat_mm_data = flatten[mm_data]
 
-    if args.images:
+        if not args.label:
+            logging.info('Generating flattened label automatically...')
+            args.label = '__'.join([args.f_text, args.f_images])
+            logging.info('    Generated label: {0}'.format(args.label))
 
-        if args.dataset_only:
-            logging.info('Building dataset only (assumes icorp and mmcorp)...')
-            idata = loader.load_img(args.label, {'overwrite': True,
-                                                 'shardsize': args.shardsize})
-            idata.data.save()
-            return
+        logging.info('Serializing flattened data...')
+        serialization_name = loader.pipeline_serialization_target(args.label)
+        serializer = Serializer(flat_mm_data, ShardedCorpus, serialization_name)
+        pipeline = serializer[flat_mm_data]
 
-        if loader.has_image_corpora(args.label):
-            logging.warn('Overwriting image corpora with label %s' % args.label)
-
-        if args.input_label:
-            if args.input_label == '.':
-                args.input_label = None
-            icorp = loader.load_image_corpus(args.input_label)
-        else:
-            # Build the default corpus.
-            image_file = os.path.join(args.root, loader.layout.image_vectors)
-            icorp = ImagenetCorpus(image_file, delimiter=';',
-                                   dim=4096, label='')
-        corpus_to_serialize = icorp
-
-        if args.uniform_covariance:
-            logging.info('Transforming to uniform covariance.')
-            covariance_transform = LeCunnVarianceScalingTransform(
-                                                            corpus_to_serialize)
-            corpus_to_serialize = covariance_transform[corpus_to_serialize]
-
-        if args.scale is not None:
-            logging.info('Scaling with cutoff at %f' % args.scale)
-            scaling_transform = GlobalUnitScalingTransform(icorp,
-                                                            cutoff=args.scale)
-            corpus_to_serialize = scaling_transform[corpus_to_serialize]
-
-        if args.tanh:
-            logging.info('Squishing through the tanh function with coef. %f' % args.tanh)
-            tanh_transform = GeneralFunctionTransform(numpy.tanh,
-                                                      multiplicative_coef=args.tanh)
-            corpus_to_serialize = tanh_transform[corpus_to_serialize]
-
-        if args.normalize is not None:
-            logging.info('Normalizing each data point to %f' % args.normalize)
-            norm_transform = NormalizationTransform(args.normalize)
-            corpus_to_serialize = norm_transform[corpus_to_serialize]
-
-        # i1 = icorp.__iter__().next()
-        # s1 = corpus_to_serialize.__iter__().next()
-        # print i1[:20]
-        # print s1[:20]
-
-        loader.serialize_image_corpus(corpus_to_serialize, args.label)
-        loader.save_image_corpus(corpus_to_serialize, args.label)
-
-        output_prefix = loader.img_output_prefix(args.label)
-        dataset = ShardedDataset(output_prefix, corpus_to_serialize,
-                                 shardsize=args.shardsize,
-                                 overwrite=(not args.no_overwrite_shdat))
-        dataset.save()
+        logging.info('Saving pipeline...')
+        pipeline_name = loader.pipeline_name(args.label)
+        pipeline.save(fname=pipeline_name)
 
         return
-
-    ###########################################################################
-
-    # Text processing #
-
-    if args.dataset_only:
-
-        logging.info('Only creating dataset, assuming serialized corpus available for %s' % args.label)
-        output_prefix = loader.text_output_prefix(args.label)
-
-        vt_corpus_filename = loader.layout.required_text_corpus_names(args.label)[1]
-        vt_full_filename = os.path.join(args.root, loader.layout.corpus_dir,
-                                        vt_corpus_filename)
-
-
-        mm_corpus_filename = loader.layout.required_text_corpus_names(args.label)[0]
-        mm_full_filename = os.path.join(args.root, loader.layout.corpus_dir,
-                                        mm_corpus_filename)
-
-        dataset = UnsupervisedShardedVTextCorpusDataset(
-            output_prefix,
-            vt_corpus_filename=vt_full_filename,
-            mm_corpus_filename=mm_full_filename,
-            shardsize=args.shardsize,
-            overwrite=args.overwrite_shdat)
-        dataset.data.save()  # Save the ShardedDataset, not the wrapper
 
     if args.input_label is not None:
         logging.info('Loading corpus with label %s' % args.input_label)
-        corpus_to_serialize = loader.load_text_corpus(args.input_label)
+        pipeline_fname = loader.pipeline_name(args.input_label)
+        pipeline = SaveLoad.load(pipeline_fname)
 
-        logging.debug('Loaded corpus report:\n')
-        print log_corpus_stack(corpus_to_serialize)
+        logging.info('Loaded corpus report:\n')
+        logging.info(log_corpus_stack(pipeline))
+
+    elif args.images:
+        logging.info('Reading raw image data.')
+        image_file = os.path.join(args.root, loader.layout.image_vectors)
+        icorp = ImagenetCorpus(image_file, delimiter=';',
+                               dim=4096, label='')
+        pipeline = icorp
 
     else:
+        logging.info('Reading raw text data.')
         vtargs = {}
         if args.label:
             logging.info('VTextCorpus will have label %s' % args.label)
             vtargs['label'] = args.label
         if args.pos:
-            logging.info('Constructing POS filter with values %s' % str(list(args.pos)))
+            logging.info('Constructing POS filter with values {0}'
+                         ''.format(list(args.pos)))
             vtargs['token_filter'] = PositionalTagTokenFilter(list(args.pos), 0)
         if args.pfilter:
             logging.info('Constructing positional filter: %d.' % args.pfilter)
@@ -332,110 +314,172 @@ def main(args):
                 vtargs['pfilter_full_freqs'] = args.pfilter_fullfreq
         if args.filter_capital:
             vtargs['filter_capital'] = True
+        vtargs['tokens'] = args.tokens
+        vtargs['sentences'] = args.sentences
 
-        logging.info('Deriving corpus from loader with vtargs %s' % str(vtargs))
+        if args.tokens or args.sentences:
+            # This already happens automatically inside VTextCorpus, but it
+            # raises a warning we can avoid if we know about this in advance.
+            vtargs['precompute_vtlist'] = False
+
+        logging.info(u'Deriving corpus from loader with vtargs:\n{0}'.format(
+            u'\n'.join(u'  {0}: {1}'.format(k, v)
+                       for k, v in sorted(vtargs.items())))
+        )
+
         vtcorp = loader.get_text_corpus(vtargs)
+        # VTextCorpus initialization is still the same, refactor or not.
         logging.info('Corpus: %s' % str(vtcorp))
         logging.info('  vtlist: %s' % str(vtcorp.input))
 
-        corpus_to_serialize = vtcorp  # Holds the data
+        pipeline = vtcorp  # Holds the data
 
     if args.tfidf:
 
-        tfidf = TfidfModel(corpus_to_serialize)
-        corpus_to_serialize = tfidf[corpus_to_serialize]
+        tfidf = TfidfModel(pipeline)
+        pipeline = tfidf[pipeline]
 
     if args.top_k is not None:
+        if args.images:
+            logging.warn('Running a frequency-based transformer on image data'
+                         ' not a lot of sense makes, hmm?')
 
         logging.info('Running transformer with k=%i, discard_top=%i' % (
             args.top_k, args.discard_top))
 
         if args.profile_transformation:
             report, transformer = safire.utils.profile_run(_create_transformer,
-                                     corpus_to_serialize,
-                                     args.top_k, args.discard_top)
+                                                           pipeline,
+                                                           args.top_k,
+                                                           args.discard_top)
             # Profiling output
-            print report
+            print report.getvalue()
         else:
-            transformer = FrequencyBasedTransformer(corpus_to_serialize,
-                                                args.top_k, args.discard_top)
+            transformer = FrequencyBasedTransformer(pipeline,
+                                                    args.top_k,
+                                                    args.discard_top)
 
-        corpus_to_serialize = transformer[corpus_to_serialize]
-
-        # Cannot save the TransformedCorpus that comes out of TfidfModel
-        # - transform original VTextCorpus instead.
-        #corpus_to_save = transformer._apply(corpus_to_save)
+        pipeline = transformer[pipeline]
 
     if args.post_tfidf:
+        post_tfidf = TfidfModel(pipeline)
+        pipeline = post_tfidf[pipeline]
 
-        post_tfidf = TfidfModel(corpus_to_serialize)
-        corpus_to_serialize = post_tfidf[corpus_to_serialize]
+    if args.word2vec is not None:
+        logging.info('Applying word2vec transformation with embeddings '
+                     '{0}'.format(args.word2vec))
+        w2v_dictionary = get_id2word_obj(pipeline)
+        # Extracting dictionary from FrequencyBasedTransform supported
+        # through utils.transcorp.KeymapDict
+        pipeline = convert_to_gensim(pipeline)
+        word2vec = Word2VecTransformer(args.word2vec,
+                                       w2v_dictionary,
+                                       op=args.word2vec_op)
+        pipeline = word2vec[pipeline]
+
+    if args.w2v_filter_empty:
+        print 'Applying word2vec empty doc filtering.'
+        document_filter = DocumentFilterTransform(zero_length_filter)
+        pipeline = document_filter[pipeline]
 
     if args.uniform_covariance:
-
-        ucov = LeCunnVarianceScalingTransform(corpus_to_serialize)
-        corpus_to_serialize = ucov[corpus_to_serialize]
+        ucov = LeCunnVarianceScalingTransform(pipeline)
+        pipeline = ucov[pipeline]
 
     if args.tanh:
-
+        pipeline = convert_to_gensim(pipeline)
         tanh_transform = GeneralFunctionTransform(numpy.tanh,
                                                   multiplicative_coef=args.tanh)
-        corpus_to_serialize = tanh_transform[corpus_to_serialize]
+        pipeline = tanh_transform[pipeline]
 
     if args.capped_normalize is not None:
         logging.info('Normalizing each data point to '
                      'max. value %f' % args.capped_normalize)
-        cnorm_transform = CappedNormalizationTransform(corpus_to_serialize,
+        cnorm_transform = CappedNormalizationTransform(pipeline,
                                                         args.capped_normalize)
-        corpus_to_serialize = cnorm_transform[corpus_to_serialize]
+        pipeline = cnorm_transform[pipeline]
 
     if args.normalize is not None:
         logging.info('Normalizing each data point to %f' % args.normalize)
         norm_transform = NormalizationTransform(args.normalize)
-        corpus_to_serialize = norm_transform[corpus_to_serialize]
-
-    if args.word2vec is not None:
-        logging.info('Applying word2vec transformation with embeddings '
-                     '%s' % args.word2vec)
-        w2v_dictionary = get_id2word_obj(corpus_to_serialize)
-        # Extracting dictionary from FrequencyBasedTransform supported
-        # through utils.transcorp.KeymapDict
-        word2vec = Word2VecTransformer(args.word2vec,
-                                       w2v_dictionary,
-                                       op=args.word2vec_op)
-        corpus_to_serialize = word2vec[corpus_to_serialize]
+        pipeline = norm_transform[pipeline]
 
     logging.info('Serializing...')
-    cnames = loader.layout.required_text_corpus_names(args.label)
+    # Rewrite as applying a Serializer block.
 
-    data_name = os.path.join(loader.root, loader.layout.corpus_dir, cnames[0])
-    obj_name = os.path.join(loader.root, loader.layout.corpus_dir, cnames[2])
+    if isinstance(pipeline, VTextCorpus):
+        logging.info('Checking that VTextCorpus dimension is available.')
+        #if not pipeline.precompute_vtlist:
+        #    logging.info('    ...to get dimension: precomputing vtlist.')
+        #    pipeline._precompute_vtlist(pipeline.input)
+        if pipeline.n_processed < len(pipeline.vtlist):
+            logging.info('Have to dry_run() the pipeline\'s VTextCorpus,'
+                         'because we cannot derive its dimension.')
+            if args.serialization_format == 'gensim':
+                logging.info('...deferring dimension check to serialization,'
+                             ' as the requested serialization format does not'
+                             ' need dimension defined beforehand.')
+            else:
+                pipeline.dry_run()
 
-    logging.info('  Data name: %s' % cnames[0])
-    logging.info('  Obj name:  %s' % cnames[2])
+    data_name = loader.pipeline_serialization_target(args.label)
+    logging.info('  Data name: {0}'.format(data_name))
 
-    serializer = corpora.MmCorpus
+    serializer_class = ShardedCorpus
 
-    if args.serializer:
-        if args.serializer == 'SvmLight':
-            serializer = corpora.SvmLightCorpus
-        elif args.serializer == 'Blei':
-            serializer = corpora.BleiCorpus
-        elif args.serializer == 'Low':
-            serializer = corpora.LowCorpus
-        elif serializer == 'Mm':
-            serializer = corpora.MmCorpus
+    # Here, the 'serializer_class' will not be called directly. Instead,
+    # a Serializer block will be built & applied. (Profiling serialization
+    # currently not supported.)
+    serialization_start_time = time.clock()
+    logging.info('Starting serialization: {0}'.format(serialization_start_time))
+    sparse_serialization = False
+    gensim_serialization = False
+    if args.serialization_format == 'sparse':
+        sparse_serialization = True
+    elif args.serialization_format == 'gensim':
+        gensim_serialization = True
+    elif args.serialization_format != 'dense':
+        logging.warn('Invalid serialization format specified ({0}), serializing'
+                     ' as dense.'.format(args.serialization_format))
+    serializer_block = Serializer(pipeline, serializer_class,
+                                  data_name,
+                                  dim=dimension(pipeline),
+                                  gensim_serialization=gensim_serialization,
+                                  sparse_serialization=sparse_serialization,
+                                  overwrite=(not args.no_overwrite),
+                                  shardsize=args.shardsize)
+    serialization_end_time = time.clock()
+    logging.info('Serialization finished: {0}'.format(serialization_end_time))
 
-    if args.profile_serialization:
-        logging.info('Profiling serialization.')
-        profiler_results, _ = safire.utils.profile_run(serializer.serialize,
-                                                       data_name,
-                                                       corpus_to_serialize)
+    logging.debug('After serialization: n_processed = {0}'
+                  ''.format(safire.utils.transcorp.bottom_corpus(pipeline).n_processed))
 
-        logging.info('Profiling results:')
-        print profiler_results.getvalue()
-    else:
-        serializer.serialize(data_name, corpus_to_serialize)
+    pipeline = serializer_block[pipeline]
+
+    assert isinstance(pipeline, SwapoutCorpus), 'Serialization not applied' \
+                                                ' correctly.'
+
+    if args.index:
+        iloader = IndexLoader(args.root, args.name)
+        index_name = iloader.output_prefix(args.label)
+        logging.info('Building index with name {0}'.format(index_name))
+        similarity_transformer = SimilarityTransformer(pipeline, index_name)
+        # Should the pipeline get transformed? Or do we only want
+        # the transformer?
+        # What is the use case here? We need the *transformer*, not the
+        # transformed data (that would be just the self-similarity of our
+        # dataset), so we need to get some new input. We can retrieve
+        # the pipeline.obj and lock the transformer onto another pipeline.
+        pipeline = similarity_transformer[pipeline]
+
+    logging.info('Corpus stats: {0} documents, {1} features.'.format(
+        len(pipeline),
+        safire.utils.transcorp.dimension(pipeline)))
+
+    if not args.no_save_corpus:
+        obj_name = loader.pipeline_name(args.label)
+        logging.info('Saving pipeline to {0}'.format(obj_name))
+        pipeline.save(obj_name)
 
     # HACK: logging word2vec OOV
     if args.word2vec:
@@ -449,25 +493,6 @@ def main(args):
         embeddings_dict = word2vec_to_export.embeddings
         with open(args.word2vec_export, 'wb') as w2v_export_handle:
             cPickle.dump(embeddings_dict, w2v_export_handle, protocol=-1)
-
-    # We are saving the VTextCorpus rather than the transformed corpus,
-    # in order to be able to load it.
-
-    logging.info('Corpus stats: %d documents, %d features.' % (
-        len(corpus_to_serialize),
-        safire.utils.transcorp.dimension(corpus_to_serialize)))
-
-    if not args.no_save_corpus:
-        corpus_to_serialize.save(obj_name)
-
-    if not args.no_shdat:
-
-        output_prefix = loader.text_output_prefix(args.label)
-
-        dataset = ShardedDataset(output_prefix, corpus_to_serialize,
-                                 shardsize=args.shardsize,
-                                 overwrite=(not args.no_overwrite_shdat))
-        dataset.save()
 
     _endtime = time.clock()
     _totaltime = _endtime - _starttime
@@ -489,4 +514,8 @@ if __name__ == '__main__':
         logging.basicConfig(format='%(levelname)s : %(message)s',
                             level=logging.INFO)
 
-    main(args)
+    if args.profile_main:
+        report, _ = profile_run(main, args)
+        print report.getvalue()
+    else:
+        main(args)

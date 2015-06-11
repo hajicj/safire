@@ -136,6 +136,7 @@ class DataDirLayout(object):
         self.index_dir = 'indexes'
         self.learner_dir = 'learners'
         self.temp_dir = 'tmp'
+        self.introspection_dir = 'introspection'
 
         # Master files.
         self.vtlist = self.name + '.vtlist'
@@ -150,6 +151,11 @@ class DataDirLayout(object):
 
         self.img_corpname = '.img'
         self.text_corpname = '.vt'
+
+         # Pipeline names should be agnostic to text vs. images (user handles
+         # the naming).
+        self.pipeline_suffix = '.pln'
+        self.pipeline_serialization_suffix = '.pls'
 
         self.mm_corp_suffix = '.mmcorp'
         self.mm_index_suffix = '.mmcorp.index'
@@ -386,6 +392,7 @@ def clean_data_root(root, force=True):
     learner_dir = os.path.join(layout.name, layout.learner_dir)
     index_dir = os.path.join(layout.name, layout.index_dir)
     temp_dir = os.path.join(layout.name, layout.temp_dir)
+    introspection_dir = os.path.join(layout.name, layout.introspection_dir)
 
     clean_dir(corpus_dir, force=force)
     clean_dir(dataset_dir, force=force)
@@ -393,6 +400,7 @@ def clean_data_root(root, force=True):
     clean_dir(learner_dir, force=force)
     clean_dir(index_dir, force=force)
     clean_dir(temp_dir, force=force)
+    #clean_dir(introspection_dir, force=force)
 
 
 def init_data_root(path, overwrite=False):
@@ -435,6 +443,11 @@ def init_data_root(path, overwrite=False):
     if not os.path.exists(temp_dir):
         is_already_root = False
         os.makedirs(temp_dir)
+
+    introspection_dir = os.path.join(layout.name, layout.introspection_dir)
+    if not os.path.exists(introspection_dir):
+        is_already_root = False
+        os.makedirs(introspection_dir)
 
     if is_already_root:
         logging.warn('Directory already is a safire data root.')

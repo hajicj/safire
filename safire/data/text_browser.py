@@ -89,7 +89,6 @@ class TextBrowser(object):
         self.to_delete = [] # Temporary files to clean up later.
         self.prev_docid = None
 
-
     def __getitem__(self, id_or_filename):
         """Gets the text file name, incl. path to root, if an ID is given.
         If a filename is given (relative to the root), returns the corresponding

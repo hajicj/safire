@@ -1,135 +1,37 @@
-import argparse
+import collections
 import logging
-from gensim.interfaces import TransformationABC, TransformedCorpus
+from gensim.interfaces import TransformationABC
+
 from gensim.utils import is_corpus
+import itertools
 import numpy
-from safire.utils.transcorp import dimension, bottom_corpus
-from safire.datasets.dataset import Dataset, DatasetABC
-from safire.datasets.unsupervised_dataset import UnsupervisedDataset
+# from safire.datasets.dataset import CompositeDataset
+# from safire.data.composite_corpus import CompositeCorpus
 
-
-# TODO: refactor to work with new DatasetABC
+from safire.utils import IndexedTransformedCorpus
 from safire.utils import flatten_composite_item
+import safire.utils.transcorp
+import safire.data.composite_corpus
+from safire.datasets.dataset import DatasetABC
 
-# This may be deprecated/rewritten as a wrapper around TransformedCorpus...
-class TransformedDataset(Dataset):
-    """A class that enables stacking dataset transformations in the training
-    stage, similar to how corpus transformations are done during preprocessing.
-
-    Instead of overriding ``__iter__`` like TransformedCorpus, will need to
-    override ``_get_batch``.
-    """
-    def __init__(self, obj, dataset):
-        """Initializes the transformer.
-
-        :type obj: DatasetTransformer
-        :param obj: The transformer through which a batch from the ``dataset``
-            is run.
-
-        :type dataset: Dataset
-        :param dataset: The underlying dataset whose _get_batch calls are
-            overridden.
-
-        """
-        self.data = dataset
-        self.obj = obj
-
-        self.n_out = self.obj.n_out
-        self.dim = dimension(obj)  # This is the preferred interface.
-
-        # This is a naming hack, because the model setup() method expects
-        # model.n_in == data.n_in. Note that this doesn't matter much: this
-        # is a dataset, so it only has ONE dimension. (The transformer, on the
-        # other hand, does have a separate input and output dimension.)
-        self.n_in = self.n_out
-
-    def _get_batch(self, subset, kind, b_index, b_size):
-        """The underlying mechanism for retrieving batches from
-        the dataset. Note that this method is "hidden" -- the learner and other
-        classes that utilize a Dataset call methods ``train_X_batch()`` etc.,
-        but all these methods internally "redirect" to ``_get_batch()``.
-
-        In this class, the batch is retrieved from the underlying Dataset
-        and then transformed through the transformer's ``__getitem__`` method.
-
-        :param subset:
-
-        :param kind:
-
-        :param b_index:
-
-        :param b_size:
-
-        :return:
-        """
-        batch = self.data._get_batch(subset=subset,
-                                     kind=kind,
-                                     b_index=b_index,
-                                     b_size=b_size)
-        transformed_batch = self.obj[batch]
-        return transformed_batch
-
-    def __getitem__(self, item):
-
-        data = self.data[item]
-        #print '  TransformedDataset.__getitem__: operating on data {0} with ' \
-        #      'item {1}'.format(data, item)
-        result = self.obj[data]
-        return result
+# TODO: phase out in favor of Reorder+Zipper pattern
 
 
-class DatasetTransformer(TransformationABC):
-    """DatasetTransformer is a base class analogous to gensim's
-    :class:`TransformationABC`, but it operates efficiently on theano batches
-    instead of gensim sparse vectors.
-
-    Constraints on dataset transformations:
-
-    * Batch size cannot change (one item for one item).
-    * Dimension may change; must provide ``n_out`` attribute.
-       * This means output dimension must be a fixed number known at
-         transformer initialization time (but can be derived from initializaton
-         parameters, or can be a parameter directly).
-    * The ``__getitem__`` method must take batches (matrices, incl. theano
-      shared vars!)
-
-    """
-    def __init__(self):
-        self.n_out = None
-        self.n_in = None
-
-    def __getitem__(self, batch):
-        """Transforms a given batch.
-
-        :type batch: numpy.array, theano.shared
-        :param batch: A batch.
-
-        :return: The transformed batch. If a dataset is given instead of
-            a batch, applies the transformer and returns a TransformedDataset.
-        """
-        if isinstance(batch, Dataset):
-            return self._apply(batch)
-
-        raise NotImplementedError
-
-    def _apply(self, dataset, chunksize=None):
-
-        if not isinstance(dataset, Dataset):
-            raise TypeError('Dataset argument given to _apply method not a'
-                            'dataset (type %s)' % type(dataset))
-
-        transformed_dataset = TransformedDataset(dataset=dataset, obj=self)
-        return transformed_dataset
-
-
-class FlattenComposite(DatasetTransformer):
+class FlattenComposite(TransformationABC):
     """This class flattens a composite dataset into a simple dataset. This
     allows on-the-fly integration of various data sources into unstructured
     batches.
 
+    It is strongly recommended to have serialized all the datasets in the
+    CompositeCorpus you will be flattening. This won't slow you down much,
+    as you might have to access these datasets in some weird and repeated
+    patterns anyway, so having a fast random-access version of your data might
+    save you time in the long run, even though you needed a pass over the
+    entire dataset first.
+
     .. warn::
 
-        All datasets aggregated in the CompositeDataset being flattened must
+        All datasets aggregated in the CompositeCorpus being flattened must
         allow list-based retrieval through ``__getitem__``. This *is* the case
         with Datasets that draw from ShardedCorpus-serialized data, as the
         ``__getitem__`` call propagates through the dataset transformation stack
@@ -137,7 +39,7 @@ class FlattenComposite(DatasetTransformer):
 
     >>> source1 = DatasetABC([[1], [2], [3]], dim=1)
     >>> source2 = DatasetABC([[-1], [-2], [-3]], dim=1)
-    >>> composite = CompositeDataset((source1, source2), names=('source1', 'source2'))
+    >>> composite = safire.data.composite_corpus.CompositeCorpus((source1, source2), names=('source1', 'source2'))
     >>> flatten = FlattenComposite(composite)
     >>> flat = flatten[composite]
     >>> flat[1:3]
@@ -167,6 +69,16 @@ class FlattenComposite(DatasetTransformer):
     ShardedCorpus, it may significantly slow operations down, as a lot of
     shard-jumping may be involved.
 
+    The ``id2doc`` and ``doc2id`` mappings are also computed at initialization.
+
+    >>> id2doc = get_id2doc_obj(flat)
+    >>> id2doc[1]
+    'blah'
+
+    Sometimes you wish to "zip" two corpora together, without combining their
+    values into one. For this use case (common for instance in introspection),
+    use the ``structured=True`` flag.
+
     TODO: If that is the case, you can serialize
     the flat dataset using the SerializationTransformer, which allows
     serializing AND retaining the whole pipeline.
@@ -181,16 +93,104 @@ class FlattenComposite(DatasetTransformer):
     The SerializationTransformer "swaps out" the incoming ``corpus`` for
     a corpus given at initialization time.
     """
-    def __init__(self, composite, indexes=None):
+    def __init__(self, composite, indexes=None, structured=False):
         """Does nothing, only initializes self.composite and self.indexes.
         Everything happens on-the-fly in __getitem__.
 
         Future: incorporate a ``precompute`` and/or ``preserialize`` flag."""
         self.composite = composite
+        if self.composite.aligned and indexes is None:
+            indexes = [composite.as_composite_dim(i)
+                       for i in xrange(len(composite))]
         self.indexes = indexes
+        self.structured = structured
+
+        if self.indexes is not None and not composite.aligned:
+            if not safire.utils.transcorp.is_fully_indexable(composite):
+                for corp in composite.corpus:
+                    if not safire.utils.transcorp.is_fully_indexable(corp):
+                        raise TypeError('Not all data sources are indexable,'
+                                        ' cannot perform flattening with '
+                                        'indexes. Problem in corpus:\n{0}'
+                                        ''.format(safire.utils.transcorp.log_corpus_stack(corp)))
+                raise TypeError('Supplied CompositeCorpus itself is not fully '
+                                'indexable (sources are OK). Corpus stack:\n{0}'
+                                ''.format(safire.utils.transcorp.log_corpus_stack(composite)))
+            # Build id2doc mapping. Will contain tuples, based on self.indexes.
+            self.id2doc = self.build_composite_id2doc(composite, indexes)
+            # What about doc2id? A list of all IDs where the document is
+            # used, regardless of which other document it is combined with...
+            # Doc2id should trace the influence of a source document through
+            # the pipeline.
+            self.doc2id = self.build_composite_doc2id(composite, indexes)
+
+    @classmethod
+    def build_composite_id2doc(cls, composite, indexes):
+        """Builds an id2doc mapping that contains for the i-th index tuple the
+        tuple of docnames associated with the data item that the flattened
+        dataset returns when asked for the i-th item.
+
+        As opposed to the id2doc mapping of a composite dataset, where there is
+        no relationship between the documents making its individual components,
+        in a flattened corpus, the individual data sources are already linked
+        in fixed items -- only, as opposed to single-source pipeline blocks,
+        each item is associated with multiple source documents. (Until a
+        composite dataset is flattened, unless it is specified as aligned,
+        there's no way of knowing which item from each of its sources will be
+        used together with which.)
+
+        :param composite: A composite dataset.
+
+        :param indexes: The indexing scheme for the flattened corpus.
+
+        :return: An id2doc dictionary that returns for each ID the tuple of
+            docnames associated with each of the composite data sources.
+        """
+        # logging.debug('Building composite id2doc for composite:\n{0}'
+        #              ''.format(safire.utils.transcorp.log_corpus_stack(composite)))
+        id2doc = collections.defaultdict(tuple)
+        src_id2docs = []
+        for c in composite.corpus:
+            # logging.debug('Getting id2doc object from corpus:\n{0}'
+            #               ''.format(safire.utils.transcorp.log_corpus_stack(c)))
+            i2d = safire.utils.transcorp.get_id2doc_obj(c)
+            src_id2docs.append(i2d)
+        for iid, idx in enumerate(indexes):
+                id2doc[iid] = tuple(src_id2doc[i]
+                                    for src_id2doc, i
+                                    in itertools.izip(src_id2docs,
+                                                      idx))
+        return id2doc
+
+    @classmethod
+    def build_composite_doc2id(cls, composite, indexes, id2doc=None):
+        """Builds the composite doc2id mapping. For a document, this contains
+        all the indices of items in the *flattened* corpus where the given
+        source document was used.
+
+        Needs the id2doc mapping to work efficiently. If None is given, will
+        construct it (but not return it).
+
+        The method assumes that no two source documents have the same name and
+        are only distinguished by which source of the composite data they came
+        from!
+
+        :param composite:
+        :param indexes:
+        :return:
+        """
+        if id2doc is None:
+            id2doc = cls.build_composite_id2doc(composite, indexes)
+
+        output_doc2id = collections.defaultdict(list)
+        for i in xrange(len(indexes)):
+            current_docs = id2doc[i]
+            for doc in current_docs:
+                output_doc2id[doc].append(i)
+        return output_doc2id
 
     def _apply(self, dataset, chunksize=None):
-        return FlattenedDatasetCorpus(self, dataset)
+        return FlattenedDatasetCorpus(self, dataset, structured=self.structured)
 
     def __getitem__(self, item):
 
@@ -199,62 +199,119 @@ class FlattenComposite(DatasetTransformer):
         if iscorpus or isinstance(item, DatasetABC):
             return self._apply(item)
         else:
-            raise ValueError('Cannot apply serializer to individual documents.')
+            raise ValueError('Cannot apply flatten_composite to individual '
+                             'documents.')
 
 
-class FlattenedDatasetCorpus(TransformedCorpus):
+class FlattenedDatasetCorpus(IndexedTransformedCorpus):
 
-    def __init__(self, flatten, dataset):
+    def __init__(self, flatten, corpus, structured=False):
+        """
+        :param flatten:
 
+        :param corpus:
+
+        :param structured: If set, will *not* merge the retrieved items into
+            one. Useful for obtaining the indexing pairs as separate entities.
+            However, the only currently useful use-case is as the underlying
+            data for introspection by a HtmlStructuredFlattenedWriter.
+
+        :return:
+        """
         self.obj = flatten
         self.indexes = flatten.indexes
-        self.corpus = dataset
+        self.corpus = corpus  # A composite corpus
 
         self.dim = self.derive_dimension(self.corpus)
         self.n_in = self.dim
         self.n_out = self.dim
 
+        self.structured = structured
+
+        self.chunksize = None
+        self.id2doc = flatten.build_composite_id2doc(self.corpus, self.indexes)
+        self.doc2id = flatten.build_composite_doc2id(self.corpus, self.indexes,
+                                                     self.id2doc)
+
     def __getitem__(self, item):
         """This is where on-the-fly construction of the flattened dataset
-        happens. (Note: will be cached.)
+        happens.
+
+        This method is NOT format-agnostic, it assumes its inputs and outputs
+        are in numpy ndarray format.
 
         :param item: An index or slice.
 
         :return: numpy.ndarray
         """
-        if self.indexes is None:
+        # print '...flattening item: {0}'.format(item)
+        if self.indexes is None or self.corpus.aligned:
+            # print '...flattening from aligned'
             retrieved = self.corpus[item]
-            output = self.item2flat(retrieved)
+            output = self.item2flat(retrieved, nostack=self.structured)
         else:
-            # Possibly inefficient
-            indexes = self.indexes[item]
-            idxs_by_dataset = map(list, zip(*indexes))
-            logging.debug('Indexes: {0}, by dataset: {1}'.format(indexes,
-                                                         idxs_by_dataset))
-            retrieved = []
-            for dataset, idxs in zip(self.corpus.data, idxs_by_dataset):
-                logging.debug(' Retrieving: dataset {0}, '
-                              'idxs {1}'.format(dataset, idxs))
+            if isinstance(item, list):
+                output = [self[i] for i in item]
+                return numpy.hstack(output)
+            if isinstance(item, slice):
+                output = [self[i] for i in xrange(*item.indices(len(self)))]
+                return numpy.hstack(output)
 
-                #partial = numpy.array([dataset[i:i+1] for i in idxs])
-                # The dataset[i:i+1] hack is here to make sure the retrieved
-                # item will be a 2-D ndarray.
+            # Possibly inefficient
+            # print 'Item: {0}'.format(item)
+            indexes = self.indexes[item]
+            try:
+                idxs_by_dataset = map(list, zip(*indexes))
+            except TypeError:
+                # Single item retrieved
+                indexes = [indexes]
+                idxs_by_dataset = map(list, zip(*indexes))
+            # print 'Flattening with indexes {0}'.format(idxs_by_dataset)
+            # logging.debug('Indexes: {0}, by dataset: {1}'
+            #              ''.format(indexes, idxs_by_dataset))
+            retrieved = []
+            for dataset, idxs in zip(self.corpus.corpus, idxs_by_dataset):
+                # logging.debug(' Retrieving: dataset {0}, '
+                #               'idxs {1}'.format(dataset, idxs))
 
                 # Depends here on ability of SwapoutCorpus serialized by
                 # ShardedCorpus to deliver numpy ndarrays from lists of indices.
-                partial = numpy.array(dataset[idxs])
-                retrieved.append(partial)
-            logging.debug('Retrieved shapes:'
-                          ' {0}'.format([r.shape for r in retrieved]))
-            output = self.item2flat(retrieved)
+                partial = dataset[idxs]
+                # ('Partial for dataset {0}, idxs {1}: {2}'
+                #               ''.format(dataset, idxs, partial))
+                if isinstance(partial[0], numpy.ndarray):
+                    partial = numpy.array(partial)
 
+                # print 'Partial shape: {0}'.format(partial.shape)
+                retrieved.append(partial)
+
+            # Here depends on availability of ``shape`` instance attribute
+            #logging.debug('Retrieved shapes: {0}'
+            #              ''.format([r.shape for r in retrieved]))
+            output = self.item2flat(retrieved, nostack=self.structured)
+
+        # Problem: flattening is outputting
+
+        # logging.debug('flattening __getitem__ output: {0}'.format(output))
+        # print 'flattening __getitem__ output: {0}'.format(output)
         return output
 
     def derive_dimension(self, composite):
-        return FlattenedDatasetCorpus.flattened_dimension(composite.dim)
+        return FlattenedDatasetCorpus.flattened_dimension(
+            safire.utils.transcorp.dimension(composite))
+
+    def __len__(self):
+        if self.indexes is not None:
+            return len(self.indexes)
+        else:
+            return len(self.corpus)
+
+    def __iter__(self):
+        for i in xrange(len(self)):
+            yield self[i]
 
     @staticmethod
-    def item2flat(item):
+    def item2flat(item, nostack=False):
         """Flattens a (recursive) tuple of numpy ndarrays/scipy sparse matrices
         and stacks them next to each other (i.e.: rows stay rows, columns
         change).
@@ -263,13 +320,15 @@ class FlattenedDatasetCorpus(TransformedCorpus):
         >>> y = numpy.array([[-1], [-3], [-5], [-7]])
         >>> z = numpy.array([[10, 20], [11, 21], [12, 22], [13, 23]])
         >>> item = (x, (y, z))
-        >>> FlattenComposite.item2flat(item)
-        >>> [1,2,3] # TODO result!
+        >>> FlattenedDatasetCorpus.item2flat(item)
 
         """
-        flattened = list(flatten_composite_item(item))
-        stacked = numpy.hstack(flattened)
-        return stacked
+        # print 'item2flat: item {0}, nostack {1}'.format(item, nostack)
+        output = list(flatten_composite_item(item))
+        if not nostack:
+            output = numpy.hstack(output)
+        # print 'item2flat output: {0}'.format(output)
+        return output
 
     @staticmethod
     def flattened_dimension(composite_dim):
@@ -284,30 +343,3 @@ class FlattenedDatasetCorpus(TransformedCorpus):
         return total
 
 
-def docnames2indexes(data, docnames):
-    """Converts a mapping of document names to indexes into the given datasets.
-    Utility function for flattening datasets that provide a doc2id mapping.
-
-    .. note::
-
-        Currently only supports a non-recursive composite dataset.
-
-    :type data: safire.datasets.dataset.CompositeDataset
-    :param data: A composite dataset from which to extract indexing. (This will
-        be the dataset you then pass to FlattenDataset.) Currently only works
-        with
-
-    :type docnames: list[tuple[str]]
-    :param docnames: A list of the document names that should be flattened into
-        one item when ``data`` is flattened.
-
-    :rtype: list[tuple[int]]
-    :returns: A list of indices into the individual components of the ``data``
-        composite dataset.
-    """
-    doc2ids = [bottom_corpus(d).doc2id for d in data.data]
-    output = []
-    for name_item in docnames:
-        idxs = tuple(doc2ids[i][name] for i, name in enumerate(name_item))
-        output.append(idxs)
-    return output

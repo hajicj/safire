@@ -342,11 +342,9 @@ class BaseUnsupervisedModel(BaseModel):
                 the output dimension. In this case, ``n_out`` must be supplied
                 as a keyword argument here.
 
-        :rtype: ModelHandle
-        :returns: ``ModelHandle(model, train_f, validate_f, test_f)``
-            where ``model`` is the Model instance initialized during
-            :func:`setup` and the ``_func`` variables are compiled
-            theano.functions to use in a learner.
+        :rtype: dict(str => ModelHandle)
+        :returns: A dict of model handles for training, validating, testing
+            and plain old running the model. Pass these to a learner.
 
         """
         index = TT.lscalar() # index of minibatch
@@ -367,7 +365,8 @@ class BaseUnsupervisedModel(BaseModel):
             elif hasattr(data, 'n_out') and isinstance(data.n_out, int):
                 model_init_kwargs['n_out'] = data.n_out
             else:
-                raise ValueError('Must supply n_out either from dataset or **model_init_kwargs.')
+                raise ValueError('Must supply n_out either from dataset'
+                                 ' or **model_init_kwargs.')
             logging.info('Setting model output dimension '
                          'to {0}.'.format(model_init_kwargs['n_out']))
 
@@ -381,7 +380,7 @@ class BaseUnsupervisedModel(BaseModel):
             # - Are we passing a model of the same type as we're trying
             #   to set up?
             # - Are we passing a dataset that the model can work on?
-            assert cls == type(model)
+            assert cls == model.__class__
             assert model.n_in == data.n_in
 
             # Unsupervised model output dimension is not checked against the
@@ -426,29 +425,37 @@ class BaseUnsupervisedModel(BaseModel):
 
         #print 'Dummy inputs: ', model.inputs.tag.test_value
 
-        train_model = theano.function(inputs = [model.inputs],
-                                      outputs = bound_cost,
-                                      updates = updates,
+        train_model = theano.function(inputs=[model.inputs],
+                                      outputs=bound_cost,
+                                      updates=updates,
                                       allow_input_downcast=True,
                                       **training_kwargs)
 
         # Compile a Theano function that computes the cost that are made
         # by the model on a minibatch of devel/test data
         model.inputs.tag.test_value = dummy_inputs
-        validate_model = theano.function(inputs = [model.inputs],
-                                outputs = model.error(model.inputs),
-                                allow_input_downcast=True,
-                                **training_kwargs)
+        validate_model = theano.function(inputs=[model.inputs],
+                                         outputs=model.error(model.inputs),
+                                         allow_input_downcast=True,
+                                         **training_kwargs)
 
-        test_model = theano.function(inputs = [model.inputs],
-                                outputs = model.error(model.inputs),
-                                allow_input_downcast=True,
-                                **training_kwargs)
+        test_model = theano.function(inputs=[model.inputs],
+                                     outputs=model.error(model.inputs),
+                                     allow_input_downcast=True,
+                                     **training_kwargs)
 
-        run_model = theano.function(inputs = [model.inputs],
-                                    outputs = model.outputs,
+        run_model = theano.function(inputs=[model.inputs],
+                                    outputs=model.outputs,
                                     allow_input_downcast=True)
         
+        train_handle = ModelHandle(model, train_model)
+        validate_handle = ModelHandle(model, validate_model)
+        test_handle = ModelHandle(model, test_model)
+        run_handle = ModelHandle(model, run_model)
 
-        return ModelHandle(model, train_model, validate_model, test_model,
-                           run_model)
+        handle_dict = {'train': train_handle,
+                       'validate': validate_handle,
+                       'test': test_handle,
+                       'run': run_handle}
+
+        return handle_dict

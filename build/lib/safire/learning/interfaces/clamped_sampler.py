@@ -106,6 +106,8 @@ class MultimodalClampedSampler(object):
         # Input shape has to have the same number of rows as the input.
         inputs = numpy.zeros((len(text_features), self.model.n_in),
                              dtype=theano.config.floatX)
+        #logging.info('Initialized inputs shape: {0}, text_features shape: {1}'
+        #             ''.format(inputs.shape, text_features.shape))
         inputs[:, :self.dim_text] = text_features
 
         # Assumes the image init features have the right shape.
@@ -113,6 +115,8 @@ class MultimodalClampedSampler(object):
             inputs[:, self.dim_text:] = image_init_features
 
         # Magic happens here (gibbs vhv step)
+        #print 'Setting gibbs vhv step: sample_hidden {0}, sample_visible {1}' \
+        #      ''.format(sample_hidden, sample_visible)
         if sample_hidden and sample_visible:
             outputs = self.vhv_vh_sample(inputs)
         elif sample_hidden:
@@ -140,13 +144,14 @@ class MultimodalClampedSampler(object):
 
         return img_features
 
-    def t2i_run_chain_mean_last(self, text_features, k=1):
+    def t2i_run_chain_mean_last(self, text_features, k=1,
+                                sample_hidden=True, sample_visible=True):
         """Runs the chain for K steps. In all steps except last, both layers
         are sampled. In the last step, both the hidden and visible layer use
-        means."""
+        means. If k=1, then, no sampling is used at all."""
         img_features = self.t2i_run_chain(text_features, k-1,
-                                          sample_hidden=True,
-                                          sample_visible=True)
+                                          sample_hidden=sample_hidden,
+                                          sample_visible=sample_visible)
         img_features = self.t2i_step(text_features, img_features,
                                      sample_hidden=False,
                                      sample_visible=False)

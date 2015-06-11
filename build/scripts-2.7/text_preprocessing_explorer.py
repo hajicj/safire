@@ -77,7 +77,6 @@ def run_interactive(vtlist, raw_corpus, raw_browser,
             command = split_input[0]
             options = None
 
-
         # Execute command
         if command in help_commands:
             print_interactive_help()
@@ -109,7 +108,6 @@ def run_interactive(vtlist, raw_corpus, raw_browser,
             output = text + '\n\n' + formatted_repr
             raw_browser.text_to_window(output)
 
-
         elif command in exit_commands:
             confirmation = raw_input('-[y/n]-> ')
             if confirmation in exit_commands or confirmation == '' \
@@ -118,6 +116,7 @@ def run_interactive(vtlist, raw_corpus, raw_browser,
                 continue
         else:
             print 'Invalid command %s' % command
+
 
 def main(args):
 

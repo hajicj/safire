@@ -2,9 +2,11 @@
 """
 ``math.py`` is a library that provides mathematical utility functions.
 """
+import collections
 import logging
 import numpy
 import math
+import operator
 
 __author__ = 'Jan Hajic jr.'
 
@@ -297,3 +299,26 @@ def splice_csr(target, t_from, t_to, source, s_from, s_to):
     :param s_to: The index one-past of the last row of the source data to copy.
     """
     # Will need to change all indptrs past the row column.
+    raise NotImplementedError()
+
+
+def sum_gensim_columns(data):
+    """Sums the given list of gensim sparse vectors by (imaginary) column.
+    Handles both integer and float values (all-integer columns have an integer
+    result, others have float results).
+
+    >>> data = [[(0, 1.0), (1, 1), (4, 1)], [(1, 1), (2, 1), (4, 1), (5, 1)]]
+    >>> sum_gensim_columns(data)
+    [(0, 1.0), (1, 2), (2, 1), (4, 2), (5, 1)]
+
+    :param data: A list of gensim sparse vectors.
+
+    :return: A gensim sparse vector that contains in each ``(key, value)`` pair
+        the sum of all values from ``data`` with the same key.
+    """
+    sums = collections.defaultdict(int)
+    for item in data:
+        for key, value in item:
+            sums[key] += value
+    output = sorted(sums.items(), key=operator.itemgetter(0))
+    return output

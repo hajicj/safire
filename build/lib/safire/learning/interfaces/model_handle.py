@@ -63,15 +63,18 @@ class ModelHandle(object):
         Exports a dicitonary that can directly be pickled to sufficiently
         describe the handle.
         """
-        model_pickleable_obj = self.model_instance._export_pickleable_object()
+        if self.model_instance is not None:
+            model_pickleable_obj = self.model_instance._export_pickleable_object()
+        else:
+            model_pickleable_obj = None
 
-        init_args = { 'train' : self.train,
-                      'validate' : self.validate,
-                      'test' : self.test,
-                      'run' : self.run }
+        init_args = {'train': self.train,
+                     'validate': self.validate,
+                     'test': self.test,
+                     'run': self.run}
 
-        save_dict = { 'model' : model_pickleable_obj,
-                      'init_args' : init_args }
+        save_dict = {'model': model_pickleable_obj,
+                     'init_args': init_args}
 
         return save_dict
 
@@ -88,12 +91,16 @@ class ModelHandle(object):
     @classmethod
     def _load_from_save_dict(cls, save_dict):
 
-        model_init_args = save_dict['model']['init_args']
-        model_class = save_dict['model']['class']
+        if save_dict['model'] is not None:
+            model_init_args = save_dict['model']['init_args']
+            model_class = save_dict['model']['class']
 
-        logging.debug('Handle: loading model class: %s' % str(model_class))
+            logging.debug('Handle: loading model class: %s' % str(model_class))
 
-        model = model_class(**model_init_args)
+            model = model_class(**model_init_args)
+
+        else:
+            model = save_dict['model']
 
         handle_init_args = save_dict['init_args']
         model_handle = ModelHandle(model_instance=model, **handle_init_args)
@@ -264,7 +271,8 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
     """
 
     def __init__(self, model_instance, train, validate, test, run,
-                 dim_text, dim_img, k=10):
+                 dim_text, dim_img, k=10,
+                 sample_hidden=True, sample_visible=True):
         """Initializes the handle. Assumes the model is sample-able.
 
         :type model_instance: safire.learning.models.BaseModel
@@ -296,7 +304,20 @@ class MultimodalClampedSamplerModelHandle(ModelHandle):
 
         :type k: int
         :param k: The number of sampling steps to produce an image sample.
-            The first ``k - 1`` steps are sampled, the
+            Note that setting ``k=1`` will not sample anything at all and use
+            the hidden/visible mean in the one vhv step.
+
+        :type sample_visible: bool
+        :param sample_visible: If set, will sample the visible layer during the
+            first ``k - 1`` steps. Otherwise, uses visible mean. Note that
+            sampling only works when the visible layer activations are in the
+            range ``(0, 1)``. True by default.
+
+        :type sample_hidden: bool
+        :param sample_hidden: If set, will sample the hidden layer during the
+            first ``k - 1`` steps. Otherwise, uses hidden mean. Note that
+            sampling only works when the hidden layer activations are in the
+            range ``(0, 1)``. True by default.
 
         """
         self.model_instance = model_instance

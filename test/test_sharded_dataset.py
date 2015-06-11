@@ -20,7 +20,7 @@ from safire_test_case import SafireTestCase
 
 
 # This class should test stuff like train_X_batch, etc.
-class TestDataset(SafireTestCase):
+class TestShardedDataset(SafireTestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -32,7 +32,7 @@ class TestDataset(SafireTestCase):
         cls.devel_p = 0.1
         cls.test_p = 0.1
 
-        super(TestDataset, cls).setUpClass(no_datasets=True)
+        super(TestShardedDataset, cls).setUpClass(no_datasets=True)
 
         # Files will get removed through SafireTestCase.tearDownClass()
         cls.shcorp_name = os.path.join(cls.data_root, 'corpora', 'tshcorp')

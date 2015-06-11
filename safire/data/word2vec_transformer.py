@@ -17,6 +17,7 @@ from gensim.corpora import TextCorpus
 from gensim.interfaces import TransformationABC, TransformedCorpus
 
 from safire.utils import total_size
+import safire.utils.transcorp
 
 __author__ = "Jan Hajic jr."
 
@@ -79,7 +80,9 @@ class Word2VecTransformer(TransformationABC):
             ``embeddings`` parameter to point to a pickled embeddings dict
             instead of a vectors file.
 
-        :param deUFALize: If this flag is set, will assume that
+        :param deUFALize: If this flag is set, will assume that the id2word
+            values are UFAL lemmas that need to be further standardized to
+            correspond to basic forms that are in the word2vec embeddings dict.
         """
         if from_pickle:
             if not isinstance(embeddings, str):
@@ -150,47 +153,46 @@ class Word2VecTransformer(TransformationABC):
         if len(bow) == 0:
             logging.debug('Running empty doc through Word2VecTransformer.')
         else:
-            logging.debug('-- Word2VecTransformer doc length=%d --' % len(bow))
+            #logging.debug('-- Word2VecTransformer doc length=%d --' % len(bow))
+            pass
 
         embeddings = numpy.zeros((len(bow), self.n_out))
         has_hit = False
         for i, item in enumerate(bow):
-            wid = item[0]
+            try:
+                wid = item[0]
+            except IndexError:
+                logging.error('IndexError in item of type {0}: {1}'
+                              ''.format(type(item), item))
+                logging.error('Problem document: type {0}\n{1}'
+                              ''.format(type(bow), bow))
+                raise
             word = self._id2word(wid)
             try:
                 embedding = self.embeddings[word]
                 #logging.info('Embedding: %s with shape %s' % (
-                #    type(embedding), str(embedding.shape)))
+                #    btype(embedding), str(embedding.shape)))
                 embeddings[i, :] = embedding
                 has_hit = True
                 self.hit_ids.add(wid)
-                #print '...hit.'
+                #  print '...hit.'
             except KeyError:
                 self.oov += 1.0
                 self.oov_collector.add((wid, word))
-                #print '...no hit.'
+                #  print '...no hit.'
         if not has_hit:
             self.emptydocs += 1
 
         self.total_processed += len(bow)
-        self.oov_rate = self.oov / self.total_processed
+        self.oov_rate = self.oov / max(1, self.total_processed)
 
-        #if self.total_processed % self.log_oov_at == 0:
-        #    self.log_oov()
-
-        # Combining the embeddings. (Could be a method.)
-        #print 'Embeddings:', embeddings
+        # Combining the embeddings.
         output_embeddings = self.combine_words(embeddings)
-
-        #print 'Output embeddings:', output_embeddings
 
         if self.dense:
             return output_embeddings
 
         sparse_embeddings = gensim.matutils.dense2vec(output_embeddings)
-
-        #logging.debug('Output doc: length %d' % len(sparse_embeddings))
-
         return sparse_embeddings
 
     def _apply(self, corpus, chunksize=None):
@@ -201,13 +203,15 @@ class Word2VecTransformer(TransformationABC):
         :type corpus: gensim.interfaces.CorpusABC
         :param corpus: The corpus to transform.
         """
-        if not isinstance(corpus, TextCorpus):
-            logging.warn('Word2VecTransformer applied on non-text' +
-                         ' corpus; returning TransformedCorpus.')
-
-            transformed_corpus = TransformedCorpus(self, corpus, chunksize)
-            return transformed_corpus
-
+        # TODO: Remake to smart_apply_corpus()?
+        # TODO: Automatically extract id2word object?
+        # if not isinstance(corpus, TextCorpus):
+        #     logging.warn('Word2VecTransformer applied on non-text' +
+        #                  ' corpus; returning TransformedCorpus.')
+        #
+        #     transformed_corpus = TransformedCorpus(self, corpus, chunksize)
+        #     return transformed_corpus
+        # transformed_corpus = TransformedCorpus(self, corpus, chunksize)
         transformed_corpus = TransformedCorpus(self, corpus, chunksize)
         return transformed_corpus
 

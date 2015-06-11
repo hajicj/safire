@@ -3,11 +3,13 @@
 import theano
 
 from safire.data.utils import as_shared
-from safire.datasets.dataset import Dataset
+import safire.datasets.dataset
 
-
-class SupervisedDataset(Dataset):
-    """Storage class for supervised datasets.
+# DEPRECATED!!!
+class SupervisedDataset(safire.datasets.dataset.Dataset):
+    """Storage class for supervised datasets. DEPRECATED! (Superseded
+    by safire.datasets.dataset.SupervisedDataset, based on CompositeDataset
+    logic.)
 
     Expects the data to be split into a train/devel/test set, with
     a response vector for each of the datasets.
@@ -90,7 +92,6 @@ class SupervisedDataset(Dataset):
                   into for given batch_size.
         """
         return self.devel_X.get_value(borrow=True).shape[0] / batch_size
-
 
     def n_test_batches(self, batch_size):
         """Determines how many batches of given size the test data will

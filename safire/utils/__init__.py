@@ -6,7 +6,10 @@ For example ``tile_raster_images`` helps in generating a easy to grasp
 image from a set of samples or weights.
 """
 import cProfile
+import codecs
+import collections
 import copy
+import inspect
 import logging
 import math
 import StringIO
@@ -18,12 +21,17 @@ import time
 from sys import getsizeof, stderr
 from itertools import chain
 from collections import deque
+import pickle
 
 from gensim.matutils import full2sparse, sparse2full, corpus2dense
+import itertools
 
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
-
+import operator
+import os
+import pprint
+from pympler import asizeof
 
 try:
     import Image
@@ -34,6 +42,7 @@ import numpy
 import numpy.random
 import theano
 import theano.ifelse
+import gensim.interfaces
 
 
 def check_kwargs(kwargs, names):
@@ -317,9 +326,31 @@ def total_size(o, handlers={}):
     return sizeof(o)
 
 
-##############################################################################
+def obj_memory_usage(obj):
+    """Computes the memory usage of an object's __dict__ members.
+    """
+    memory_usage_dict = {}
+    for key, value in obj.__dict__.items():
+        size = asizeof.asizeof(value)
+        memory_usage_dict[key] = size
+    return memory_usage_dict
 
-### Various interesting activation functions
+
+def memory_usage_report(memory_usage_dict, human_readable=True, linesep='\n'):
+    """Generates a report of memory usage from a memory usage dict. Set
+    ``human_readable=True`` if you want the report in B, kB, MB and GB,
+    otherwise only bytes are used."""
+    report_lines = []
+    for key in sorted(memory_usage_dict.keys()):
+        size = memory_usage_dict[key]
+        if human_readable:
+            size = pformat_nbytes(size)
+        report_lines.append('{0}:\t{1}'.format(key, size))
+    return linesep.join(report_lines)
+
+##############################################################################
+# Various interesting activation functions
+
 
 def mask_ReLU(X):
     """Rectified Linear Unit activation function."""
@@ -360,8 +391,8 @@ def detect_nan(i, node, fn):
                 pdb.set_trace()
                 raise ValueError('Found NaN in computation!')
         except TypeError:
-            print 'Couldn\'t check node for NaN:'
-            theano.printing.debugprint(node)
+            logging.debug('Couldn\'t check node for NaN: {0}'.format(node))
+            #theano.printing.debugprint(node)
 
 
 def merciless_print(i, node, fn):
@@ -391,8 +422,89 @@ def merciless_print(i, node, fn):
                 pdb.set_trace()
                 raise ValueError('Found Inf in computation!')
         except TypeError:
-            print 'Couldn\'t check node for NaN/Inf:'
-            theano.printing.debugprint(node)
+            logging.debug('Couldn\'t check node for NaN/Inf: {0}'.format(node))
+            #theano.printing.debugprint(node)
+
+
+# Debugging tools for pickle
+
+class VerbosePickler(pickle.Pickler):
+    def save(self, obj):
+        try:
+            pickle.Pickler.save(self, obj)
+        except pickle.PicklingError:
+            print 'Dumping object failed: {0}'.format(type(obj))
+            print 'Object in question: {0}'.format(obj)
+            raise
+        from theano.tensor import raw_random
+        from theano.tensor.shared_randomstreams import RandomStreams
+
+
+def test_pickleability(obj, test_pickle_fname='test-theano-fn-pickle.pkl',
+                       find_culprit=False, recursive=True):
+    """Tests whether the given object is pickle-able. Debugging tool."""
+    logging.debug('Pickling object of type {0}'.format(obj.__class__.__name__))
+    try:
+        with open(test_pickle_fname, 'wb') as phandle:
+            pickler = VerbosePickler(phandle, protocol=-1)
+            pickler.dump(obj)
+            logging.debug('Successfully pickled object {0}'.format(type(obj)))
+    except pickle.PicklingError:
+        logging.debug('Failed to pickle type {0}, object {1}.'.format(type(obj),
+                                                                      obj))
+        if find_culprit:
+            culprit, culprit_log = find_pickle_error_culprit(
+                obj,
+                test_pickle_fname=test_pickle_fname)
+            logging.debug('Culprit: {0}'.format(culprit_log))
+            if recursive:
+                logging.debug('Tracing culprit {0} recursively...'
+                              ''.format(culprit))
+                test_pickleability(culprit,
+                                   test_pickle_fname=test_pickle_fname,
+                                   find_culprit=True, recursive=True)
+        raise
+    finally:
+        try:
+            os.remove(test_pickle_fname)
+        except OSError:
+            # Could have been deleted from within find_pickle_error_culprit
+            # logging.debug('Pickleability test temp file {0} has already'
+            #               ' been removed.'.format(test_pickle_fname))
+            pass
+
+
+def find_pickle_error_culprit(obj, recursive=True,
+                              test_pickle_fname='test-theano-fn-pickle.pkl'):
+    """Attempts to find what is causing pickling trouble for an object.
+    If ``recursive`` is set, will try to catch the culprits recursively."""
+    try:
+        pdict = obj.__getstate__()
+    except AttributeError:
+        pdict = obj.__dict__
+
+    logging.debug('pdict: {0}'.format(pdict))
+    for k, v in pdict.items():
+        try:
+            test_pickleability(v, test_pickle_fname=test_pickle_fname,
+                               find_culprit=False)
+        except pickle.PicklingError:
+            culprit_log = 'pdict key {0}:\n\t\ttype: {1}\n\t\tvalue: {2}' \
+                          ''.format(k, type(v), v)
+            return v, culprit_log
+
+    return None, 'No culprit found in pdict.'
+
+
+def call_stack_report(maxlevels=None):
+    """Helper function for debugging: prints the call stack for the containing
+    function."""
+    curframe = inspect.currentframe()
+    outframes = inspect.getouterframes(curframe, 2)
+    fnames = [frame[3] for frame in outframes]
+    if maxlevels is not None:
+        fnames = fnames[:min(len(fnames, maxlevels))]
+    return u'  Call stack: {0}'.format(' <-- '.join(fnames))
 
 
 def shuffle_together(*lists):
@@ -400,8 +512,6 @@ def shuffle_together(*lists):
     zipped_lists = zip(*lists)
     random.shuffle(zipped_lists)
     unzipped_lists = map(list, zip(*zipped_lists))
-
-    #print unzipped_lists
 
     return unzipped_lists
 
@@ -426,7 +536,7 @@ def iter_sample_fast(iterable, samplesize):
 
 
 def flatten_composite_item(item):
-    """Simply flattens a (recursive) tuple of ndarrays. Is a generator,
+    """Unrolls a (recursive) tuple of ndarrays. Is a generator,
     so you have to use ``list(flatten_composite_item(item))``.
 
     >>> x = numpy.array([1, 2, 3, 4])
@@ -445,6 +555,7 @@ def flatten_composite_item(item):
                 yield j
         else:
             yield i
+
 
 def uniform_steps(iterable, k):
     """Chooses K items from the iterable so that they are a constant step size
@@ -627,9 +738,9 @@ def add_header_image(image, header_image, header_size=(300,200), margin=20):
 # Matplotlib plotting
 
 
-def heatmap_matrix(matrix, title='', with_average=False,
+def heatmap_matrix(matrix, title='', with_average=False, save=None,
                    colormap='coolwarm', vmin=0.0, vmax=1.0,
-                   **kwargs):
+                   **colormesh_kwargs):
     """Creates and shows a heatmap of the given matrix. Optionally, will also
     plot column averages. Doesn't return anything; will show() the figure.
 
@@ -645,6 +756,10 @@ def heatmap_matrix(matrix, title='', with_average=False,
     :type with_average: bool
     :param with_average: If set, will plot column averages above the heatmap.
 
+    :type save: str
+    :param save: If given, will save the heatmap to this file instead of
+        ``show()``-ing it.
+
     :type colormap: str
     :param colormap: The colormap to use in colormesh. Passed directly to
         colormesh, so you can use anything you find in the corresponding
@@ -658,11 +773,11 @@ def heatmap_matrix(matrix, title='', with_average=False,
     :param vmax: The value in the ``matrix`` which should correspond to the
         "maximum" color in the heatmap.
 
-    :param kwargs: Other arguments to maptlotlib.pyplot.colormesh
+    :param colormesh_kwargs: Other arguments to maptlotlib.pyplot.colormesh
 
     """
     plt.figure(figsize=(matrix.shape[1]*0.002, matrix.shape[0]*0.02),
-               dpi=160,
+               dpi=300,
                facecolor='white')
     if with_average:
         gs = gridspec.GridSpec(2, 1, height_ratios=[1,2])
@@ -675,13 +790,13 @@ def heatmap_matrix(matrix, title='', with_average=False,
         # Sliding window average
         avg_windowsize = 20
         vscale = 2.0
-        wavgs = [ sum(avgs[i:i+avg_windowsize])*vscale / float(avg_windowsize)
-                 for i in xrange(matrix.shape[1] - avg_windowsize) ]
+        wavgs = [sum(avgs[i:i+avg_windowsize])*vscale / float(avg_windowsize)
+                 for i in xrange(matrix.shape[1] - avg_windowsize)]
         wavgs.extend([avgs[-1] for _ in xrange(avg_windowsize)])
 
         plt.title(title)
         plt.plot(avgs, 'r,')
-        #plt.plot(wavgs, 'b-')
+        # plt.plot(wavgs, 'b-')
 
         # Hide x-axis ticks
         frame1 = plt.gca()
@@ -689,16 +804,21 @@ def heatmap_matrix(matrix, title='', with_average=False,
             xlabel_i.set_visible(False)
             xlabel_i.set_fontsize(0.0)
 
-        #plt.xlim([0, matrix.shape[1]])
+        # plt.xlim([0, matrix.shape[1]])
         plt.subplot(gs[1])
 
     plt.xlim([0, matrix.shape[1]])
     plt.ylim([0, matrix.shape[0]])
-    plt.pcolormesh(matrix, cmap=colormap, vmin=vmin, vmax=vmax, **kwargs)
+    plt.pcolormesh(matrix, cmap=colormap, vmin=vmin, vmax=vmax,
+                   **colormesh_kwargs)
     if not with_average:
         plt.title(title)
         plt.colorbar()
-    plt.show()
+
+    if save is not None:
+        plt.savefig(save, bbox_inches='tight')
+    else:
+        plt.show()
 
 ##############################################################################
 
@@ -779,15 +899,171 @@ def mock_data(n_items=1000, dim=1000, prob_nnz=0.5, lam=1.0):
 
 # Conversions: ndarray2gensim, gensim2ndarray
 def ndarray2gensim(array):
-    """Convert a numpy ndarray into a gensim-style generator of lists of tuples."""
+    """Convert a numpy ndarray into a gensim-style generator of lists of
+    tuples."""
     return (full2sparse(row) for row in array)
 
 
-def gensim2ndarray(corpus, dim, num_docs=None):
+def gensim2ndarray(corpus, dim, num_docs=None, dtype=numpy.float32):
     """Convert a gensim-style list of list of tuples into a numpy ndarray
-    with documents as rows.
+    with documents as rows. Can now also deal with a single sparse vector.
+
     Mirror function to ``ndarray2gensim``."""
-    return corpus2dense(corpus, dim, num_docs=num_docs).T
+    # Checking for single-vector.
+    # print 'Corpus: {0}'.format(corpus)
+    if isinstance(corpus[0], tuple):
+        return sparse2full(corpus, dim)
+    return corpus2dense(corpus, dim, num_docs=num_docs, dtype=dtype).T
+
+
+# Checks list of gensim sparse vectors vs. list of lists of gensim sparse
+# vectors
+def is_gensim_vector(data, strict=False):
+    """Checks whether the given data is a gensim sparse vector."""
+    if not isinstance(data, list):
+        return False
+    if not len(data) > 0:
+        return True
+    if strict:
+        for d in data:
+            if not (isinstance(d, tuple) and len(d) == 2):
+                return False
+            if not isinstance(d[0], int):
+                return False
+            if not (isinstance(d[1], int) or isinstance(d[1], float)):
+                return False
+    else:
+        if not isinstance(data[0], tuple):
+            return False
+    return True
+
+
+def is_gensim_batch(data, strict=False):
+    """Checks whether the given data is a gensim batch (list of gensim sparse
+    vectors).
+
+    >>> data = [[(0, 1), (1, 1), (2, 4)], [(1, 1), (3, 2), (5, 1)]]
+    >>> is_gensim_batch(data)
+    True
+    >>> other_data = [[[(0, 1), (1, 1), (2, 4)]], [[(1, 1), (3, 2), (5, 1)]]]
+    >>> is_gensim_batch(other_data)
+    False
+
+    Note that unless ``strict`` is set, the function does not check that each
+    member of each (potential) sparse vector is a gensim ``(key, value)`` pair,
+    it will only check the first member of each row. (Using ``strict`` should
+    not be necessary when checking the output of a safire pipeline.)
+
+    >>> data = [[(0, 1), 'a']]
+    >>> is_gensim_batch(data)
+    True
+    >>> is_gensim_batch(data, strict=True)
+    False
+
+    :param data: Some data to verify.
+
+    :param strict: When set, will check each individual (key, value) pair in
+        the given batch. This can be very slow and is usually not necessary if
+        the input data is an output of a safire pipeline.
+
+    :return: ``True`` or ``False``.
+    """
+    if not isinstance(data, list):
+        return False
+    for row in data:
+        if not isinstance(row, list):
+            return False
+        if len(row) > 0:
+            if strict is True:
+                for item in row:
+                    if not isinstance(item, tuple) or not len(item) == 2:
+                        return False
+                    if not isinstance(item[0], int):
+                        return False
+                    if not isinstance(item[1], int) or isinstance(item[1], float):
+                        return False
+            else:
+                if not isinstance(row[0], tuple) or not len(row[0]) == 2:
+                    return False
+    return True
+
+
+def is_list_of_gensim_batches(data, strict=False):
+    """Checks that the given data is a list of gensim batches (where a gensim
+    batch is defined as an object that passes the ``is_gensim_batch()`` check).
+
+    Useful in safire for detecting an "over-batched" output: in a situation
+    where we are iterating one by one over a pipeline that produces a batch even
+    for requests of size 1 and storing these length-1 batches in a list.
+
+    >>> data = [[(0, 1), (1, 1), (2, 4)], [(1, 1), (3, 2), (5, 1)]]
+    >>> is_list_of_gensim_batches(data)
+    False
+    >>> other_data = [[[(0, 1), (1, 1), (2, 4)]], [[(1, 1), (3, 2), (5, 1)]]]
+    >>> is_list_of_gensim_batches(other_data)
+    True
+
+    :param data: Some data to verify.
+
+    :param strict: If set, will check elements of ``data`` for being strict
+        gensim batches.
+
+    :return: True or False
+    """
+    if not isinstance(data, list):
+        return False
+    for item in data:
+        if not is_gensim_batch(item, strict=strict):
+            return False
+    return True
+
+
+def compact_list_of_gensim_batches(data, strict_verify=False):
+    """Combines a list of gensim batches into a single gensim batch.
+
+    >>> data = [[[(0, 1), (1, 1), (2, 4)]], [[(1, 1), (3, 2), (5, 1)]]]
+    >>> is_list_of_gensim_batches(data)
+    True
+    >>> compact_list_of_gensim_batches(data)
+    [[(0, 1), (1, 1), (2, 4)], [(1, 1), (3, 2), (5, 1)]]
+
+    :param data: A list of gensim batches.
+
+    :param strict_verify: Set to True if you want a strict verification that the
+        input is a gensim batch.
+
+    :return: A gensim batch
+    """
+    if not is_list_of_gensim_batches(data, strict=strict_verify):
+        raise ValueError('Input is not a list of gensim batches. Input:\n{0}'
+                         ''.format(data))
+    batch = list(itertools.chain(*data))
+    return batch
+
+
+def gensim_batch_nth_member(data, n):
+    """Returns the n-th element in a gensim batch.
+
+    >>> data = [[(0, 1), (1, 1), (2, 4)], [(1, 1), (3, 2), (5, 1)]]
+    >>> gensim_batch_nth_member(data, 3)
+    (1, 1)
+
+    If ``n`` is larger than available data, will raise an IndexError, just as
+    a list.
+    """
+    remaining = n
+    total = 0
+    for row in data:
+        rlen = len(row)
+        total += rlen
+        if rlen > remaining:
+            return row[remaining]
+        else:
+            remaining -= rlen
+    if n > 0:
+        raise IndexError('Too high index specified: {0}, total: {1}'
+                         ''.format(n, total))
+    raise ValueError('Wrong input (negative?): {0}'.format(n))
 
 
 # Parsing some elementary data files
@@ -810,3 +1086,127 @@ def parse_textdoc2imdoc_map(textdoc2imdoc):
                 t2i_map[text].append(img)
 
     return t2i_map
+
+
+def freqdict(iterable):
+    """Computes a frequency dictionary from the items in the iterable.
+    """
+    freqs = collections.defaultdict(int)
+    for item in iterable:
+        freqs[item] += 1
+    return freqs
+
+
+def print_freqdict(freqdict, top_n=10):
+    print u'\n'.join([
+        u'{0}: {1}'.format(w, f) for w, f in sorted(
+            freqdict.items(), key=operator.itemgetter(1), reverse=True
+        )[:top_n]
+    ])
+
+
+def pformat_nbytes(n_bytes):
+    """Formats the number of bytes "nicely", in human-readable format (kB, MB,
+    ...).
+
+    >>> pformat_nbytes(100)
+    '100 B'
+    >>> pformat_nbytes(10240)
+    '10.0 kB'
+    >>> pformat_nbytes(1024*1024*10)
+    '10.0 MB'
+    >>> pformat_nbytes(1024*1024*1024*10)
+    '10.0 GB'
+
+    """
+    if n_bytes < 1024:
+        return '{0} B'.format(n_bytes)
+    elif n_bytes < 1024**2:
+        return '{0:.2f} kB'.format(n_bytes / 1024.0)
+    elif n_bytes < 1024**3:
+        return '{0:.2f} MB'.format(n_bytes / (1024.0 ** 2))
+    else:
+        return '{0:.2f} GB'.format(n_bytes / (1024.0 ** 3))
+
+
+def lines_as_stream(lines):
+    """Pushes the given set of strings into a StrngIO buffer. A use case is
+    to simulate a file input for a gensim TextCorpus."""
+    buffer = StringIO.StringIO()
+    for line in lines:
+        if not line.endswith('\n'):
+            line += '\n'
+        buffer.write(unicode(line))
+    return buffer
+
+
+def file_lines_as_set(fname):
+    """Loads the given file as a set of stripped lines."""
+    # Originally created to help config deal with the ImagenetCorpus featues
+    # include_docnames and exclude_docnames.
+    with codecs.open(fname, 'r', 'utf-8') as handle:
+        output = {l.strip() for l in handle}
+    return output
+
+
+class IndexedTransformedCorpus(gensim.interfaces.TransformedCorpus):
+    """Adds __getitem__ functionality to a TransformedCorpus interface.
+    Expects an indexable ``corpus`` object."""
+    def __init__(self, obj, corpus, chunksize=None):
+        try:
+            _ = corpus[0]
+        except (TypeError, AttributeError):
+            raise TypeError('Corpus {0} of type {1} is not indexable (does not'
+                            'respond to __getitem__ call, raises TypeError)'
+                            .format(corpus, type(corpus)))
+        except (ValueError, KeyError):
+            raise TypeError('Corpus {0} of type {1} has zero length.'
+                            ' Corpus stack.'.format(corpus, type(corpus)))
+
+        super(IndexedTransformedCorpus, self).__init__(obj, corpus, chunksize)
+
+    def __getitem__(self, item):
+
+        # logging.debug('  ITrCorpAccessing item: {0}'.format(item))
+        if isinstance(item, list):
+            # logging.debug('  ...processing as list.')
+            return [self[i] for i in item]
+        if isinstance(item, slice):
+            # logging.debug('  ...processing as slice.')
+            return [self[i] for i in xrange(*item.indices(len(self)))]
+
+        retrieved = self.corpus[item]
+        # logging.debug('  ITrCorp Retrieved: {0}'.format(retrieved))
+
+        output = self.obj[retrieved]
+        # logging.debug('  ITrCorp Output: {0}'.format(output))
+
+        return output
+
+
+class SimpleTokenizeTextCorpus(gensim.corpora.TextCorpus):
+    """A TextCorpus that tokenizes only on whitespace. Other than that, is
+    exactly like the default TextCorpus implementation."""
+    def get_texts(self):
+        """
+        Iterate over the collection, yielding one document at a time. A document
+        is a sequence of words (strings) that can be fed into `Dictionary.doc2bow`.
+
+        Override this function to match your input (parse input files, do any
+        text preprocessing, lowercasing, tokenizing etc.). There will be no further
+        preprocessing of the words coming out of this function.
+        """
+        length = 0
+        with self.getstream() as lines:
+            for lineno, line in enumerate(lines):
+                length += 1
+                yield self.tokenize(line)
+        self.length = length
+
+    @staticmethod
+    def tokenize(line):
+        """Strips and splits the line on whitespace."""
+        for w in line.strip().split(' '):
+            yield w
+
+

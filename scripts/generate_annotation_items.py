@@ -24,13 +24,12 @@ __author__ = 'Jan Hajic jr.'
 def main(args):
     logging.info('Executing generate_annotation_items.py...')
 
-
     # Load index
     logging.info('Loading index with label %s.' % args.index_label)
     iloader = IndexLoader(args.root, args.name)
     index = iloader.load_index(args.index_label)
 
-    index.num_best = None # NOT working with this
+    index.num_best = None  # NOT working with this
 
     # Load dataset/corpus
     logging.info('Loading dataset and corpus with label %s.' % args.index_label)

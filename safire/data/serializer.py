@@ -4,6 +4,10 @@ This module contains classes that ...
 import logging
 from gensim.interfaces import TransformationABC, TransformedCorpus
 from gensim.utils import is_corpus
+import numpy
+from safire.utils import IndexedTransformedCorpus
+import safire.utils.transcorp
+import safire.data.sharded_corpus
 
 __author__ = "Jan Hajic jr."
 
@@ -63,12 +67,14 @@ class Serializer(TransformationABC):
             # Will this work?
             return self.serialized_data[item]
 
+            # What happens on a call directly with a data item?
+
     def _apply(self, corpus, chunksize=None):
 
         return SwapoutCorpus(self.serializer_class.load(self.fname), corpus)
 
 
-class SwapoutCorpus(TransformedCorpus):
+class SwapoutCorpus(IndexedTransformedCorpus):
     """This class implements a transformation where the outputs of the input
     corpus are swapped for outputs of a different corpus. Use case: instantiated
     by Serializer in order to substitute results transformed through a
@@ -78,8 +84,23 @@ class SwapoutCorpus(TransformedCorpus):
     The key idea is that this design will allow us to retain and backtrack
     through the applied transformations while making retrieval faster."""
     def __init__(self, swap, corpus):
+        if corpus is None:
+            logging.warn('Initializing SwapoutCorpus without a ``corpus``. Note'
+                         ' that pattern should only be used for the bottom'
+                         ' block of a pipeline.')
+        elif len(swap) != len(corpus):
+            logging.warn('Swapout corpus: original and swap lengths do not '
+                         'match! (original corpus {0}: {1}, swap corpus {2} '
+                         ':{3}). Maybe reading serialized corpus from existing '
+                         'data, but re-initializing underlying source corpora?'
+                         ''.format(type(corpus),
+                                   len(corpus),
+                                   type(swap),
+                                   len(swap)))
+
         self.obj = swap  # The corpus which gets used instead of the input
                          # corpus.
+
         self.corpus = corpus
         self.chunksize = None
         self.metadata = False
@@ -87,8 +108,24 @@ class SwapoutCorpus(TransformedCorpus):
     def __getitem__(self, key):
         # if isinstance(key, slice):
         #     logging.warn('Are you sure the swapped corpus is sliceable?')
-        return self.obj[key]
+        # print 'Calling __getitem__ on SwapoutCorpus with obj of type {0}' \
+        #       'and item {1}'.format(type(self.obj), key)
+        out = self.obj[key]
+        # print '  SwapoutCorpus.__getitem__: operating on type {0} with ' \
+        #       'item {1}'.format(type(out), key)
+        # if isinstance(out, numpy.ndarray):
+        #     print '              output: shape {0}'.format(out.shape)
+        return out
 
     def __iter__(self):
         for doc in self.obj:
             yield doc
+
+    def save(self, *args, **kwargs):
+        logging.info('\n\nSaving SwapoutCorpus with pipeline:\n{0}'
+                     ''.format(safire.utils.transcorp.log_corpus_stack(self,
+                                                                       with_length=True)))
+        super(SwapoutCorpus, self).save(*args, **kwargs)
+
+    def __len__(self):
+        return len(self.obj)

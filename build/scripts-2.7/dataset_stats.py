@@ -23,6 +23,7 @@ import logging
 import cPickle
 import random
 import gensim
+from gensim.utils import SaveLoad
 import numpy
 import matplotlib.pyplot as plt
 import sys
@@ -32,7 +33,7 @@ import safire
 from safire.utils.matutils import scale_to_unit_covariance, generate_grid, \
     grid2sym_matrix
 from safire.data.loaders import MultimodalShardedDatasetLoader
-from safire.utils.transcorp import dimension
+from safire.utils.transcorp import dimension, convert_to_dense
 
 __author__ = 'Jan Hajic jr.'
 
@@ -131,6 +132,11 @@ class DatasetStats(object):
 
         start = int(time.clock())
 
+        #print 'self.d_idxs: {0}/{1}'.format(type(self.d_idxs),
+        #                                    type(self.d_idxs[0]))
+        #print 'self.dataset: {0}/{1}'.format(type(self.dataset),
+        #                                     type(self.dataset[self.d_idxs[0]]))
+        #print 'data: {0}'.format(self.dataset[self.d_idxs[0]])
         self.item_totals = [sum(self.dataset[idx]) for idx in self.d_idxs]
         self.dataset_total = sum(self.item_totals)
 
@@ -168,10 +174,6 @@ class DatasetStats(object):
         for n_th, idx in enumerate(self.d_idxs):
             item = numpy.array(self.dataset[idx])
             self.feature_totals += item
-            #self.n_items_processed += 1.0
-            #self.n_cells_processed += dataset.dim
-            #maximum = self.minimum
-            #minimum = self.maximum
             item_nnz = 0.0
             #self._init_process_item(self.feature_totals, item, item_nnz)
 
@@ -389,17 +391,21 @@ def main(args):
 
     # Loading and/or computing
     if not args.load:
-        if args.text:
-            wrapper_dataset = loader.load_text(args.dataset)
-            dataset = wrapper_dataset.data
-            vtcorp = wrapper_dataset.vtcorp
-            print 'Dimension of underlying text data: %d' % dimension(vtcorp)
-            print 'Dimension of dataset: %d' % dataset.dim
-            # The ShardedDataset, not the text-modality wrapper
-        else:
-            dataset = loader.load_img(args.dataset).data
+        dataset_name = loader.pipeline_name(args.dataset)
+        dataset = SaveLoad.load(dataset_name)
+        dataset = convert_to_dense(dataset)
+        # if args.text:
+        #     wrapper_dataset_name = loader.pipeline_name(args.dataset)
+        #     wrapper_dataset = SaveLoad.load(wrapper_dataset_name)
+        #     dataset = wrapper_dataset.data
+        #     vtcorp = wrapper_dataset.vtcorp
+        #     print 'Dimension of underlying text data: %d' % dimension(vtcorp)
+        #     print 'Dimension of dataset: %d' % dataset.dim
+        #     # The ShardedDataset, not the text-modality wrapper
+        # else:
+        #     dataset = loader.load_img(args.dataset).data
 
-        logging.info('Loaded dataset: %d items, dimension %d, shardsize %d' % (len(dataset), dataset.dim, dataset.shardsize))
+        logging.info('Loaded dataset: %d items, dimension %d' % (len(dataset), dimension(dataset)))
         report, stats = safire.utils.profile_run(do_stats_init, args, dataset)
     else:
         with open(args.load) as input_handle:

@@ -14,14 +14,15 @@ import safire
 from safire.data.layouts import DataDirLayout
 from safire.data.filters.positionaltagfilter import PositionalTagTokenFilter
 from safire.data import VTextCorpus, FrequencyBasedTransformer
-from safire.utils.transcorp import get_composite_source, reset_vtcorp_input
+from safire.utils.transcorp import get_composite_source, reset_vtcorp_input, \
+    docnames2indexes
 from safire.utils.transformers import GeneralFunctionTransform
 from safire.data.sharded_corpus import ShardedCorpus
 from safire.data.serializer import Serializer
 from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.datasets.dataset import Dataset, CompositeDataset
 from safire.utils import parse_textdoc2imdoc_map
-from safire.datasets.transformations import docnames2indexes, FlattenComposite
+from safire.datasets.transformations import FlattenComposite
 from safire.learning.models import DenoisingAutoencoder
 from safire.learning.learners import BaseSGDLearner
 from safire.learning.interfaces import SafireTransformer, \
@@ -408,16 +409,16 @@ def build_multimodal_pipeline(text_pipeline, image_pipeline):
 
     flatten = FlattenComposite(multimodal_dataset,
                                t2i_indexes)
-    flat_multimodal_dataset = flatten[multimodal_dataset]
+    flat_multimodal_corpus = flatten[multimodal_dataset]
     # FlattenComposite is just another transformation block, although
     # specifically designed to deal with composite datasets (it will refuse to
     # work on anything else). Its role is to stitch items from individual
     # subsets of the composite dataset together. (It does this on the fly.)
 
-    serializer = Serializer(flat_multimodal_dataset,
+    serializer = Serializer(flat_multimodal_corpus,
                             ShardedCorpus,
                             serialization_mmname)
-    pipeline = serializer[flat_multimodal_dataset]
+    pipeline = serializer[flat_multimodal_corpus]
     # Finally, we serialize the flattened results.
 
     return pipeline
@@ -605,7 +606,7 @@ if __name__ == '__main__':
     #    it needs __getitem__ slicing/list support. Of course, we could've added
     #    the dataset: text_runtime_pipeline = Dataset(text_pipeline)
 
-    tan = GeneralFunctionTransform(numpy.tan,
+    tan = GeneralFunctionTransform(numpy.arctanh,
                                    multiplicative_coef=1.0/0.99975,
                                    outer_multiplicative_coef=3.0)
     # We now invert the GeneralFunctionTransform that we used in constructing
@@ -615,7 +616,7 @@ if __name__ == '__main__':
     #
     # we now need:
     #
-    # X = (1 / inner) * numpy.tan((1 / outer) * Y)
+    # X = (1 / inner) * numpy.arctanh((1 / outer) * Y)
     #
     # to restore the original values.
     #
@@ -637,3 +638,4 @@ if __name__ == '__main__':
     #
     # Now we'd just need to build a similarity index, but that truly is outside
     # the scope of this tutorial. (Hint: use gensim's Similarity class.)
+    print 'Tutorial finished!'

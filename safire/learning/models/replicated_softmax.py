@@ -13,10 +13,10 @@ import theano.tensor as TT
 from theano.tensor.shared_randomstreams import RandomStreams
 from safire.learning.models import RestrictedBoltzmannMachine
 
-from safire.learning.models.base_unsupervised_model import BaseUnsupervisedModel
-from safire.learning.interfaces.pretraining_model_handle import PretrainingModelHandle
-from safire.learning.interfaces import ModelHandle
-from safire.utils import check_kwargs
+# from safire.learning.models.base_unsupervised_model import BaseUnsupervisedModel
+# from safire.learning.interfaces.pretraining_model_handle import PretrainingModelHandle
+# from safire.learning.interfaces import ModelHandle
+# from safire.utils import check_kwargs
 
 class ReplicatedSoftmax(RestrictedBoltzmannMachine):
     def __init__(self, inputs, n_in, n_out=100,

@@ -8,6 +8,7 @@ import re
 import gzip
 import os
 from tempfile import mkdtemp
+import collections
 from joblib import memory
 #import cPickle
 
@@ -15,8 +16,10 @@ from joblib import memory
 from gensim.corpora.textcorpus import TextCorpus
 from gensim.corpora.dictionary import Dictionary
 import itertools
+from safire.data.filters.tfidf_token_filter import TfidfBasedTokensFilter
 
 import filters.positional_filters as pfilters
+from safire.utils import freqdict, call_stack_report
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +49,15 @@ class VTextCorpus(TextCorpus):
                  retcol='lemma', input_root=None,
                  delimiter='\t', gzipped=True,
                  sentences=False,
+                 tokens=False, tokens_use_sentence_separator=False,
                  dictionary=None, allow_dict_updates=True,
                  doc2id=None, id2doc=None, token_filter=None,
                  token_transformer='strip_UFAL',
+                 token_min_freq=0,
                  pfilter=None, pfilter_full_freqs=False,
                  filter_capital=False,
+                 filter_short=None,
+                 tfidf_filter=None,
                  label=None, precompute_vtlist=True):
         """Initializes the text corpus.
 
@@ -74,15 +81,15 @@ class VTextCorpus(TextCorpus):
         :param sentences: Set to True if docs should not be entire files
             but rather sentences.
 
-            .. warning::
+        :param tokens: Set to True if docs should be individual tokens rather
+            than entire files. Note that the dataset will be *very*
+            long. Also, all filtering methods that depend on co-occurrence of
+            tokens in documents will not work (tf-idf), although frequency-based
+            filtering and all filtering done within VTextCorpus will work.
 
-                This option is scheduled for deprecation.
-
-            .. warning::
-
-                If you set ``sentences``, you MUST unset ``precompute_vtlist``,
-                as the ``doc2id`` and ``id2doc`` mappings do NOT get precomputed
-                on a per-sentence basis.
+        :param tokens_use_sentence_separator: Set to True if you want to output
+            a ``<S>`` special token between sentences. Only works when the
+            ``tokens`` flag is set. [NOT IMPLEMENTED]
 
         :param dictionary: If specified, the corpus will share a dictionary.
             Useful for multiple VTextCorpus instances running on a single
@@ -117,6 +124,14 @@ class VTextCorpus(TextCorpus):
             obtained from MorphoDiTa, from the MorphLex lemma dictionary
             at UFAL. **This is currently the default behavior.**
 
+        :param token_min_freq: The minimum frequency a token must have in
+            a document to stay in the output. Note that "document level" means
+            at the level of one vtext document (vtlist entry), not one returned
+            data item. By default, no minimum frequency is necessary.
+
+            This is something of a document-level filter and may yet be
+            generalized.
+
         :param pfilter: A number, either an integer or a float. If
             an integer (K) is given, will only take the first K sentences from
             the beginning of a document. If a float is given, will use the given
@@ -130,6 +145,11 @@ class VTextCorpus(TextCorpus):
         :param filter_capital: If set, will remove all words that start with
             a capital letter in their retfield. This serves to remove named
             entities.
+
+        :param tfidf_filter: If set, will use a specific TfIdf-based filtering
+            to only retain tokens that are significant for the document.
+            Has to be ``__call__``-able with the same signature as
+            :meth:`TfidfBasedTokensFilter.__call__`.
 
         :param label: A "name" the corpus carries with it for identification.
 
@@ -169,21 +189,28 @@ class VTextCorpus(TextCorpus):
 
         # Initialize document ID tracking
         if doc2id is None:
-            doc2id = {}
+            doc2id = collections.defaultdict(set)
         if id2doc is None:
-            id2doc = []
+            id2doc = collections.defaultdict(str)
 
+        # logging.debug('vtcorp: id2doc at init: {0}'.format(id2doc))
         self.doc2id = doc2id
         self.id2doc = id2doc
 
         # Initialize filters
         self.token_filter = token_filter
 
+        if tfidf_filter is not None:
+            if not isinstance(tfidf_filter, TfidfBasedTokensFilter):
+                logging.warn('Unexpected tfidf_filter type: {0}'
+                             ''.format(type(tfidf_filter)))
+        self.tfidf_filter = tfidf_filter
+
         if token_transformer == 'strip_UFAL':
             token_transformer = _strip_UFAL
 
         self.token_transformer = token_transformer
-
+        self.token_min_freq = token_min_freq
         # Initialize column parsing
         self.delimiter = delimiter
         self.colnames = colnames
@@ -195,6 +222,8 @@ class VTextCorpus(TextCorpus):
 
         # Output behavior properties
         self.sentences = sentences
+        self.tokens = tokens
+        self.tokens_use_sentence_separator = tokens_use_sentence_separator
 
         # Initializes the positional filter
         self.positional_filter = None
@@ -209,13 +238,22 @@ class VTextCorpus(TextCorpus):
         self.precompute_vtlist = precompute_vtlist
         self.vtlist = []
         if self.precompute_vtlist:
-            self.vtlist = self._precompute_vtlist(self.input)
-
+            if self.tokens or self.sentences:
+                logging.warn('Precomputing vtlist leads to wrong behavior with'
+                             ' tokens or sentences retrieval; skipping and'
+                             ' setting self.precompute_vtlist to false.')
+                self.precompute_vtlist = False
+            else:
+                logging.debug('Precomputing vtlist '
+                              '(self.precompute_vtlist = {0})'
+                              ''.format(self.precompute_vtlist))
+                self.vtlist = self._precompute_vtlist(self.input)
+            logging.info('  Length after precomputing vtlist: {0}'.format(len(self)))
         # Caching
         self._cachedir = mkdtemp()
         self._memory = memory.Memory(cachedir=self._cachedir, verbose=0)
 
-        self.__getitem__ = self._memory.cache(self.__getitem__)
+        #self.__getitem__ = self._memory.cache(self.__getitem__)
 
     def __iter__(self):
         """
@@ -225,7 +263,7 @@ class VTextCorpus(TextCorpus):
         document. In our case, behavior will depend on whether
         ``precompute_vtlist`` was set during initialization.
         """
-        if self.precompute_vtlist and not self.sentences:
+        if self.precompute_vtlist and not self.sentences and not self.tokens:
             for i in xrange(len(self)):
                 out = self[i]
                 self.n_processed += 1
@@ -238,7 +276,7 @@ class VTextCorpus(TextCorpus):
     def doc2bow(self, text, allow_update=None):
         """Mini-method for generating BOW representation of text."""
         if allow_update is None:
-            allow_update=self.allow_dict_updates
+            allow_update = self.allow_dict_updates
         bow = self.dictionary.doc2bow(text,
                                       allow_update=allow_update)
 
@@ -258,7 +296,14 @@ class VTextCorpus(TextCorpus):
         One iteration of get_texts() should yield one document, which means
         one file. Note that get_texts() can work even with vtlists that do not
         fit into memory, which would be a very rare occasion indeed.
+
+        Also, it is at this point that document/sentence/token retrieval is
+        resolved and the document <==> id mapping is constructed.
         """
+        logging.info('VTextCorpus: entering get_texts.')
+        # logging.debug('id2doc at this point: {0}.'.format(self.id2doc))
+        # logging.debug('{0}'.format(call_stack_report()))
+
         batch_no = 1
         timed_batch_size = 1000
         start_time = time.clock()  # Logging time
@@ -284,6 +329,8 @@ class VTextCorpus(TextCorpus):
             doc = doc.strip()
             doc_short_name = doc
 
+            # logging.info('Operating on document {0}'.format(doc_short_name))
+
             doc = self.doc_full_path(doc)
             if not self.precompute_vtlist:
                 self.vtlist.append(doc)
@@ -291,37 +338,74 @@ class VTextCorpus(TextCorpus):
             # This is where the actual parsing happens.
             with self._get_doc_handle(doc) as doc_handle:
                 document, sentences = self.parse_document_and_sentences(
-                    doc_handle)
+                    doc_handle, docno)
 
-            # This may get deprecated (no sentences)
-            if not self.sentences:
-                # Update document mappings
-                if not self.precompute_vtlist:
+            # if len(document) <= 10:
+            #     logging.info(u'Total tokens in document {0}: {1} |\n {2}'
+            #                  u''.format(doc_short_name, len(document),
+            #                             '\n '.join([unicode(d)
+            #                                         for d in document])))
+            # else:
+            #     logging.info(u'Total tokens in document {0}: {1}'
+            #                  u''.format(doc_short_name, len(document)))
+
+            if self.tokens:
+                for token in document:
                     docid = doc_short_name
-                    self.doc2id[docid] = total_yielded
-                    self.id2doc.append(docid)
-                total_yielded += 1
-                yield document
-
-            else:
-                for sentno, sentence in enumerate(sentences):
-                    docid = doc_short_name + '.' + str(sentno)
-                    self.doc2id[docid] = total_yielded
-                    self.id2doc.append(docid)
+                    if self.locked and token not in self.dictionary.token2id:
+                        continue
+                    self.doc2id[docid].add(total_yielded)
+                    ### DEBUG
+                    #if total_yielded < 10 and len(self.id2doc) < 100:
+                    #    logging.debug(u'Adding token {2} to id2doc[{0}]: {1}, id2doc: {3}'.format(len(self.id2doc), docid, token, self.id2doc))
+                    self.id2doc[len(self.id2doc)] = docid
                     total_yielded += 1
+                    self.n_processed += 1
+                    self.n_words_processed += 1
+
+                    # logging.info(' Yielding token: {0}'.format([token]))
+                    yield [token]
+
+            elif self.sentences:
+                for sentno, sentence in enumerate(sentences):
+                    docid = doc_short_name     # + '.' + str(sentno)
+                    # Instead of creating a special document name for each
+                    # sentence, simply make a list of output items associated
+                    # with the original document. The id2doc mapping then serves
+                    # as the reverse pointer.
+                    self.doc2id[docid].add(total_yielded)
+                    self.id2doc[len(self.id2doc)] = docid
+                    total_yielded += 1
+                    self.n_processed += 1
+                    self.n_words_processed += len(sentence)
                     yield sentence
 
+            else:
+                # Update document mappings
+                if self.tokens:
+                    logging.debug('Yielding DOCUMENT!!!\n\n')
+                if not self.precompute_vtlist:
+                    docid = doc_short_name
+                    self.doc2id[docid].add(total_yielded)
+                    self.id2doc[len(self.id2doc)] = docid
+                total_yielded += 1
+                self.n_processed += 1
+                self.n_words_processed += len(document)
+                yield document
+
             # Logging
-            self.n_processed += 1
-            if self.n_processed % timed_batch_size == 0:
+            # self.n_processed += 1
+            if self.n_processed % timed_batch_size == 0 and self.n_processed > 0:
                 batch_end_time = time.clock()
                 batch_time = batch_end_time - batch_start_time
                 batch_total_time = batch_end_time - start_time
-                logger.info(
-                    'Done batch no. %d, total docs %d. Batch time %f s (%f s / doc), total time %f s (%f s / doc)' % (
-                        batch_no, self.n_processed, batch_time,
-                        batch_time / timed_batch_size, batch_total_time,
-                        batch_total_time / self.n_processed))
+                logger.info('Done batch no. {0}, total docs {1}. Batch time '
+                            '{2} s ({3} s / doc), total time {4} s ({5} s /'
+                            ' doc)'
+                            ''.format(batch_no, self.n_processed, batch_time,
+                                      batch_time / timed_batch_size,
+                                      batch_total_time,
+                                      batch_total_time / self.n_processed))
                 batch_no += 1
                 batch_start_time = time.clock()
 
@@ -330,10 +414,13 @@ class VTextCorpus(TextCorpus):
 
         end_time = time.clock()
         total_time = end_time - start_time
-        logger.info('Processing corpus took %f s (%f s per document).' % (
-            total_time, total_time / self.n_processed))
+        if self.n_processed > 0:
+            logger.info('Processing corpus took %f s (%f s per document).' % (
+                total_time, total_time / self.n_processed))
+        else:
+            logger.warn('Only processed 0 documents!')
 
-    def parse_document_and_sentences(self, doc_handle):
+    def parse_document_and_sentences(self, doc_handle, docno=None):
         """Parses the whole document. Returns both the sentences and the
         whole document, filtered by pfilter."""
         # Pre-parse entire document
@@ -342,7 +429,18 @@ class VTextCorpus(TextCorpus):
         # Process sentences and prepare document to return
         flt_sentences = sentences
         if self.positional_filter:
-            flt_sentences = self._apply_positional_filter(sentences)
+            flt_sentences = self._apply_positional_filter(flt_sentences)
+
+        if self.tfidf_filter:
+            if docno is None:
+                raise ValueError('Cannot use tfidf_filter with document iid'
+                                 ' not supplied.')
+            flt_sentences = self._apply_tfidf_filter(flt_sentences,
+                                                     docno,
+                                                     sentences=True)
+
+        if self.token_min_freq:
+            flt_sentences = self._apply_token_min_freq(flt_sentences)
 
         document = list(itertools.chain(*flt_sentences))
 
@@ -355,7 +453,7 @@ class VTextCorpus(TextCorpus):
 
         If a sentence filter is specified, applies the sentence filter.
         """
-        logging.debug('Parsing sentences from handle %s' % str(doc_handle))
+        # logging.debug('Parsing sentences from handle %s' % str(doc_handle))
 
         filter_capital_regex = None
         if self.filter_capital:
@@ -364,15 +462,12 @@ class VTextCorpus(TextCorpus):
         sentences = []
         current_buffer = []
         for line_no, line in enumerate(doc_handle):
-            # Quick fix?
-            #if self.gzipped:
-            #    line = line.decode('utf-8')
 
-            #logging.debug('Line: %s' % line.strip())
-            #safire.utils.check_malformed_unicode(line.strip())
+            # logging.debug('Line: %s' % line.strip())
+            # safire.utils.check_malformed_unicode(line.strip())
 
             if line.strip() == '':
-                #logger.debug('parse_sentences: Adding sentence at %d: %s' % (
+                # logger.debug('parse_sentences: Adding sentence at %d: %s' % (
                 #    line_no, str(current_buffer)))
                 sentences.append(current_buffer)
                 current_buffer = []
@@ -396,18 +491,35 @@ class VTextCorpus(TextCorpus):
                     continue
                 current_buffer.append(ret_field)
 
+        # Last sentence
+        if len(current_buffer) > 0:
+            sentences.append(current_buffer)
+            # current_buffer = []   #... not strictly necessary
+
         return sentences
 
     def dry_run(self):
         """Loops through the entire corpus without outputting the documents
         themselves, to generate the corpus infrastructure: document ID mapping,
         dictionary, etc."""
+        start_time = time.clock()
         if self.precompute_vtlist:
-            for i in xrange(len(self)):     # Caches results!
+            for i in xrange(len(self)):     # Should cache results (?)
                 _ = self[i]
+                if i % 1000 == 0:
+                    logging.info(' Dry run at {0}, in {1} s. Vocabulary size: '
+                                 '{2}'.format(i, time.clock() - start_time,
+                                              len(self.dictionary)))
         else:
-            for _ in self:
+            for i, _ in enumerate(self):
                 pass
+                if i % 1000 == 0:
+                    logging.info(' Dry run at {0}, in {1} s'
+                                 ''.format(i, time.clock() - start_time))
+
+        logging.info('Corpus stats derived from dry run:\n  {0} docs,\n'
+                     '  {1} tokens.\n'.format(self.n_processed,
+                                              self.n_words_processed))
 
     def lock(self):
         """In order to use the corpus as a transformer, it has to be locked: it
@@ -457,9 +569,10 @@ class VTextCorpus(TextCorpus):
             self.input_root = input_root
         self.input = vtlist_filename
         self.vtlist = []
-        self.doc2id = {}
-        self.id2doc = []
+        self.doc2id = collections.defaultdict(set)
+        self.id2doc = collections.defaultdict(str)
         if self.precompute_vtlist:
+            logging.info('Precomputing vtlist in reset_input()')
             self.vtlist = self._precompute_vtlist(self.input)
         self._memory.clear()
         if lock:
@@ -473,8 +586,14 @@ class VTextCorpus(TextCorpus):
         of documents. If it was not precomputed, returns the number of documents
         processed from the current input. Note that resetting the input will
         also reset corpus length; for a total of documents retrieved from the
-        corpus, see the ``n_processed`` attribute."""
-        return len(self.vtlist)
+        corpus, see the ``n_processed`` attribute.
+
+        This DOES NOT WORK when yielding ``sentences`` or ``tokens``!!!
+        """
+        if self.precompute_vtlist:
+            return len(self.vtlist)
+        else:
+            return self.n_processed
 
     def __del__(self):
         if self.__do_cleanup:
@@ -499,19 +618,32 @@ class VTextCorpus(TextCorpus):
             VTextCorpusTransformer class, as the usage pattern more closely
             mirrors a transformation of vertical text documents.
 
-        Does NOT support retrieving sentences."""
-        #print 'Item: {0}'.format(item)
+        Does NOT support retrieving sentences or tokens."""
         if self.sentences:
-            raise ValueError('__getitem__ calls not supported when retrieving'
-                             'sentences as documents.')
+            raise TypeError('__getitem__ calls not supported when retrieving'
+                            ' sentences as documents.')
+        if self.tokens:
+            raise TypeError('__getitem__ calls not supported when retrieving'
+                            ' tokens as documents.')
         if isinstance(item, slice):
-            return [self[i] for i in xrange(item.start, item.stop, 1)]
+            # print 'Slice: {0}, indices: {1}'.format(item, item.indices(len(self)))
+            return [self[i] for i in xrange(*item.indices(len(self)))]
+        if isinstance(item, list):
+            return [self[i] for i in item]
         if isinstance(item, int):
             if not self.precompute_vtlist:
                 raise TypeError('Doesn\'t support indexing without precomputing'
-                                'the vtlist.')
-            with self._get_doc_handle(self.vtlist[item]) as vthandle:
-                document, _ = self.parse_document_and_sentences(vthandle)
+                                ' the vtlist.')
+            try:
+                with self._get_doc_handle(self.vtlist[item]) as vthandle:
+                    document, _ = self.parse_document_and_sentences(vthandle,
+                                                                    docno=item)
+            except IndexError:
+                logging.critical('Asking for vtlist item {0}, vtlist length is'
+                                 ' only {1}.'.format(item, len(self.vtlist)))
+                raise
+            self.n_processed += 1
+            self.n_words_processed += len(document)
 
             return self.doc2bow(document, allow_update=allow_update)
 
@@ -547,7 +679,38 @@ class VTextCorpus(TextCorpus):
 
         :return: The filtered document.
         """
-        return self.positional_filter(sentences, **self.positional_filter_kwargs)
+        return self.positional_filter(sentences,
+                                      **self.positional_filter_kwargs)
+
+    def _apply_token_min_freq(self, flt_sentences):
+        """Filters the given set of sentences so that tokens that appear
+        less than ``self.token_min_freq`` times are filtered out.
+
+        If the document would be left empty after all the low-frequency tokens
+        are removed, doesn't filter."""
+        freqs = freqdict(itertools.chain(*flt_sentences))
+        throw_out = set()
+        for token in freqs:
+            if freqs[token] < self.token_min_freq:
+                throw_out.add(token)
+        filtered_sentences = []
+        for sentence in flt_sentences:
+            filtered_sentence = [token
+                                 for token in sentence
+                                 if token not in throw_out]
+            filtered_sentences.append(filtered_sentence)
+        total_length = sum(len(fs) for fs in filtered_sentences)
+        if total_length == 0:
+            logging.debug('Document would be empty after min. freq. filter,'
+                          ' filter is not applied.')
+            filtered_sentences = flt_sentences
+
+        flt_sentences = filtered_sentences
+        return flt_sentences
+
+    def _apply_tfidf_filter(self, flt_sentences, docno, **kwargs):
+        filtered_sentences = self.tfidf_filter(flt_sentences, docno, **kwargs)
+        return filtered_sentences
 
     def _get_doc_handle(self, doc):
         if self.gzipped:
@@ -560,6 +723,7 @@ class VTextCorpus(TextCorpus):
     def _precompute_vtlist(self, input):
         # Should also compute the doc2id and id2doc mapping.
         # Does NOT support sentences.
+        logging.info('VTextCorpus: precomputing vtlist {0}.'.format(input))
         if not isinstance(input, str):
             raise TypeError('Cannot precompute vtlist from a handle,'
                             ' must supply parameter input as filename.')
@@ -567,15 +731,17 @@ class VTextCorpus(TextCorpus):
         with open(input) as vtl_handle:
             for i, vtname in enumerate(vtl_handle):
                 doc_short_name = vtname.strip()
-                self.id2doc.append(doc_short_name)
-                self.doc2id[doc_short_name] = i
+                self.id2doc[len(self.id2doc)] = doc_short_name
+                self.doc2id[doc_short_name].add(i)
 
                 doc_full_name = self.doc_full_path(doc_short_name)
+                # logging.debug('Adding document to vtlist: {0}'.format(doc_full_name))
                 vtlist.append(doc_full_name)
+        #logging.debug('Precomputed vtlist, doc2id: {0}'.format(self.doc2id))
         return vtlist
 
     def save(self, *args, **kwargs):
-        attrs_to_ignore = ['__getitem__']
+        attrs_to_ignore = []
         if 'ignore' not in kwargs:
             kwargs['ignore'] = frozenset(attrs_to_ignore)
         else:
@@ -588,8 +754,11 @@ class VTextCorpus(TextCorpus):
         corpus = super(VTextCorpus, cls).load(fname, mmap=mmap)
 
         # Restore ignored __getitem__
-        corpus.__getitem__ = VTextCorpus.__getitem__
-        corpus.__getitem__ = corpus._memory.cache(corpus.__getitem__)
+        #corpus.__getitem__ = VTextCorpus.__getitem__
+        #corpus.__getitem__ = corpus._memory.cache(corpus.__getitem__)
         # Restoring works, but caching doesn't..?
 
         return corpus
+
+#   def __setstate__(self, d):
+    #     self.__dict__.update(d)

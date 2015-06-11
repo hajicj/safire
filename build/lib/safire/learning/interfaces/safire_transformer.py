@@ -13,11 +13,15 @@ import gensim.utils
 import gensim.matutils
 from gensim.interfaces import TransformationABC, TransformedCorpus
 from gensim.similarities import Similarity
+import numpy
 import theano
 import theano.printing
+import safire
+from safire.datasets.dataset import DatasetABC
 
 from safire.learning.interfaces import ModelHandle
-from safire.utils import profile_run
+from safire.utils import profile_run, gensim2ndarray, IndexedTransformedCorpus
+from safire.utils.transcorp import smart_apply_transcorp
 
 
 class SafireTransformer(TransformationABC):
@@ -52,10 +56,19 @@ class SafireTransformer(TransformationABC):
     inputs to the ``run`` theano compiled function. The outputs of ``run``
     will be collected and returned again as a corpus.
 
+    Sparse vs. dense output
+    -----------------------
+
+    The SafireTransformer accepts both gensim vectors and numpy ndarrays as
+    inputs and can produce outputs of either type. The type of throughput is
+    controlled by the ``dense_throughput`` attribute. If set, it will expect
+    dense input and produce dense output; if unset, it will expect gensim
+    input and produce gensim output.
+
     """
     def __init__(self, model_handle, dataset=None, learner=None,
-                 eps=1e-09, chunksize=1000, attempt_resume=False,
-                 profile_training=False):
+                 eps=1e-09, chunksize=None, attempt_resume=False,
+                 profile_training=False, dense_throughput=False):
         """Initializes the transformer. If necessary, performs model training
         (when the ``dataset`` and ``learner`` arguments are given).
 
@@ -95,6 +108,10 @@ class SafireTransformer(TransformationABC):
 
         :type profile_training: bool
         :param profile_training: If set, will profile the learner run.
+
+        :type dense_throughput: bool
+        :param dense_throughput: If set, will (a) assume numpy ndarrays on input
+            and (b) not convert output to sparse vectors.
         """
 
         self.model_handle = model_handle
@@ -114,7 +131,8 @@ class SafireTransformer(TransformationABC):
         self.n_out = self.model_handle.n_out
 
         self.chunksize = chunksize
-        self.eps = eps # Using this is not implemented.
+        self.eps = eps   # Using this is not implemented.
+        self.dense_throughput = dense_throughput
 
     def save(self, fname, protocol=-1):
         """Saves the transformer. Saving is achieved by getting the handle
@@ -132,15 +150,15 @@ class SafireTransformer(TransformationABC):
         describe the transformer.
         """
         init_args = {
-            'handle' : self.model_handle._export_pickleable_obj(),
-            'handle_class' : self.model_handle.__class__, # Generality...
-            'chunksize' : self.chunksize,
-            'eps' : self.eps
+            'handle': self.model_handle._export_pickleable_obj(),
+            'handle_class': self.model_handle.__class__, # Generality...
+            'chunksize': self.chunksize,
+            'eps': self.eps
         }
 
         return init_args
 
-    def __getitem__(self, bow, chunksize=1000):
+    def __getitem__(self, bow, chunksize=None):
 
         # We want to do the _apply thing only when the corpus
         # is a stream-style yield()-ing corpus, not when it's
@@ -148,6 +166,8 @@ class SafireTransformer(TransformationABC):
         # through the corpus in chunks, by setting the chunksize
         # parameter of TransformedCorpus.
         if isinstance(bow, gensim.interfaces.CorpusABC):
+            return self._apply(bow, self.chunksize)
+        if isinstance(bow, DatasetABC):
             return self._apply(bow, self.chunksize)
 
         # Convert chunk to dense. We can use the fact that the array of
@@ -157,53 +177,76 @@ class SafireTransformer(TransformationABC):
         # Note that the ``corpus2dense`` function returns a numpy ndarray with
         # documents as *columns*, while the safire model expects documents as
         # *rows*.
-        is_corpus, bow = gensim.utils.is_corpus(bow)
-        if not is_corpus: # If we got a single item: make a one-item corpus
-                          # from it, to simplify code path.
-            bow = [bow]
 
-        dense_bow = gensim.matutils.corpus2dense(bow,
-                                                 self.n_in,
-                                                 len(bow)).T
-        # Transposition!!! (Due to gensim's corpus2dense returning documents
-        # as columns)
+        # Because the model handle needs a 2d input to its run() method,
+        # if only a single document is given, we'll need to convert it to
+        # 2d. However, before outputting the result (which is also given as
+        # a 2d matrix), we should strip the extra dimension, to keep
+        # dimensionality of output consistent with dimensionality of input.
+        was_single_doc = False
 
-        # logging.debug('Debug print of self.model_handle.run():')
-        # logging.debug(theano.printing.debugprint(self.model_handle.run.maker.fgraph.outputs[0]))
-        # theano.printing.pp(self.model_handle.run.maker.fgraph.outputs[0])
-        # theano.printing.pydotprint(self.model_handle.run,
-        #                            outfile='run.pydotprint.png',
-        #                            with_ids=True)
-        # theano.printing.pydotprint(self.model_handle.train,
-        #                            outfile='train.pydotprint.png',
-        #                            with_ids=True)
-        # theano.printing.pydotprint(self.model_handle.validate,
-        #                            outfile='validate.pydotprint.png',
-        #                            with_ids=True)
-        # theano.printing.pydotprint(self.model_handle.test,
-        #                            outfile='test.pydotprint.png',
-        #                            with_ids=True)
+        # logging.debug('SFtrans bag of words type: {0}'.format(type(bow)))
+        if not isinstance(bow, numpy.ndarray):
+
+            if self.dense_throughput:
+                raise TypeError('dense_throughput set, expecting numpy.ndarray'
+                                'input (got: {0})'.format(type(bow)))
+
+            is_corpus, bow = gensim.utils.is_corpus(bow)
+            # if not is_corpus:  # If we got a single item: make a one-item
+            #                    # corpus from it, to simplify code path.
+            #     pass
+            #print 'bow: {0}'.format(bow)
+            if isinstance(bow[0], tuple):  # If we get a single gensim-style
+                bow = [bow]                # vector, we convert it to a 1-doc
+                was_single_doc = True      # corpus (the handle needs a matrix).
+
+            dense_bow = gensim2ndarray(bow, self.n_in, len(bow))
+            # Why not gensim.matutils.corpus2dense? Tansposition!
+            # (Due to gensim's corpus2dense returning documents as columns.)
+
+        else:
+            if len(bow.shape) == 1:
+                was_single_doc = True
+            dense_bow = numpy.atleast_2d(bow)
 
         # Run the model on the dense representation of input.
         dense_out = self.model_handle.run(dense_bow)
 
-        sparse_out = gensim.matutils.Dense2Corpus(dense_out,
-                                                  documents_columns=False)#,
-                                                  #eps=self.eps) Param
-                                                  # not available in gensim
-                                                  # 0.10.1
+        if self.dense_throughput:
+            out = dense_out
 
-        return sparse_out
+        else:
+            #logging.debug('Dense_out: {0}'.format(dense_out))
+            sparse_out = gensim.matutils.Dense2Corpus(dense_out,
+                                                      documents_columns=False)
 
-    def _apply(self, corpus, chunksize=1000):
+            sparse_out = list(sparse_out)  # Runs through Dense2Corpus.__iter__
+            out = sparse_out
+
+        if was_single_doc:
+            out = out[0]
+
+        # if self.n_out == 200:  # Very bad debugging practice
+        #     logging.debug('SafireTransformer output: {0}'.format(out))
+        #     logging.debug('                  length: {0}'.format(len(out)))
+        #     print 'SafireTransformer output: {0}'.format(out)
+        #     print '                  length: {0}'.format(len(out))
+
+        return out
+
+    def _apply(self, corpus, chunksize=None):
         """
 
         :param corpus:
         :param chunksize:
         :return:
         """
-
-        return TransformedCorpus(self, corpus, chunksize)
+        return smart_apply_transcorp(self, corpus, chunksize=chunksize)
+        # try:
+        #     return IndexedTransformedCorpus(self, corpus, chunksize)
+        # except TypeError:
+        #     return TransformedCorpus(self, corpus, chunksize)
 
     @classmethod
     def load(cls, fname):

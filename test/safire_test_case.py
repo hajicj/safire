@@ -1,12 +1,47 @@
 import os
 import gensim
 import logging
+from safire.data.vtextcorpus import VTextCorpus
+from safire.data.imagenetcorpus import ImagenetCorpus
 from safire.data.layouts import clean_data_root, init_data_root
 from safire.data.loaders import MultimodalShardedDatasetLoader
+from safire.data.serializer import Serializer
+from safire.data.sharded_corpus import ShardedCorpus
+from safire.utils import IndexedTransformedCorpus
+from safire.utils.transcorp import id2doc_to_doc2id
 
 __author__ = 'hajicj'
 
 import unittest
+
+
+class SafireMockCorpus(gensim.interfaces.CorpusABC):
+    """Use this class to simulate a safire pipeline.
+    """
+    def __init__(self, data, dim, id2doc):
+        if len(id2doc.keys()) != len(data):
+            raise ValueError('Supplied id2doc length {0} does not match '
+                             'supplied data length {1}'
+                             ''.format(len(id2doc), len(data)))
+        self.data = data
+        self.dim = dim
+        self.id2doc = id2doc
+        self.doc2id = id2doc_to_doc2id(self.id2doc)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __iter__(self):
+        for item in self.data:
+            yield item
+
+    def __getitem__(self, item):
+        if isinstance(item, list):
+            return [self.data[i] for i in item]
+        elif isinstance(item, slice):
+            return [self.data[i] for i in xrange(*item.indices(len(self)))]
+        else:
+            return self.data[item]
 
 
 class SafireTestCase(unittest.TestCase):
@@ -44,16 +79,28 @@ class SafireTestCase(unittest.TestCase):
         # a SafireTestCase
         init_data_root(cls.data_root, overwrite=True)
 
+        cls.loader = MultimodalShardedDatasetLoader(cls.data_root,
+                                                    'test-data')
+        cls.vtlist = os.path.join(cls.loader.root, cls.loader.layout.vtlist)
+
         cls._clean_only = clean_only
         if cls._clean_only:
             return
 
         # Re-generate the default corpora/datasets.
-        cls.loader = MultimodalShardedDatasetLoader(cls.data_root,
-                                                    'test-data')
         cls.loader.build_default_text_corpora(serializer=gensim.corpora.MmCorpus)
         cls.loader.build_default_image_corpora(
             serializer=gensim.corpora.MmCorpus)
+
+        cls.vtcorp = VTextCorpus(cls.vtlist, input_root=cls.loader.root)
+        cls.vtcorp_name = cls.loader.pipeline_name('')
+        cls.vtcorp.save(cls.vtcorp_name)
+
+        ivectors = os.path.join(cls.loader.root,
+                                cls.loader.layout.image_vectors)
+        cls.icorp = ImagenetCorpus(ivectors, delimiter=';', dim=4096)
+        cls.icorp_name = cls.loader.pipeline_name('.img')
+        cls.icorp.save(cls.icorp_name)
 
         cls._no_datasets = no_datasets
         if not no_datasets:
@@ -64,6 +111,18 @@ class SafireTestCase(unittest.TestCase):
             default_icorp = cls.loader.load_image_corpus()
             cls.loader.build_img(default_icorp,
                                  dataset_init_args={'overwrite': True})
+
+            cls.vtcorp_s_name = cls.loader.pipeline_serialization_target()
+            cls.vtcorp.dry_run()
+            t_serializer = Serializer(cls.vtcorp, ShardedCorpus,
+                                      cls.vtcorp_s_name)
+            cls.vtcorp_serialized = t_serializer[cls.vtcorp]
+
+            cls.icorp_s_name = cls.loader.pipeline_serialization_target('.img')
+            i_serializer = Serializer(cls.icorp, ShardedCorpus,
+                                      cls.icorp_s_name)
+            cls.icorp_serialized = i_serializer[cls.icorp]
+
 
 
     @classmethod

@@ -13,8 +13,22 @@ will be at the end run through the trained model and saved with the
 """
 import argparse
 import logging
+from gensim.utils import SaveLoad
 import matplotlib.pyplot as plt
 import operator
+import os
+from safire.data.word2vec_transformer import Word2VecTransformer
+from safire.datasets.transformations import FlattenComposite
+from safire.datasets.word2vec_transformer import \
+    Word2VecSamplingDatasetTransformer
+from safire.utils.transcorp import dimension, smart_cast_dataset, \
+    log_corpus_stack, get_id2word_obj, docnames2indexes, \
+    compute_docname_flatten_mapping
+import safire
+from safire.data.serializer import Serializer
+from safire.data.sharded_corpus import ShardedCorpus
+from safire.datasets.dataset import Dataset, CompositeDataset
+import time
 import theano
 import theano.compile.pfunc
 from safire.data.loaders import MultimodalShardedDatasetLoader, ModelLoader, \
@@ -23,7 +37,8 @@ from safire.learning.interfaces import SafireTransformer
 from safire.learning.learners import BaseSGDLearner
 import safire.learning.models as models
 from safire.learning.models import check_model_dataset_compatibility
-from safire.utils import ReLU, cappedReLU, build_cappedReLU, abstanh
+from safire.utils import ReLU, cappedReLU, build_cappedReLU, abstanh, \
+    profile_run, parse_textdoc2imdoc_map
 
 print theano.config.compute_test_value
 
@@ -83,10 +98,20 @@ def _build_argument_parser():
     parser.add_argument('-t', '--text_label',
                         help='The text corpus label from which to load data. '
                              'Only one of -t, -i can be specified.')
+    parser.add_argument('--mm_label',
+                        help='If an already flattened multimodal dataset is'
+                             ' available, use that dataset right away and do'
+                             ' not unnecesarily do the combination step.'
+                             ' If mm_label is used, img_label and text_label'
+                             ' must *not* be used.')
     parser.add_argument('-l', '--transformation_label', action='store',
                         help='The output label. This is to help distinguish ' +
                         'models made with different options. Controls saving names,'
                         'both for the model and for the transformed corpus.')
+
+    parser.add_argument('--w2v', action='store',
+                        help='Path to the word2vec dict.')
+
     parser.add_argument('--n_out', type=int, default=1000,
                         help='The number of model output neurons.')
     parser.add_argument('-m', '--model', default='DenoisingAutoencoder',
@@ -146,9 +171,9 @@ def _build_argument_parser():
     parser.add_argument('--bias_decay', type=float, default=0.0,
                         help='A decay coefficient for bias parameters only '
                              '(weights stay untouched).')
-    parser.add_argument('--L1_norm', type=float, default=None,
+    parser.add_argument('--L1_norm', type=float, default=0.0,
                         help='Weight of L1-regularization.')
-    parser.add_argument('--L2_norm', type=float, default=None,
+    parser.add_argument('--L2_norm', type=float, default=0.0,
                         help='Weight of L2-regularization.')
 
     parser.add_argument('--feature_centering', action='store_true',
@@ -191,6 +216,17 @@ def _build_argument_parser():
                              'learner is useful if you will want to resume '
                              'training later.')
 
+    parser.add_argument('--serialize', action='store_true',
+                        help='If set, will serialize the pipeline built by '
+                             'adding the SafireTransformer block to the input '
+                             'pipeline. The serialization will be done by '
+                             'ShardedCorpus and the name will be based on the'
+                             '--transformation_label argument. Note that if '
+                             'this is given, the pipeline will be saved '
+                             'including the Serializer block.')
+
+    parser.add_argument('--profile_main', action='store_true',
+                        help='If set, will profile the main() function.')
     parser.add_argument('--profile_training', action='store_true',
                         help='If set, will profile the training procedure.')
     parser.add_argument('--plot_monitors', action='store',
@@ -221,6 +257,10 @@ def _build_argument_parser():
 
 def main(args):
 
+    if args.root == 'test':
+        args.root = safire.get_test_data_root()
+        args.name = 'test-data'
+
     # Initializing loaders
     logging.info('Initializing loaders with root %s, name %s' % (
         args.root, args.name))
@@ -229,24 +269,122 @@ def main(args):
     mloader = ModelLoader(args.root, args.name)
 
     # Loading datasets
-    if args.img_label and args.text_label:
-        raise ValueError('Can only specify one of text and image label.')
-    if not args.img_label and not args.text_label:
-        raise ValueError('Must specify either text or image label.')
+    if args.mm_label and (args.img_label or args.text_label):
+        raise ValueError('Cannot specify both mm_label and'
+                         ' img_label/text_label.')
 
+    if not args.img_label and not args.text_label and not args.mm_label:
+        raise ValueError('Must specify text/image label or both or mm_label.')
+
+    if args.img_label and args.text_label:
+        logging.info('Will train a multimodal model: text label {0}, image '
+                     'label {1}.'.format(args.img_label, args.text_label))
+
+        logging.info('Assuming')
+        #raise ValueError('Can only specify one of text and image label.')
+
+    # Need to refactor dataset loading.
+    # ...no more difference in principle between image labels and text labels.
     if args.img_label:
-        logging.info('Loading sharded dataset with img. label %s' % args.img_label)
-        dataset = mdloader.load_img(args.img_label)
-    elif args.text_label:
-        logging.info('Loading sharded dataset with text label %s' % args.text_label)
-        dataset = mdloader.load_text(args.text_label)
-    else:
-        raise argparse.ArgumentError('Must supply either --img_label'
-                                     'or --text_label.')
+        logging.info('Loading image dataset with img. label {0}'
+                     ''.format(args.img_label))
+        pipeline_fname = mdloader.pipeline_name(args.img_label)
+
+        #  - load the pipeline
+        img_pipeline = SaveLoad.load(fname=pipeline_fname)
+        # cast to Dataset
+        img_pipeline = Dataset(img_pipeline)
+
+    if args.text_label:
+        logging.info('Loading text dataset with text label {0}'
+                     ''.format(args.text_label))
+        pipeline_fname = mdloader.pipeline_name(args.text_label)
+
+        #  - load the pipeline
+        text_pipeline = SaveLoad.load(fname=pipeline_fname)
+        # - Cast to dataset
+        text_pipeline = Dataset(text_pipeline, ensure_dense=True)
+
+        # This is specifically a text transformation.
+        if args.w2v:
+            logging.info('Building and applying word2vec sampler. Note that '
+                         'this will mean no serialization is performed after'
+                         ' flattening, in case this is applied in a multimodal'
+                         ' setting.')
+            w2v_trans = Word2VecTransformer(args.w2v,
+                                            get_id2word_obj(text_pipeline))
+            w2v_sampler = Word2VecSamplingDatasetTransformer(w2v_trans)
+
+            text_pipeline = w2v_sampler[text_pipeline]
+
+    if (not args.text_label) and args.img_label:
+        pipeline = img_pipeline
+    elif args.text_label and (not args.img_label):
+        pipeline = text_pipeline
+    elif args.text_label and args.img_label:
+        logging.info('Combining text and image sources into a multimodal '
+                     'pipeline.')
+        logging.info('Text pipeline:\n{0}'.format(log_corpus_stack(text_pipeline)))
+        logging.info('Image pipeline:\n{0}'.format(log_corpus_stack(img_pipeline)))
+
+        # - Combine into CompositeDatasest
+        mm_composite_dataset = CompositeDataset((text_pipeline, img_pipeline),
+                                                names=('txt', 'img'),
+                                                aligned=False)
+        # - Flatten the dataset
+        #    - Load flatten indices
+        t2i_file = os.path.join(mdloader.root,
+                                mdloader.layout.textdoc2imdoc)
+        # t2i_map = parse_textdoc2imdoc_map(t2i_file)
+        # t2i_list = [[text, image]
+        #             for text in t2i_map
+        #             for image in t2i_map[text]]
+        # Sorting the indices is an optimization for underlying ShardedCorpus
+        # serializers.
+        t2i_indexes = compute_docname_flatten_mapping(mm_composite_dataset,
+                                                      t2i_file)
+
+        #    - Initialize flattening transformer
+        flatten = FlattenComposite(mm_composite_dataset, indexes=t2i_indexes)
+
+        #    - Apply
+        pipeline = flatten[mm_composite_dataset]
+
+        if not args.w2v:
+            #    - Serialize, because multimodal indexed retrieval is *slow*
+            mm_serialization_label = args.text_label + '__' + args.img_label
+            serialization_name = mdloader.pipeline_serialization_target(
+                mm_serialization_label)
+            logging.info('Serializing flattened multimodal data to {0}.'
+                         ''.format(serialization_name))
+
+            logging.debug('Pre-serialization pipeline: {0}'
+                          ''.format(log_corpus_stack(pipeline)))
+            serializer = Serializer(pipeline, ShardedCorpus, serialization_name,
+                                    dim=dimension(pipeline),
+                                    gensim_retrieval=False)
+            pipeline = serializer[pipeline]
+
+            mm_name = mdloader.pipeline_name(mm_serialization_label)
+            pipeline.save(mm_name)
+        else:
+            logging.warn('Word2vec sampling active, cannot serialize flattened'
+                         'corpus.')
+
+    if args.mm_label:
+        logging.info('Loading multimodal pipeline with label {0}'
+                     ''.format(args.mm_label))
+        pipeline_name = mdloader.pipeline_name(args.mm_label)
+        pipeline = SaveLoad.load(pipeline_name)
+
+    logging.info('Loaded pipeline:\n{0}'.format(log_corpus_stack(pipeline)))
+
+    #  - cast to dataset
+    dataset = smart_cast_dataset(pipeline, test_p=0.1, devel_p=0.1,
+                                 ensure_dense=True)
 
     logging.info('Setting up %s handle with output dimension %d' % (args.model,
                                                                     args.n_out))
-
     # Loading model class
     try:
         model_class = getattr(models, args.model)
@@ -262,17 +400,24 @@ def main(args):
     backward_activation = init_activation(args.backward_activation)
 
     model_init_args = {
-        'heavy_debug' : args.heavy_debug,
-        'activation' : activation,
-        'backward_activation' : backward_activation
+        'heavy_debug': args.heavy_debug,
+        'activation': activation,
+        'backward_activation': backward_activation
     }
     if args.model == 'DenoisingAutoencoder':
         model_init_args['corruption_level'] = args.corruption
         model_init_args['reconstruction'] = args.reconstruction
-    if args.model == 'SparseDenoisingAutoencoder' :
+        model_init_args['L1_norm'] = args.L1_norm
+        model_init_args['L2_norm'] = args.L2_norm
+        model_init_args['bias_decay'] = args.bias_decay
+        model_init_args['sparsity_target'] = args.sparsity
+        model_init_args['output_sparsity_target'] = args.output_sparsity
+
+    if args.model == 'SparseDenoisingAutoencoder':
         model_init_args['corruption_level'] = args.corruption
         model_init_args['sparsity_target'] = args.sparsity
         model_init_args['reconstruction'] = args.reconstruction
+
     if args.model == 'RestrictedBoltzmannMachine' or args.model == 'ReplicatedSoftmax':
         model_init_args['sparsity_target'] = args.sparsity
         model_init_args['output_sparsity_target'] = args.output_sparsity
@@ -283,6 +428,10 @@ def main(args):
         model_init_args['L1_norm'] = args.L1_norm
         model_init_args['L2_norm'] = args.L2_norm
         model_init_args['noisy_input'] = args.noisy_input
+
+    logging.info('\nModel init args:' +
+                 u'\n'.join([u'  {0}: {1}'.format(k, v)
+                             for k, v in model_init_args.items()]))
 
     # Set up model
     model_handle = model_class.setup(dataset, n_out=args.n_out,
@@ -326,7 +475,8 @@ def main(args):
     # Training starts here.
     transformer = SafireTransformer(model_handle, dataset, learner,
                                     attempt_resume=args.resume,
-                                    profile_training=args.profile_training)
+                                    profile_training=args.profile_training,
+                                    dense_throughput=True)
 
     # Training is done at this point.
 
@@ -359,45 +509,40 @@ def main(args):
 
         plt.savefig(args.plot_monitors)
 
-
     if not args.no_save_transformer:
 
         logging.info('Saving transformer with label %s' % args.transformation_label)
         mloader.save_transformer(transformer, args.transformation_label)
 
-    logging.info('Creating transformed corpus with label %s' % args.transformation_label)
+    logging.info('Creating transformed corpus with label {0}'
+                 ''.format(args.transformation_label))
+    # This applies the transformation to the input corpus.
+    pipeline = transformer[pipeline]
 
-    if args.img_label:
-        corpus = mdloader.load_image_corpus(args.img_label)
-    elif args.text_label:
-        corpus = mdloader.load_text_corpus(args.text_label)
+    # Serialization (this should be wrapped in some utility function?)
+    # Doesn't always have to happen. (Difference from dataset2corpus.)
+    if args.serialize:
+        serializer_class = ShardedCorpus
+        data_name = mdloader.pipeline_serialization_target(args.transformation_label)
+        serialization_start_time = time.clock()
+        logging.info('Starting serialization: {0}'
+                     ''.format(serialization_start_time))
+        serializer_block = Serializer(pipeline, serializer_class,
+                                      data_name,
+                                      dim=dimension(pipeline))
+        serialization_end_time = time.clock()
+        logging.info('Serialization finished: {0}'
+                     ''.format(serialization_end_time))
 
-    # This merely applies the transformation to the input corpus.
-    transformed_corpus = transformer[corpus]
+        pipeline = serializer_block[pipeline]
 
-    if not args.no_corpus_transform:
+    # Now we save the pipeline. This is analogous to the Dataset2Corpus step.
+    # In this way, also, the learned transformation is stored and can be
+    # recycled, and other handles can be derived from the sftrans.model_handle.
+    pipeline_savename = mdloader.pipeline_name(args.transformation_label)
+    logging.info('    Pipeline name: {0}'.format(pipeline_savename))
 
-        logging.info('Saving transformed corpus with label %s.' % args.transformation_label)
-
-        if args.img_label:
-            mdloader.serialize_image_corpus(transformed_corpus,
-                                          args.transformation_label)
-            mdloader.save_image_corpus(transformed_corpus,
-                                       args.transformation_label)
-        elif args.text_label:
-            mdloader.serialize_text_corpus(transformed_corpus,
-                                           args.transformation_label)
-            mdloader.save_text_corpus(transformed_corpus,
-                                       args.transformation_label)
-
-    if not args.no_dataset_transform:
-
-        logging.info('Saving transformed dataset with label %s.' % args.transformation_label)
-
-        if args.img_label:
-            mdloader.build_img(transformed_corpus, args.transformation_label)
-        elif args.text_label:
-            mdloader.build_text(transformed_corpus, args.transformation_label)
+    pipeline.save(pipeline_savename)
 
 ###############################################################################
 
@@ -413,4 +558,8 @@ if __name__ == '__main__':
         logging.basicConfig(format='%(levelname)s : %(message)s',
                             level=logging.INFO)
 
-    main(args)
+    if args.profile_main:
+        report, _ = profile_run(main, args)
+        print report.getvalue()
+    else:
+        main(args)
