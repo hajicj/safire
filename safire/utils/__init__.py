@@ -1208,3 +1208,5 @@ class SimpleTokenizeTextCorpus(gensim.corpora.TextCorpus):
         """Strips and splits the line on whitespace."""
         for w in line.strip().split(' '):
             yield w
+
+

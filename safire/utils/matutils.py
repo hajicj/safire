@@ -4,6 +4,8 @@
 """
 import collections
 import logging
+import heapq
+import itertools
 import numpy
 import math
 import operator
@@ -327,3 +329,95 @@ def sum_gensim_columns(data):
             sums[key] += value
     output = sorted(sums.items(), key=operator.itemgetter(0))
     return output
+
+
+def sort_to_visualize(data):
+    """This function should help visualize a set of vectors by making similar
+    items go near each other.
+
+    Because the number of clusters is unclear, DBscan is run.
+
+    :param data: A numpy array of the individual vectors.
+    """
+    try:
+        from sklearn.cluster import DBSCAN
+        return _sort_clustering(data)
+    except ImportError:
+        logging.error('Cannot sort using DBSCAN, resorting to heuristic '
+                      'similarity sort.')
+        return _sort_heuristic(data)
+
+
+def _sort_heuristic(data, similarity=cosine_similarity):
+    """Sorts the data using a simple similarity heuristic.
+
+    #. Compute average similarity for each data member with all others,
+       choose on average least similar member.
+    #. Recompute average similarities for all data members against
+       already chosen/not yet chosen data, choose max(sim(chosen) - sim(other))
+
+    """
+    similarities = numpy.array([[similarity(x, y)
+                                for j, y in enumerate(data)]
+                               for i, x in enumerate(data)])
+    avg_similarities = numpy.average(similarities, axis=1)
+
+    remaining = set(range(len(data)))
+
+    chosen = [numpy.argmin(avg_similarities)]  # New ordering of the data
+    remaining.remove(chosen[-1])
+
+    while remaining:
+        sims_to_remaining = similarities[:, numpy.array(sorted(remaining))]
+        avg_remaining_sims = numpy.average(sims_to_remaining, axis=1)
+        sims_to_chosen = similarities[:, numpy.array(sorted(chosen))]
+        avg_chosen_sims = numpy.average(sims_to_chosen, axis=1)
+
+        choice_metric = avg_chosen_sims - (0.5 * avg_remaining_sims)
+        choice_metric[chosen] = -1.0 * float('inf')
+        next_choice = numpy.argmax(choice_metric)
+        chosen.append(next_choice)
+        remaining.remove(next_choice)
+
+    output = numpy.array([data[i] for i in chosen])
+    return output
+
+
+def _sort_clustering(data):
+    from sklearn.cluster import AgglomerativeClustering
+    from sklearn.metrics.pairwise import euclidean_distances
+
+    dbscan = AgglomerativeClustering(n_clusters=len(data) / 10,
+                                     compute_full_tree=False)
+    labels = dbscan.fit_predict(data)
+
+    logging.debug('Clustering sort, assigned labels: {0}'
+                  ''.format({l: len([x for x in labels if x == l])
+                             for l in set(labels)}))
+
+    data_by_labels = collections.defaultdict(list)
+    for i, l in enumerate(labels):
+        data_by_labels[l].append(data[i])
+
+    numpy_by_labels = {l: numpy.array(data_by_labels[l])
+                       for l in data_by_labels}
+    centroids = {l: numpy.average(numpy_by_labels[l], axis=0)
+                 for l in numpy_by_labels}
+    pivot_centroid = centroids[0]
+    # Get distances to pivot centroid
+    distances_to_pivot = {l: euclidean_distances(numpy.array([centroids[l],
+                                                              pivot_centroid]))[0][1]
+                          for l in centroids}
+
+    # sort Labels by Distances To Pivot (ldtp)
+    ldtp = map(operator.itemgetter(0),
+               sorted(distances_to_pivot.items(),
+                      key=operator.itemgetter(1)))
+
+    sorted_data_by_cluster = []
+    for label in ldtp:
+        for item in numpy_by_labels[label]:
+            sorted_data_by_cluster.append(item)
+
+    return numpy.array(sorted_data_by_cluster)
+
