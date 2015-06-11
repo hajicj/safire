@@ -384,8 +384,13 @@ def _sort_heuristic(data, similarity=cosine_similarity):
 
 
 def _sort_clustering(data):
-    from sklearn.cluster import AgglomerativeClustering
-    from sklearn.metrics.pairwise import euclidean_distances
+    try:
+        from sklearn.cluster import AgglomerativeClustering
+        from sklearn.metrics.pairwise import euclidean_distances
+    except ImportError:
+        logging.error('Cannot use _sort_clustering without scikit-learn '
+                      'installed.')
+        raise
 
     dbscan = AgglomerativeClustering(n_clusters=len(data) / 10,
                                      compute_full_tree=False)
