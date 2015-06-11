@@ -384,6 +384,30 @@ def _sort_heuristic(data, similarity=cosine_similarity):
 
 
 def _sort_clustering(data):
+    """Sorts the data so that a straightforward visualization can reveal a
+    little more about their structure. If your data is meaningfully cluster-able
+    at all, you should see a noisy gentle progression from top to bottom if you
+    visualize the data as a heatmap.
+
+    The algorithm works like this:
+
+    * Splits the data into clusters using AgglomerativeClustering from
+      scikit-learn, with the number of clusters set at ``len(data) / 10``.
+    * Pick a "pivot centroid" and sort all other centroids by distance from
+      the pivot. This gives us an ordering over the clusters.
+    * Finally, sort the bundles of data belonging to each cluster according
+      to this ordering of clusters. No ordering is done *inside* the clusters.
+
+    Note that the clustering resutls are *not* returned. This is just a way
+    of sorting vectors so that they can be visualized more informatively.
+
+    :type data: numpy.ndarray
+    :param data: A numpy array of items you want to visualize.
+
+    :rtype: numpy.ndarray
+    :returns: The data reordered so that clustered items are together and the
+        clusters are ordered by distance from one pivot cluster.
+    """
     try:
         from sklearn.cluster import AgglomerativeClustering
         from sklearn.metrics.pairwise import euclidean_distances
